@@ -7,6 +7,13 @@ export const topics = [
   { label: 'Conversation', query: '雑談 ラジオ 対談 -日本語学習'  },
 ];
 export const topicUrl = (query: string) => `https://m.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=ja&gl=JP&relevanceLanguage=ja`;
+export function isYouTubeSignInUrl(input: string): boolean {
+  try {
+    const url = new URL(input);
+    if (url.protocol !== 'https:') return false;
+    return ['accounts.google.com', 'accounts.youtube.com'].includes(url.hostname) || (['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname) && /^\/(?:signin|sign_in)(?:\/|$)/.test(url.pathname));
+  } catch { return false; }
+}
 export function youtubeUrl(input: string): string | null {
   try {
     const u = new URL(input.trim());

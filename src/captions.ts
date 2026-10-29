@@ -7,15 +7,17 @@ export function japaneseCaptionUrl(input: string, videoId: string): URL | null {
     return url.protocol === 'https:' && /(^|\.)youtube\.com$/.test(url.hostname) && url.pathname === '/api/timedtext' && url.searchParams.get('v') === videoId && /^ja(?:-|$)/.test(language) && (!translation || /^ja(?:-|$)/.test(translation)) ? url : null;
   } catch { return null; }
 }
-// Retain the last spoken line through gaps so study/lookup never disappears.
-// Looking up from the beginning also handles a backwards seek without stale text.
+// Resolve against the actual media timeline, including expiry and backwards seeks.
+// The reading section stays visible during silence without presenting a stale line.
 export function readingCue(cues: TimedCue[], time: number): TimedCue | undefined {
-  let result: TimedCue | undefined;
-  for (const cue of cues) {
-    if (cue.start > time) break;
-    result = cue;
+  let left = 0, right = cues.length - 1, candidate = -1;
+  while (left <= right) {
+    const middle = (left + right) >>> 1;
+    if (cues[middle].start <= time) { candidate = middle; left = middle + 1; }
+    else right = middle - 1;
   }
-  return result;
+  const cue = cues[candidate];
+  return cue && time < cue.end ? cue : undefined;
 }
 // YouTube JSON3 is an optional fast path fetched on the phone. Keep visible
 // captions as a fallback: these public page structures can change independently.

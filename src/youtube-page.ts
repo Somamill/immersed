@@ -162,6 +162,33 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
       if (!state.ready && !state.fallback && currentId() === videoId) { state.fallback = true; send({ type: 'captionTrack', language: 'ja', videoId, url: track.baseUrl }); }
     }
   };
+  let stopClock = () => {}, lastFrameAt = 0;
+  const emitClock = (video, time = video.currentTime || 0, force = false) => {
+    if (!force && Date.now() - clock < 40) return;
+    clock = Date.now();
+    send({ type: 'clock', videoId: currentId(), time: Number.isFinite(time) ? time : 0, paused: video.paused });
+  };
+  const attachClock = video => {
+    let frameId = null, active = true;
+    const force = () => emitClock(video, video.currentTime || 0, true);
+    const fallback = () => { if (Date.now() - lastFrameAt > 250) emitClock(video); };
+    const events = ['seeking', 'seeked', 'play', 'pause', 'ratechange', 'ended', 'loadedmetadata'];
+    events.forEach(event => video.addEventListener(event, force));
+    video.addEventListener('timeupdate', fallback);
+    const frame = (_now, metadata) => {
+      if (!active) return;
+      lastFrameAt = Date.now(); emitClock(video, metadata.mediaTime);
+      frameId = video.requestVideoFrameCallback(frame);
+    };
+    if (typeof video.requestVideoFrameCallback === 'function') frameId = video.requestVideoFrameCallback(frame);
+    force();
+    return () => {
+      active = false;
+      if (frameId !== null) video.cancelVideoFrameCallback?.(frameId);
+      events.forEach(event => video.removeEventListener(event, force));
+      video.removeEventListener('timeupdate', fallback);
+    };
+  };
   const read = () => {
     if (location.href !== lastHref) { lastHref = location.href; last = ''; captionText = ''; staleCaptionText = null; lastTrackChoice = 0; send({ type: 'reset' }); }
     window.__immersedApplyOptions?.();
@@ -198,9 +225,9 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
       } catch { /* Player APIs are not guaranteed on every YouTube client. */ }
     }
     const video = selectVideo();
-    if (video !== lastVideo) { lastVideo = video; last = ''; captionText = ''; }
+    if (video !== lastVideo) { stopClock(); lastVideo = video; last = ''; captionText = ''; lastFrameAt = 0; if (video) stopClock = attachClock(video); }
     if (!video) return;
-    if (Date.now() - clock > 150) { clock = Date.now(); send({ type: 'clock', videoId, time: video.currentTime || 0, paused: video.paused }); }
+    if (Date.now() - lastFrameAt > 250) emitClock(video);
     const japaneseTextTrack = [...video.textTracks].find(t => /^ja(?:-|$)/.test(t.language));
     // Native tracks stay active for cue timing, without an on-video overlay.
     // Every other track is disabled rather than allowing a preferred English CC.
@@ -229,6 +256,6 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
   const observer = new MutationObserver(() => { if (!queued) { queued = true; setTimeout(() => { queued = false; read(); }, 16); } });
   observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
   const timer = setInterval(read, 150);
-  window.addEventListener('pagehide', () => { observer.disconnect(); clearInterval(timer); }, { once: true });
+  window.addEventListener('pagehide', () => { observer.disconnect(); clearInterval(timer); stopClock(); }, { once: true });
   read();
 })(); true;`;

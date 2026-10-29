@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { analyze, lookup } = require('../server/language.cjs');
+const { analyze, lookup, search } = require('../server/language.cjs');
 
 test('inflected Japanese is grouped, normalized, and resolves through the real installed JMdict', async () => {
   const text = '昨日は日本語を勉強していました。ご飯を食べませんでした。';
@@ -17,6 +17,18 @@ test('inflected Japanese is grouped, normalized, and resolves through the real i
   const entries = await lookup(eat.lemma);
   assert.ok(entries.some(e => e.senses.some(s => s.english_definitions.some(d => d.includes('eat')))));
   for (const t of tokens) assert.equal(text.slice(t.start, t.end), t.text);
+});
+
+test('dictionary searches English meanings, Japanese readings and inflected words', async () => {
+  const english = await search('eat');
+  assert.ok(english[0].senses[0].english_definitions.includes('to eat'), 'main meanings should outrank incidental later senses');
+  assert.ok(english.some(entry => entry.japanese.some(form => form.word === '食べる')));
+  const japanese = await search('食べる');
+  assert.ok(japanese.some(entry => entry.senses.some(s => s.english_definitions.includes('to eat'))));
+  assert.ok((await search('たべる')).some(entry => entry.japanese.some(form => form.word === '食べる')));
+  assert.ok((await search('食べました')).some(entry => entry.japanese.some(form => form.word === '食べる')));
+  assert.ok((await search('ice cream')).some(entry => entry.senses.some(s => s.english_definitions.some(d => /ice cream/i.test(d)))));
+  assert.deepEqual(await search('zzzzzzzznotaword'), []);
 });
 
 test('particle boundaries, compounds, grammar expressions, and raw morphology are preserved', async () => {

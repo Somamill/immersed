@@ -5,7 +5,7 @@ import { Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { japaneseCaptionUrl, parseCaptionTrack } from '../captions';
 import history from '../version-history.json';
-import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, youtubeUrl } from '../youtube';
+import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../youtube';
 import type { BrowserHandle, BrowserProps } from './YouTubeBrowser';
 export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, onCaption, onError, onPage, onClock, onTranscript }, ref) {
   // WebView 14 defaults its extra-props generic to undefined, which intersects
@@ -24,6 +24,12 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     const id = canonical ? new URL(canonical).searchParams.get('v') : null;
     if (currentVideo.current !== id) { pendingTrack.current?.abort(); currentVideo.current = id; }
     onPage?.(url);
+  };
+  const openYouTubeSignIn = (url: string) => {
+    try {
+      const target = new URL(url);
+      if (isYouTubeSignInUrl(target.toString())) void Linking.openURL(target.toString()).catch(() => onError('Could not open the sign-in browser.'));
+    } catch { /* Ignore unrelated popup URLs. */ }
   };
   const loadTrack = async (url: string, videoId: string) => {
     try {
@@ -53,7 +59,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
       try {
         const u = new URL(request.url);
         if (u.protocol !== 'https:') return false;
-        if (u.hostname === 'accounts.google.com' || u.hostname === 'accounts.youtube.com') { void Linking.openURL(u.toString()).catch(() => onError('Could not open the system browser for sign-in.')); return false; }
+        if (isYouTubeSignInUrl(u.toString())) { openYouTubeSignIn(u.toString()); return false; }
         if (hideShorts && u.pathname.startsWith('/shorts/')) return false;
         if (!/(^|\.)youtube\.com$/.test(u.hostname)) return false;
         const watch = youtubeUrl(request.url);
@@ -65,6 +71,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
         return true;
       } catch { return false; }
     }}
+    onOpenWindow={event => openYouTubeSignIn(event.nativeEvent.targetUrl)}
     onMessage={event => {
       try {
         const v = JSON.parse(event.nativeEvent.data);

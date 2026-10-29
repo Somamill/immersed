@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, youtubeUrl } from '../src/youtube';
+import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
 import { embeddedPlayerSource, swipeAction } from '../src/player';
 import { familiarity } from '../src/learning';
 import { japaneseCaptionUrl, parseCaptionTrack, readingCue } from '../src/captions';
@@ -20,6 +20,15 @@ test('video links normalize safely', () => {
   expect(youtubeUrl('https://youtube.com/shorts/M7lc1UVf-VE')).toBe('https://m.youtube.com/watch?v=M7lc1UVf-VE&hl=ja');
   expect(youtubeUrl('https://youtube.com.evil.example/watch?v=M7lc1UVf-VE')).toBeNull();
   expect(youtubeUrl('javascript:alert(1)')).toBeNull();
+});
+
+test('only YouTube sign-in and trusted account links enter the system sign-in browser', () => {
+  expect(isYouTubeSignInUrl('https://m.youtube.com/signin?next=%2F')).toBe(true);
+  expect(isYouTubeSignInUrl('https://accounts.google.com/ServiceLogin?service=youtube')).toBe(true);
+  expect(isYouTubeSignInUrl('https://accounts.youtube.com/accounts/ServiceLogin')).toBe(true);
+  expect(isYouTubeSignInUrl('https://accounts.google.com.evil.example/ServiceLogin')).toBe(false);
+  expect(isYouTubeSignInUrl('https://m.youtube.com/watch?v=M7lc1UVf-VE')).toBe(false);
+  expect(isYouTubeSignInUrl('http://accounts.google.com/ServiceLogin')).toBe(false);
 });
 
 test('caption adapter reads player text, pauses, ignores comments, and clears on navigation', async ({ page }) => {
@@ -57,15 +66,19 @@ test('caption adapter reads player text, pauses, ignores comments, and clears on
   await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string }[] }).messages.some(m => m.type === 'reset'))).toBe(true);
 });
 
- test('dictionary settings persist without requiring dictionary imports', async ({ page }) => {
+test('learning has no off switches, sign-in button or exposed dictionary setup', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByText('JMdict · Japanese → English', { exact: true })).toBeVisible();
-  await expect(page.getByRole('switch', { name: 'Smart word groups' })).toBeChecked();
-  await page.getByRole('switch', { name: 'Smart word groups' }).click();
+  await expect(page.getByRole('switch', { name: /Smart word groups|Furigana|AMOLED/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Google|sign.in/i })).toHaveCount(0);
+  await expect(page.getByText('Dictionary & credits', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('switch', { name: 'Dark mode', exact: true })).toBeChecked();
+  await page.getByRole('switch', { name: 'Dark mode', exact: true }).click();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('switch', { name: 'Smart word groups' })).not.toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Dark mode', exact: true })).not.toBeChecked();
+  await page.getByRole('button', { name: 'About', exact: true }).click();
+  await expect(page.getByText('Dictionary & credits', { exact: true })).toBeVisible();
 });
 
 test('language API uses actual morphology and dictionary data', async ({ request }) => {
@@ -81,12 +94,18 @@ test('language API uses actual morphology and dictionary data', async ({ request
   expect(invalid.status()).toBe(400);
 });
 
-test('older saved morpheme settings migrate to smart groups once', async ({ page }) => {
+test('old disabled grouping and readings still produce grouped tappable grammar', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 3, text: '食べていました。' }] }) }));
   await page.goto('/');
-  await page.evaluate(() => localStorage.setItem('immersed.preferences.v1', JSON.stringify({ grouped: false, readings: true, automatic: true })));
+  await page.evaluate(() => localStorage.setItem('immersed.preferences.v1', JSON.stringify({ schema: 2, grouped: false, readings: false })));
   await page.reload();
-  await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('switch', { name: 'Smart word groups' })).toBeChecked();
+  await page.getByRole('textbox', { name: 'Search Japanese topics or paste a YouTube link' }).fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  const word = page.getByRole('button', { name: 'Look up 食べていました', exact: true });
+  await expect(word).toBeVisible({ timeout: 10000 });
+  await expect(word).toContainText('たべていました');
+  await word.click();
+  await expect(page.getByText(/て-form construction.*polite.*past/)).toBeVisible();
 });
 
 test('timed captions join fragments, normalize line breaks and resolve overlap', () => {
@@ -97,7 +116,9 @@ test('timed captions join fragments, normalize line breaks and resolve overlap',
   ] });
   expect(cues).toEqual([{ start: 0, end: 2, text: '日本語 です。' }, { start: 2, end: 3, text: '食べました。' }]);
   expect(readingCue(cues, 1)?.text).toBe('日本語 です。');
-  expect(readingCue(cues, 8)?.text).toBe('食べました。');
+  expect(readingCue(cues, 8)).toBeUndefined();
+  expect(readingCue(cues, 2)?.text).toBe('食べました。');
+  expect(readingCue(cues, 3)).toBeUndefined();
   expect(readingCue(cues, 1)?.text).toBe('日本語 です。');
   expect(readingCue(cues, -1)).toBeUndefined();
 });
@@ -119,7 +140,7 @@ test('viewing preferences persist and navigation stays near the bottom', async (
   const browserBounds = await page.getByTestId('video-surface').boundingBox();
   expect(browserBounds!.y + browserBounds!.height).toBe(844);
   await settingsButton.click();
-  await expect(page.getByRole('switch', { name: 'AMOLED dark mode' })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Dark mode' })).toBeChecked();
   await expect(page.getByRole('switch', { name: 'Hide Shorts' })).toBeChecked();
   await page.getByRole('radio', { name: 'Completed N3', exact: true }).click();
   await expect(page.getByRole('radio', { name: 'Completed N3', exact: true })).toBeChecked();
@@ -364,6 +385,42 @@ test('navigation uses large labelled icons with an active state and no visible t
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
 
+test('Words searches English and Japanese without showing dictionary setup', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Words · 0', exact: true }).click();
+  const input = page.getByRole('textbox', { name: 'Search English or Japanese words' });
+  await input.fill('eat');
+  await expect(page.getByText('English → Japanese', { exact: true })).toBeVisible();
+  await expect(page.getByText('食べる', { exact: true }).first()).toBeVisible({ timeout: 15000 });
+  await input.fill('食べる');
+  await expect(page.getByText('Japanese → English', { exact: true })).toBeVisible();
+  await expect(page.getByText(/^to eat\b/).first()).toBeVisible();
+  await expect(page.getByText(/JMdict|EDRDG/)).toHaveCount(0);
+});
+
+test('video frame timestamps drive captions and seek/pause events refresh immediately', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<video></video>' }));
+  await page.goto('https://m.youtube.com/embed/M7lc1UVf-VE');
+  await page.clock.install();
+  await page.evaluate(() => {
+    const w = window as unknown as { messages: unknown[]; nextFrame: (now: number, metadata: { mediaTime: number }) => void; ReactNativeWebView: { postMessage: (raw: string) => void } };
+    w.messages = []; w.ReactNativeWebView = { postMessage: raw => w.messages.push(JSON.parse(raw)) };
+    const video = document.querySelector('video')!;
+    Object.defineProperty(video, 'currentTime', { configurable: true, get: () => Number(video.dataset.time || '0') });
+    video.requestVideoFrameCallback = callback => { w.nextFrame = callback as unknown as typeof w.nextFrame; return 1; };
+    video.cancelVideoFrameCallback = () => {};
+  });
+  await page.addScriptTag({ content: CAPTION_BRIDGE });
+  await page.clock.fastForward(45);
+  await page.evaluate(() => (window as unknown as { nextFrame: (now: number, metadata: { mediaTime: number }) => void }).nextFrame(performance.now(), { mediaTime: 2.04 }));
+  const lastClock = () => page.evaluate(() => (window as unknown as { messages: { type: string; time?: number; paused?: boolean }[] }).messages.filter(m => m.type === 'clock').at(-1));
+  expect((await lastClock())?.time).toBe(2.04);
+  await page.evaluate(() => { const video = document.querySelector('video')!; video.dataset.time = '25'; video.dispatchEvent(new Event('seeked')); });
+  expect((await lastClock())?.time).toBe(25);
+  await page.evaluate(() => document.querySelector('video')!.dispatchEvent(new Event('pause')));
+  expect((await lastClock())?.paused).toBe(true);
+});
+
 test('a saved Japanese caption track survives reload when transcription is unavailable', async ({ page }) => {
   let calls = 0;
   await page.route('**/api/immersion/transcribe?**', route => {
@@ -403,7 +460,7 @@ test('horizontal gestures navigate settings and words using the floating dock ro
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.mouse.move(60, 430); await page.mouse.down();
   await page.mouse.move(310, 435, { steps: 12 }); await page.mouse.up();
-  await expect(page.getByText('Your words.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Words.', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/panel=words/);
   await page.mouse.move(310, 430); await page.mouse.down();
   await page.mouse.move(60, 435, { steps: 12 }); await page.mouse.up();

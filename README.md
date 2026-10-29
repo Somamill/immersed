@@ -5,14 +5,14 @@ iPhone-first Japanese immersion: choose a natural Japanese video, watch in a foc
 ## Current implementation
 
 - Browse Japanese topics in YouTube; selecting a video opens one portrait watch-and-read view. The video fills the upper viewing area, with a permanent full-width reading area beneath it. Only the bottom navigation floats. Wide videos crop at the sides. Discovery is still search-based, not a strictly language-filtered feed.
-- Closing any dictionary lookup resumes playback if it was playing before the lookup; a manually paused video remains paused. Smart groups are on by default, including a one-time migration from the earlier experimental preset.
-- The subtitle pane is hidden during browsing and always present for a selected video. It retains the last real line through speech gaps, with tappable words and dictionary lookup. There are no separate watch/reading modes, floating subtitle cards, duplicate playback buttons, or manual subtitle recovery/setup controls. Failures have a passive status; no loading spinner is shown.
+- Closing any dictionary lookup resumes playback if it was playing before the lookup; a manually paused video remains paused. Word/grammar grouping and readings are always on, including after restoring earlier disabled settings.
+- The subtitle pane is hidden during browsing and always present for a selected video. It displays active timed lines with tappable words and dictionary lookup; the section stays visible through speech gaps. There are no separate watch/reading modes, floating subtitle cards, duplicate playback buttons, or manual subtitle recovery/setup controls. Failures have a passive status; no loading spinner is shown.
 - Explicitly select an available Japanese player caption track, including YouTube auto-generated tracks. Native English/unknown caption overlays are suppressed; only confirmed Japanese tracks can enter the reading area. During a language switch, the old DOM line is withheld until replaced. Native Japanese text tracks run in hidden mode for cue timing, with all other text tracks disabled.
 - Fetch exposed Japanese timed caption tracks in the YouTube page session first. Observe only completed Japanese timedtext fetch/XHR responses, including player requests with session-specific parameters; parse JSON3 or XML. Separate native fetching and visible caption capture remain fallbacks. This is source-caption access, not new speech recognition.
 - Capture batching is reduced from 100 ms to 16 ms. Completed partial analyses are retained, cached results display immediately, and word definitions are prefetched with analysis. On-phone latency is not yet benchmarked.
 - Real Kuromoji/IPADIC morphological analysis runs on the preview server. Smart grouping joins inflection chains, suru verbs, dictionary-recognized noun compounds, and a small set of common grammar constructions. Readings, dictionary forms, parts of speech, and heuristic grammar labels accompany each group.
 - The full pinned JMdict English dataset (218,963 entries) is installed and indexed on the preview server. Lookups use dictionary forms rather than the displayed conjugated word. No Jisho request or dictionary subscription is needed. This is server-local, not an offline-on-phone dictionary.
-- Settings persist: grouping, furigana, theme, JLPT level and Shorts controls. Video layout and subtitle acquisition are automatic. Save a dictionary entry with the caption and video context.
+- Settings persist: light/dark theme, JLPT level and Shorts controls; grouping and furigana are mandatory. Video layout and subtitle acquisition are automatic. Save a dictionary entry with the caption and video context.
 - If no Japanese source caption has appeared after two seconds on a selected video, start a self-hosted ASR job and poll its status. Temporary failures recover automatically with bounded backoff; explicit network/source denials are not repeatedly requested. The worker attempts audio acquisition using yt-dlp, then Whisper base via faster-whisper on CPU; completed cues are cached and synchronized against the observed video clock.
 
 ## Important current limitation
@@ -60,7 +60,7 @@ See [THIRD_PARTY.md](THIRD_PARTY.md) for JMdict's CC BY-SA 4.0 attribution, pars
 
 ## Versions and GitHub
 
-Repository: https://github.com/Somamill/immersed. [CHANGELOG.md](CHANGELOG.md) and Settings → Version history record released updates. Current release: 0.5.3.
+Repository: https://github.com/Somamill/immersed. [CHANGELOG.md](CHANGELOG.md) and Settings → About → Version history record released updates. Current release: 0.5.4.
 
 For each user-facing update:
 
@@ -129,3 +129,11 @@ The player no longer falls back to a full YouTube watch page after errors, and t
 Verified Japanese timed tracks and successfully generated captions are cached on the device for repeat visits: up to eight tracks, 30-day expiry, 5,000 cues/128,000 serialized characters per track. Larger tracks remain live-only. Captions load automatically from cache before requesting recognition; cache writes are serialized and failures do not interrupt live playback. This does not provide offline video or an offline dictionary.
 
 [RELIABILITY.md](RELIABILITY.md) records the production architecture and physical-iPhone release gates. Automatic creation of subtitles for captionless YouTube videos remains blocked by source-audio access. The core end-to-end acceptance test is explicitly unfinished.
+
+## One learning mode, dictionary search and timing (0.5.4)
+
+Word/grammar grouping, lookup and furigana are always on, including after restoring older disabled preferences. Settings has one Dark mode switch (off = light), learner level and Shorts filtering. Provider, attribution, limitations and version details live under the closed About disclosure. The separate Google button is removed; only YouTube's own sign-in links can open the system sign-in browser. Google prohibits embedded-browser authentication, and the resulting browser session is not imported into the player.
+
+Words combines saved vocabulary with automatic English ↔ Japanese dictionary search. The server searches Japanese spellings, readings, inflected dictionary forms and prefixes, or English gloss terms/phrases, ranking exact/common matches first. This is a word dictionary, not sentence translation or arbitrary-language translation. No dictionary import or paid API is required.
+
+The media clock uses presented video-frame timestamps, immediate seek/pause/rate-change events and a fallback for older/non-rendering players. Timed cues expire correctly at their end rather than retaining stale text; the subtitle area stays visible during silence. The dock uses one clipped, rounded glass background with plain icon controls and a small active indicator. Research, source links and limitations are in [RESEARCH.md](RESEARCH.md). Source caption quality, fresh captionless-video ASR and native iPhone behavior retain the previously documented limitations.

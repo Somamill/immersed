@@ -2,6 +2,17 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.4 — 2026-10-29
+
+Always-on learning, two-way dictionary and tighter subtitle timing
+
+- Keep word/grammar lookup, grouping and readings always enabled; ignore older off settings and remove learning off switches.
+- Add automatic English–Japanese dictionary search to Words, alongside saved vocabulary. Hide provider details and history in Settings → About.
+- Use presented video-frame timestamps and immediate seek/playback events; expire timed cues correctly instead of displaying stale lines.
+- Clip one rounded glass dock with matching radii and plain icon controls; simplify appearance to a single Dark mode switch.
+- Remove the separate Google sign-in button. YouTube sign-in links open the system browser under Google policy; browser login is not shared with the embedded player.
+- Physical-iPhone timing/glass remain unverified, and fresh captionless YouTube transcription remains blocked by source-audio access.
+
 ## 0.5.3 — 2026-10-29
 
 Focused video player, friendly icons and device caption caching

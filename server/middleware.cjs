@@ -13,7 +13,7 @@ module.exports = function middleware(next) {
       if (url.pathname.endsWith('/analyze')) {
         const text = url.searchParams.get('text') || '';
         if (!text || text.length > 2000) return json(400, { error: 'Caption must be between 1 and 2000 characters' });
-        const tokens = await language.analyze(text, url.searchParams.get('grouped') !== 'false');
+        const tokens = await language.analyze(text, true);
         const dictionary = {};
         if (url.searchParams.get('dictionary') === 'true') {
           for (const lemma of [...new Set(tokens.filter(t => t.word).map(t => t.lemma))].slice(0, 24)) dictionary[lemma] = await language.lookup(lemma);
@@ -24,6 +24,11 @@ module.exports = function middleware(next) {
         const word = url.searchParams.get('word') || '';
         if (!word || word.length > 120) return json(400, { error: 'Invalid word' });
         return json(200, { data: await language.lookup(word), source: 'JMdict / EDRDG', license: 'CC BY-SA 4.0' });
+      }
+      if (url.pathname.endsWith('/search')) {
+        const query = (url.searchParams.get('query') || '').trim();
+        if (!query || query.length > 120) return json(400, { error: 'Enter up to 120 characters' });
+        return json(200, { data: await language.search(query) });
       }
       if (url.pathname.endsWith('/transcribe')) {
         const id = url.searchParams.get('videoId') || '';
