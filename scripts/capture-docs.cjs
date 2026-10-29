@@ -22,7 +22,7 @@ async function main() {
     await page.getByTestId('video-surface').evaluate((element, src) => {
       // Replace only the browser's "open in Expo Go" placeholder in this capture.
       const image = document.createElement('img'); image.src = src;
-      Object.assign(image.style, { width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: '0' });
+      Object.assign(image.style, { width: '100%', height: '100%', objectFit: 'contain', position: 'absolute', inset: '0' });
       const label = document.createElement('div'); label.textContent = 'Illustrative media · sample captions';
       Object.assign(label.style, { position: 'absolute', bottom: '16px', left: '16px', right: '16px', color: '#eee', font: '11px system-ui', textAlign: 'center', background: '#000b', borderRadius: '12px', padding: '8px' });
       element.style.position = 'relative'; element.replaceChildren(image, label);

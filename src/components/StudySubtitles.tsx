@@ -15,15 +15,14 @@ export default function StudySubtitles({ tokens, tail, dark, level, knowledge, r
   const ink = dark ? '#F3F3F3' : '#242D28';
   return <View testID="subtitle-words" style={styles.words}>
     {groups.map(({ token, punctuation, prefix }, index) => {
-      const unknown = familiarity(token.lemma, token.reading, level, knowledge) === 'unknown';
-      const grammar = ['particle', 'auxiliary'].includes(token.pos);
-      const color = unknown ? (dark ? '#FFD077' : '#8B4800') : grammar ? (dark ? '#B4DEC4' : '#276148') : ink;
+      const unknown = token.word && familiarity(token.lemma, token.reading, level, knowledge) === 'unknown';
+      const color = ink;
       const furigana = /[一-龯]/.test(token.text) && !!token.reading && showFurigana(token.lemma, token.reading, level, knowledge, readings);
       return <View key={`${token.start}:${index}`} style={styles.group}>
         {!!prefix && <Text selectable={false} style={[styles.japanese, { color: ink, paddingBottom: 2 }]}>{prefix}</Text>}
         <Pressable accessibilityRole={token.word ? 'button' : undefined} accessibilityLabel={token.word ? `Look up ${token.text}` : token.text} disabled={!token.word} onPress={() => onWord(token)} style={[styles.word, { paddingTop: readings ? 20 * fontScale : 0 }]}>
           {furigana && <View pointerEvents="none" style={styles.ruby}><Text selectable={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} testID={`furigana-${token.lemma}`} style={[styles.reading, { color }]}>{token.reading}</Text></View>}
-          <Text selectable={false} style={[styles.japanese, { color }]}>{token.text}</Text>
+          <View testID={unknown ? `unknown-${token.lemma}` : undefined} style={unknown ? { backgroundColor: dark ? '#B4DEC41A' : '#344C3F12', borderRadius: 5 } : undefined}><Text selectable={false} style={[styles.japanese, { color }]}>{token.text}</Text></View>
         </Pressable>
         {!!punctuation && <Text selectable={false} style={[styles.japanese, { color: ink, paddingBottom: 2 }]}>{punctuation}</Text>}
       </View>;

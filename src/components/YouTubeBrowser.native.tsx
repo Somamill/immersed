@@ -6,15 +6,16 @@ import { japaneseCaptionUrl, parseCaptionTrack, captionSourceRank, type CaptionS
 import history from '../version-history.json';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../youtube';
 import type { BrowserHandle, BrowserProps } from './YouTubeBrowser';
-export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, onCaption, onError, onPage, onClock, onTranscript }, ref) {
+export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, minimumMinutes = 0, onCaption, onError, onPage, onClock, onTranscript }, ref) {
   // WebView 14 defaults its extra-props generic to undefined, which intersects
   // its props to never under TS 6 strict mode. Explicit object preserves props.
   const initial = youtubeUrl(uri);
   const [playerId, setPlayerId] = useState<string | null>(initial ? new URL(initial).searchParams.get('v') : null);
   const [embedReady, setEmbedReady] = useState(false);
+  const [fillPortrait, setFillPortrait] = useState(false);
   const web = useRef<WebView<object>>(null);
   const source = useMemo(() => playerId ? embeddedPlayerSource(playerId, Application.applicationId || 'com.somamill.immersed') : { uri }, [playerId, uri]);
-  const optionsScript = `window.__immersedOptions = ${JSON.stringify({ dark, hideShorts, fillPortrait: true })}; window.__immersedApplyOptions?.(); true;`;
+  const optionsScript = `window.__immersedOptions = ${JSON.stringify({ dark, hideShorts, minimumMinutes, fillPortrait })}; window.__immersedApplyOptions?.(); true;`;
   useEffect(() => { web.current?.injectJavaScript(optionsScript); }, [optionsScript]);
   const currentVideo = useRef<string | null>(playerId);
   const pendingTrack = useRef<AbortController | null>(null);
@@ -25,7 +26,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     const canonical = youtubeUrl(url);
     const id = canonical ? new URL(canonical).searchParams.get('v') : null;
     if (!id && playerId) return;
-    if (id && id !== playerId) { setEmbedReady(false); setPlayerId(id); }
+    if (id && id !== playerId) { setEmbedReady(false); setFillPortrait(false); setPlayerId(id); }
     if (currentVideo.current !== id) { pendingTrack.current?.abort(); currentVideo.current = id; }
     onPage?.(url);
   };
@@ -83,6 +84,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     onMessage={event => {
       try {
         const v = JSON.parse(event.nativeEvent.data);
+        if (v.type === 'viewport' && typeof v.fillPortrait === 'boolean' && v.videoId === currentVideo.current) { setFillPortrait(v.fillPortrait); return; }
         if (v.type === 'page' && typeof v.url === 'string') {
           const url = new URL(v.url);
           if (url.protocol === 'https:' && ['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)) pageChanged(url.toString());

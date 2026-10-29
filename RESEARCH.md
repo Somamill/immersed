@@ -33,3 +33,9 @@ The [subtitle quality findings](docs/SUBTITLE_QUALITY.md) cover source-track pri
 The old Safari redirect cannot establish a WebView sign-in session and is removed. [Google OAuth policies](https://developers.google.com/identity/protocols/oauth2/policies) prohibit embedded user-agent authorization and require a registered OAuth client. A supported native account integration would be separate work; an API access token does not create YouTube browser cookies or guarantee authenticated iframe playback.
 
 The app now uses available player pause/play/seek methods and does not synthesize caption-button taps. The provider owns its playback controls; their transient appearance has not been measured on a physical iPhone. See the development guide for cue-boundary navigation and gesture limits.
+
+## Viewing and skip response (0.5.8)
+
+[React Native Pressable](https://reactnative.dev/docs/pressable) separates press-in and press release. The skip controls now activate on press-in and deduplicate release. UI tests verify the caption changes while the pointer is still held down and that release does not skip again. Player buffering cannot be eliminated by changing a button handler.
+
+Two-finger touch fixtures verify fit → fill → fit without navigation. Duration fixtures cover exact threshold boundaries, hour-formatted badges, Japanese duration labels, live/unknown cards and content added after loading. These tests do not prove compatibility with every live YouTube renderer or physical iPhone/WebKit behavior.

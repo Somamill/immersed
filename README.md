@@ -19,7 +19,7 @@
 
 <table>
   <tr>
-    <td align="center"><img src="docs/images/study.png" width="250" alt="Study interface with centered Japanese text, difficulty colors and furigana; illustrative media and sample captions" /></td>
+    <td align="center"><img src="docs/images/study.png" width="250" alt="Study interface with centered Japanese text, soft unfamiliar-word highlights and furigana; illustrative media and sample captions" /></td>
     <td align="center"><img src="docs/images/dictionary.png" width="250" alt="Words screen showing English to Japanese dictionary results for eat" /></td>
     <td align="center"><img src="docs/images/settings.png" width="250" alt="Simple settings with light/dark mode, JLPT level and optional furigana" /></td>
   </tr>
@@ -36,10 +36,11 @@
 
 - **Natural content:** browse ordinary Japanese daily life, food, travel, science, gaming and conversation. Discovery is language-biased search, not a verified Japanese-only feed.
 - **Tap to understand:** automatic word/grammar grouping, dictionary forms and readings. Lookup pauses playback and resumes it when dismissed if it was playing.
-- **Your level, less clutter:** choose a completed JLPT level. Harder words are amber; particles are mint. Optional furigana appears on harder kanji words. Known/unknown choices override estimates.
+- **Your level, less clutter:** choose a completed JLPT level. Text stays white in dark mode; unfamiliar words have a soft highlight. Light mode uses dark text for readability. Optional furigana appears on harder kanji words. Known/unknown choices override estimates.
 - **One place for words:** search English or Japanese and keep vocabulary with its original caption/video context. Uses the full JMdict English dataset plus JMnedict name readings and name categories; no paid dictionary subscription or manual import.
-- **A focused view:** portrait video, a fixed subtitle area, a compact glass navigation pill, light/dark themes and optional Shorts hiding. Selected videos use the dedicated embed instead of a watch page with comments.
+- **A focused view:** a complete video frame with black bars, pinch-out to fill/pinch-in to fit, a fixed subtitle area, a compact glass navigation pill, light/dark themes and optional Shorts hiding. Selected videos use the dedicated embed instead of a watch page with comments.
 - **Move naturally:** swipe the glass dock left/right between content, Words and Settings. Use previous/next buttons to revisit caption boundaries, or swipe the reading area to seek 10 seconds; swipe down on the dictionary header to close it. Swipe from the left edge to return to the previous panel or leave the selected video. These are app gestures; a full native interactive stack transition is not implemented.
+- **Choose your session length:** Settings → Minimum video length offers Any, 15+, 30+ or 60+ minutes. Recognized loaded YouTube cards are filtered by their visible duration; live/unknown-duration cards are hidden with a minimum enabled. This does not search or verify the entire catalog.
 - **Keep useful captions:** verified Japanese tracks are cached on the device for repeat visits. Creator-provided tracks take priority over automatic tracks. Caption caches do not make videos or the server dictionary available offline.
 
 ## Try it on your iPhone

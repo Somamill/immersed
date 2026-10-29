@@ -2,6 +2,16 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.8 — 2026-10-29
+
+Pinch to fit, quicker skipping and quieter subtitles
+
+- Default to the full video frame with black bars. Pinch outward to fill and inward to restore fit without reloading or hiding subtitles.
+- Make sentence controls larger, rounder and more spaced. Activate on touch-down, deduplicate release, and prevent stale clocks from briefly restoring the old caption during seeks.
+- Add persistent Any, 15+, 30+ and 60+ minute preferences; filter recognizable loaded YouTube cards by visible duration, hiding live or unreadable-duration cards when enabled.
+- Use neutral subtitle text with a soft highlight only for unfamiliar words, retaining word/grammar lookup and JLPT/personal knowledge overrides.
+- Pinch behavior and buffering speed need physical-iPhone verification; duration filtering depends on YouTube markup. In-app account sign-in and fresh captionless YouTube transcription remain unsupported in this preview.
+
 ## 0.5.7 — 2026-10-29
 
 Quicker lookup, sentence controls and Japanese names

@@ -4,14 +4,63 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
   if (!/(^|\.)youtube\.com$/.test(location.hostname)) return;
   if (window.__immersedBootstrap) { window.__immersedApplyOptions?.(); return; }
   window.__immersedBootstrap = true;
-  window.__immersedOptions = window.__immersedOptions || { dark: true, hideShorts: true, fillPortrait: true };
+  window.__immersedOptions = window.__immersedOptions || { dark: true, hideShorts: true, minimumMinutes: 0, fillPortrait: false };
   const css = document.createElement('style');
-  css.textContent = 'html[data-immersed-dark] { color-scheme:dark!important; background:#000!important; --yt-spec-base-background:#000!important; --yt-spec-raised-background:#171717!important; --yt-spec-menu-background:#171717!important; --yt-spec-general-background-a:#000!important; --yt-spec-general-background-b:#000!important; --yt-spec-text-primary:#eee!important; --yt-spec-text-secondary:#aaa!important; --yt-spec-brand-background-primary:#000!important; --yt-spec-brand-background-secondary:#171717!important; --yt-spec-brand-background-solid:#000!important; } html[data-immersed-dark] body, html[data-immersed-dark] ytm-app, html[data-immersed-dark] ytm-search, html[data-immersed-dark] ytm-mobile-topbar-renderer, html[data-immersed-dark] ytm-header-bar, html[data-immersed-dark] ytm-searchbox, html[data-immersed-dark] .searchbox-input, html[data-immersed-dark] .pivot-bar-renderer { background-color:#000!important; color:#eee!important; } html[data-immersed-fill] video.html5-main-video { width:100vw!important; height:100vh!important; top:0!important; left:0!important; object-fit:cover!important; } html[data-immersed-browse], html[data-immersed-browse] body { margin-bottom:0!important; padding-bottom:0!important; min-height:100vh!important; } html[data-immersed-browse] ytm-app, html[data-immersed-browse] ytm-search, html[data-immersed-browse] ytm-browse { padding-bottom:0!important; min-height:100vh!important; } html[data-immersed-browse] ytm-pivot-bar-renderer, html[data-immersed-browse] .pivot-bar-renderer { display:none!important; } html[data-immersed-watch] .ytp-caption-window-container, html[data-immersed-watch] .ytp-caption-window-container *, html[data-immersed-watch] .ytp-caption-segment, html[data-immersed-watch] .captions-text { visibility:hidden!important; pointer-events:none!important; } [data-immersed-short] { display:none!important; }';
+  css.textContent = 'html[data-immersed-dark] { color-scheme:dark!important; background:#000!important; --yt-spec-base-background:#000!important; --yt-spec-raised-background:#171717!important; --yt-spec-menu-background:#171717!important; --yt-spec-general-background-a:#000!important; --yt-spec-general-background-b:#000!important; --yt-spec-text-primary:#eee!important; --yt-spec-text-secondary:#aaa!important; --yt-spec-brand-background-primary:#000!important; --yt-spec-brand-background-secondary:#171717!important; --yt-spec-brand-background-solid:#000!important; } html[data-immersed-dark] body, html[data-immersed-dark] ytm-app, html[data-immersed-dark] ytm-search, html[data-immersed-dark] ytm-mobile-topbar-renderer, html[data-immersed-dark] ytm-header-bar, html[data-immersed-dark] ytm-searchbox, html[data-immersed-dark] .searchbox-input, html[data-immersed-dark] .pivot-bar-renderer { background-color:#000!important; color:#eee!important; } html[data-immersed-watch] video.html5-main-video { width:100vw!important; height:100vh!important; top:0!important; left:0!important; object-fit:contain!important; background:#000!important; } html[data-immersed-fill] video.html5-main-video { width:100vw!important; height:100vh!important; top:0!important; left:0!important; object-fit:cover!important; } html[data-immersed-browse], html[data-immersed-browse] body { margin-bottom:0!important; padding-bottom:0!important; min-height:100vh!important; } html[data-immersed-browse] ytm-app, html[data-immersed-browse] ytm-search, html[data-immersed-browse] ytm-browse { padding-bottom:0!important; min-height:100vh!important; } html[data-immersed-browse] ytm-pivot-bar-renderer, html[data-immersed-browse] .pivot-bar-renderer { display:none!important; } html[data-immersed-watch] .ytp-caption-window-container, html[data-immersed-watch] .ytp-caption-window-container *, html[data-immersed-watch] .ytp-caption-segment, html[data-immersed-watch] .captions-text { visibility:hidden!important; pointer-events:none!important; } [data-immersed-short], [data-immersed-duration] { display:none!important; }';
   let preferenceDark;
   const flag = (root, name, enabled) => {
     if (enabled && !root.hasAttribute(name)) root.setAttribute(name, '');
     if (!enabled && root.hasAttribute(name)) root.removeAttribute(name);
   };
+  const durationSeconds = input => {
+    const text = (input || '').normalize('NFKC').trim();
+    if (/ライブ|生配信|公開予定|\blive\b|premiere/i.test(text)) return null;
+    const clock = text.match(/^(\d{1,3}):([0-5]\d)(?::([0-5]\d))?$/);
+    if (clock) return clock[3] === undefined ? Number(clock[1]) * 60 + Number(clock[2]) : Number(clock[1]) * 3600 + Number(clock[2]) * 60 + Number(clock[3]);
+    const hours = text.match(/(\d+)\s*(?:時間|hours?|hrs?)/i);
+    const minutes = text.match(/(\d+)\s*(?:分(?!前)|minutes?|mins?)/i);
+    const seconds = text.match(/(\d+)\s*(?:秒(?!前)|seconds?|secs?)/i);
+    return hours || minutes || seconds ? Number(hours?.[1] || 0) * 3600 + Number(minutes?.[1] || 0) * 60 + Number(seconds?.[1] || 0) : null;
+  };
+  const filterDuration = minimum => {
+    const threshold = [15,30,60].includes(minimum) ? minimum * 60 : 0;
+    if (!threshold) { document.querySelectorAll('[data-immersed-duration]').forEach(node => flag(node, 'data-immersed-duration', false)); return; }
+    const cards = new Set();
+    document.querySelectorAll('a[href*="/watch?"], a[href*="/shorts/"]').forEach(link => {
+      const card = link.closest('ytm-video-with-context-renderer, ytm-rich-item-renderer, ytm-video-renderer, ytm-compact-video-renderer, ytm-media-item-renderer, ytm-lockup-view-model, ytd-video-renderer, ytd-rich-item-renderer, ytd-compact-video-renderer, yt-lockup-view-model');
+      if (card) cards.add(card);
+    });
+    cards.forEach(card => {
+      const times = [...card.querySelectorAll('.video-time, ytm-thumbnail-overlay-time-status-renderer, ytd-thumbnail-overlay-time-status-renderer, .thumbnail-overlay-time-status-renderer, yt-thumbnail-overlay-badge-view-model, .yt-thumbnail-overlay-badge-view-model')];
+      const durations = times.flatMap(node => [node.getAttribute('aria-label'), ...[...node.querySelectorAll('[aria-label]')].map(child => child.getAttribute('aria-label')), node.textContent]).map(durationSeconds).filter(value => value !== null);
+      const live = times.some(node => /ライブ|生配信|\blive\b/i.test(node.getAttribute('aria-label') || node.textContent || ''));
+      flag(card, 'data-immersed-duration', live || !durations.length || Math.max(...durations) < threshold);
+    });
+  };
+  // Two-finger spread fills the viewing area; pinch restores the complete frame.
+  // Prevent page magnification only for a two-finger gesture on a video page.
+  let pinchStart = 0;
+  const watching = () => /^\/(embed\/|watch|shorts\/)/.test(location.pathname);
+  const setFill = fill => {
+    if (window.__immersedOptions.fillPortrait === fill) return;
+    window.__immersedOptions.fillPortrait = fill;
+    window.__immersedApplyOptions?.();
+    const videoId = new URL(location.href).searchParams.get('v') || location.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1];
+    window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'viewport', videoId, fillPortrait: fill }));
+  };
+  const distance = touches => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
+  document.addEventListener('touchstart', event => {
+    if (watching() && event.touches.length === 2) { pinchStart = distance(event.touches); event.preventDefault(); }
+  }, { passive: false });
+  document.addEventListener('touchmove', event => {
+    if (!watching() || event.touches.length !== 2 || !pinchStart) return;
+    event.preventDefault();
+    const scale = distance(event.touches) / pinchStart;
+    if (scale > 1.16) setFill(true);
+    if (scale < 0.86) setFill(false);
+  }, { passive: false });
+  document.addEventListener('touchend', () => { pinchStart = 0; });
+  document.addEventListener('touchcancel', () => { pinchStart = 0; });
   window.__immersedApplyOptions = () => {
     const root = document.documentElement;
     if (!root) return;
@@ -38,6 +87,7 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
       } catch {}
     }
     if (location.pathname.startsWith('/embed/')) return;
+    if (!watch) filterDuration(options.minimumMinutes);
     document.querySelectorAll('ytm-reel-shelf-renderer, ytm-shorts-lockup-view-model, ytm-shorts-lockup-view-model-v2, ytd-reel-shelf-renderer, ytd-rich-section-renderer:has(a[href*="/shorts/"])').forEach(node => flag(node, 'data-immersed-short', options.hideShorts));
     document.querySelectorAll('a[href*="/shorts/"]').forEach(link => flag(link.closest('ytm-rich-item-renderer, ytm-video-with-context-renderer, ytd-rich-item-renderer') || link, 'data-immersed-short', options.hideShorts));
   };

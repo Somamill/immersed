@@ -339,6 +339,8 @@ test('portrait fill changes the video itself and YouTube discovery is forced dar
   await page.goto('https://m.youtube.com/embed/M7lc1UVf-VE');
   await page.addScriptTag({ content: YOUTUBE_BOOTSTRAP });
   await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+  await expect(page.locator('video')).toHaveCSS('object-fit', 'contain');
+  await page.evaluate(() => { const w = window as unknown as { __immersedOptions: { fillPortrait: boolean }; __immersedApplyOptions: () => void }; w.__immersedOptions.fillPortrait = true; w.__immersedApplyOptions(); });
   await expect(page.locator('video')).toHaveCSS('object-fit', 'cover');
   expect((await page.locator('video').boundingBox())!.height).toBe(844);
   await page.evaluate(() => { (window as unknown as { __immersedOptions: { fillPortrait: boolean }; __immersedApplyOptions: () => void }).__immersedOptions.fillPortrait = false; (window as unknown as { __immersedApplyOptions: () => void }).__immersedApplyOptions(); });
@@ -458,13 +460,19 @@ test('N2 furigana shows N1 readings only and can be turned off without disabling
   await expect(page.getByTestId('furigana-抽象')).toHaveCount(0);
   await expect(page.getByTestId('furigana-食べる')).toHaveCount(0);
   await expect(page.getByTestId('subtitle-words')).toHaveCSS('justify-content', 'center');
-  await expect(page.getByText('愛想', { exact: true })).toHaveCSS('color', 'rgb(255, 208, 119)');
+  await expect(page.getByText('愛想', { exact: true })).toHaveCSS('color', 'rgb(243, 243, 243)');
+  await expect(page.getByTestId('unknown-愛想')).toBeVisible();
+  await expect(page.getByTestId('unknown-抽象')).toHaveCount(0);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('switch', { name: 'Furigana', exact: true }).click();
   await page.getByRole('button', { name: 'Watch & read', exact: true }).click();
   await expect(page.getByTestId('furigana-愛想')).toHaveCount(0);
   await page.getByRole('button', { name: 'Look up 愛想', exact: true }).click();
   await expect(page.getByText('WORD & GRAMMAR', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Mark known', exact: true }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByTestId('unknown-愛想')).toHaveCount(0);
+  await expect(page.getByText('愛想', { exact: true })).toHaveCSS('color', 'rgb(243, 243, 243)');
 });
 
 test('JavaScript-only YouTube watch navigation is reported even before a video exists', async ({ page }) => {
@@ -640,4 +648,80 @@ test('native Japanese cue clears are forwarded on cuechange without waiting for 
   expect(await texts()).toContain('日本語です。');
   await page.evaluate(() => { const track = (window as unknown as { track: EventTarget & { activeCues: unknown[] } }).track; track.activeCues = []; track.dispatchEvent(new Event('cuechange')); });
   expect((await texts()).at(-1)).toBe('');
+});
+
+test('duration preference persists independently of Shorts and learner level', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('radio', { name: 'At least 30 minutes', exact: true }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('radio', { name: 'At least 30 minutes', exact: true })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Hide Shorts', exact: true })).toBeChecked();
+  await expect(page.getByRole('radio', { name: 'Completed N5', exact: true })).toBeChecked();
+  await page.getByRole('radio', { name: 'Any video length', exact: true }).click();
+  await expect(page.getByRole('radio', { name: 'Any video length', exact: true })).toBeChecked();
+});
+
+test('length filters handle exact thresholds, hours, Japanese labels, live and late-loaded cards', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<style>ytm-video-with-context-renderer{display:block;height:50px}</style><main>' + [['short','14:59'],['fifteen','15:00'],['thirty','30:00'],['hour','1:00:00'],['japanese','1 時間 5 分'],['live','LIVE'],['unknown','']].map(([id,time]) => `<ytm-video-with-context-renderer id="${id}"><a href="/watch?v=${id}">Video</a><span class="video-time">${time}</span></ytm-video-with-context-renderer>`).join('') + '</main>' }));
+  await page.goto('https://m.youtube.com/results?search_query=test');
+  await page.evaluate(() => { (window as unknown as { __immersedOptions: unknown }).__immersedOptions = { dark: true, hideShorts: false, minimumMinutes: 15, fillPortrait: false }; });
+  await page.addScriptTag({ content: CAPTION_BRIDGE });
+  await expect(page.locator('#short')).toBeHidden();
+  await expect(page.locator('#fifteen')).toBeVisible();
+  await expect(page.locator('#live')).toBeHidden();
+  await expect(page.locator('#unknown')).toBeHidden();
+  const minimum = async (value: number) => page.evaluate(value => { const w = window as unknown as { __immersedOptions: { minimumMinutes: number }; __immersedApplyOptions: () => void }; w.__immersedOptions.minimumMinutes = value; w.__immersedApplyOptions(); }, value);
+  await minimum(30);
+  await expect(page.locator('#fifteen')).toBeHidden();
+  await expect(page.locator('#thirty')).toBeVisible();
+  await minimum(60);
+  await expect(page.locator('#thirty')).toBeHidden();
+  await expect(page.locator('#hour')).toBeVisible();
+  await expect(page.locator('#japanese')).toBeVisible();
+  await page.evaluate(() => { const card = document.createElement('ytm-video-with-context-renderer'); card.id = 'late'; card.innerHTML = '<a href="/watch?v=late">Late result</a><span class="video-time">35:00</span>'; document.querySelector('main')!.appendChild(card); });
+  await expect(page.locator('#late')).toBeHidden();
+  await minimum(0);
+  await expect(page.locator('#late')).toBeVisible();
+  await expect(page.locator('#unknown')).toBeVisible();
+});
+
+test('two-finger spread fills the video and pinch restores the complete frame without navigating', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<meta name="viewport" content="width=device-width,initial-scale=1"><video class="html5-main-video"></video>' }));
+  await page.goto('https://m.youtube.com/embed/M7lc1UVf-VE');
+  await page.addScriptTag({ content: YOUTUBE_BOOTSTRAP });
+  const client = await page.context().newCDPSession(page);
+  const pinch = async (start: number, end: number) => {
+    const points = (distance: number) => [{ x: 195 - distance / 2, y: 300 }, { x: 195 + distance / 2, y: 300 }];
+    await client.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: points(start) });
+    await client.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: points(end) });
+    await client.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  };
+  await expect(page.locator('video')).toHaveCSS('object-fit', 'contain');
+  await pinch(100, 200);
+  await expect(page.locator('video')).toHaveCSS('object-fit', 'cover');
+  await pinch(200, 100);
+  await expect(page.locator('video')).toHaveCSS('object-fit', 'contain');
+  await expect(page).toHaveURL(/embed\/M7lc1UVf-VE/);
+});
+
+test('skip reacts on touch-down once and rapid presses advance distinct captions', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 2, text: '食べる。' }, { start: 4, end: 6, text: '旅行。' }, { start: 8, end: 10, text: '公園。' }] }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 食べる', exact: true })).toBeVisible({ timeout: 12000 });
+  const next = page.getByRole('button', { name: 'Next sentence', exact: true });
+  const previous = page.getByRole('button', { name: 'Previous sentence', exact: true });
+  const n = (await next.boundingBox())!, p = (await previous.boundingBox())!;
+  expect(n.x - (p.x + p.width)).toBeGreaterThanOrEqual(60);
+  await page.mouse.move(n.x + n.width / 2, n.y + n.height / 2);
+  await page.mouse.down();
+  await expect(page.getByRole('button', { name: 'Look up 旅行', exact: true })).toBeVisible();
+  await page.mouse.up();
+  await expect(page.getByRole('button', { name: 'Look up 旅行', exact: true })).toBeVisible();
+  await next.click();
+  await expect(page.getByRole('button', { name: 'Look up 公園', exact: true })).toBeVisible();
+  await expect(next).toBeDisabled();
 });
