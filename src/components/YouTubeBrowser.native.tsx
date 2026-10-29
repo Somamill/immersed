@@ -12,9 +12,8 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
   // its props to never under TS 6 strict mode. Explicit object preserves props.
   const initial = youtubeUrl(uri);
   const [playerId, setPlayerId] = useState<string | null>(initial ? new URL(initial).searchParams.get('v') : null);
-  const [originalPlayer, setOriginalPlayer] = useState(false);
   const web = useRef<WebView<object>>(null);
-  const source = useMemo(() => playerId ? originalPlayer ? { uri: `https://m.youtube.com/watch?v=${playerId}` } : embeddedPlayerSource(playerId, Application.applicationId || 'com.somamill.immersed') : { uri }, [playerId, originalPlayer, uri]);
+  const source = useMemo(() => playerId ? embeddedPlayerSource(playerId, Application.applicationId || 'com.somamill.immersed') : { uri }, [playerId, uri]);
   const optionsScript = `window.__immersedOptions = ${JSON.stringify({ dark, hideShorts, fillPortrait: true })}; window.__immersedApplyOptions?.(); true;`;
   useEffect(() => { web.current?.injectJavaScript(optionsScript); }, [optionsScript]);
   const currentVideo = useRef<string | null>(playerId);
@@ -48,7 +47,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     },
   }));
   return <WebView<object> key={history[0].version} ref={web} source={source} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo={false} injectedJavaScriptBeforeContentLoaded={optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
-    onNavigationStateChange={state => { if (state.url !== 'about:blank') pageChanged(state.url); }} onLoadStart={() => { onCaption(null); onError(''); }} onError={event => { if (playerId && !originalPlayer) setOriginalPlayer(true); else onError(event.nativeEvent.description); }}
+    onNavigationStateChange={state => { if (state.url !== 'about:blank') pageChanged(state.url); }} onLoadStart={() => { onCaption(null); onError(''); }} onError={event => onError(event.nativeEvent.description)}
     onShouldStartLoadWithRequest={request => {
       if (request.url === 'about:blank' || request.isTopFrame === false) return true;
       try {
@@ -59,16 +58,17 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
         if (!/(^|\.)youtube\.com$/.test(u.hostname)) return false;
         const watch = youtubeUrl(request.url);
         const id = watch ? new URL(watch).searchParams.get('v') : null;
-        if (id && (!originalPlayer || id !== playerId) && !u.pathname.startsWith('/embed/')) {
-          pageChanged(watch!); setOriginalPlayer(false); setPlayerId(id); return false;
+        if (id && !u.pathname.startsWith('/embed/')) {
+          pageChanged(watch!); setPlayerId(id); return false;
         }
+        if (playerId && !u.pathname.startsWith('/embed/')) return false;
         return true;
       } catch { return false; }
     }}
     onMessage={event => {
       try {
         const v = JSON.parse(event.nativeEvent.data);
-        if (v.type === 'playerError' && v.videoId === currentVideo.current && playerId && !originalPlayer) { setOriginalPlayer(true); return; }
+        if (v.type === 'playerError' && v.videoId === currentVideo.current) { onError('This video cannot play in the embedded player.'); return; }
         if (v.type === 'captionData' && v.language === 'ja' && typeof v.videoId === 'string' && v.videoId === currentVideo.current) {
           const cues = parseCaptionTrack(v.data);
           if (cues.length) { pendingTrack.current?.abort(); onTranscript?.(cues, v.videoId); }

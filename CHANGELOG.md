@@ -2,6 +2,15 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.3 — 2026-10-29
+
+Focused video player, friendly icons and device caption caching
+
+- Replace text navigation with large accessible vector icons, add a generated mint play/book app mark, and configure native/project/web icon assets.
+- Keep selected videos in the embedded player with a fixed reading area; remove the full watch-page fallback so comments cannot appear in the viewing screen. Embedding-disabled videos now report a playback error.
+- Automatically reuse validated Japanese timed captions from a bounded, expiring device cache; preserve live playback if cache storage fails.
+- Document persistent-service, supported-audio and physical-iPhone release requirements in RELIABILITY.md. Captionless YouTube speech recognition remains blocked by cloud audio access; the core acceptance test is unfinished.
+
 ## 0.5.2 — 2026-10-29
 
 Japanese-only captions, fixed reading area and automatic recovery

@@ -342,12 +342,45 @@ test('YouTube browsing removes the duplicate bottom bar and its reserved space',
   expect(bounds.y + bounds.height).toBe(844);
 });
 
-test('an explicit embedded-player error requests automatic fallback', async ({ page }) => {
+test('an explicit embedded-player error is reported without navigating to a watch page', async ({ page }) => {
   await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="movie_player"><div class="ytp-error-content-wrap">Embedding is disabled</div></div>' }));
   await page.goto('https://m.youtube.com/embed/M7lc1UVf-VE');
   await page.evaluate(() => { const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (raw: string) => void } }; w.messages = []; w.ReactNativeWebView = { postMessage: raw => w.messages.push(JSON.parse(raw)) }; });
   await page.addScriptTag({ content: CAPTION_BRIDGE });
   expect(await page.evaluate(() => (window as unknown as { messages: { type: string; videoId?: string }[] }).messages.filter(m => m.type === 'playerError'))).toEqual([{ type: 'playerError', videoId: 'M7lc1UVf-VE' }]);
+  expect(page.url()).toContain('/embed/M7lc1UVf-VE');
+});
+
+test('navigation uses large labelled icons with an active state and no visible text tabs', async ({ page }) => {
+  await page.goto('/');
+  for (const label of ['Browse', 'Words · 0', 'Settings']) {
+    const button = page.getByRole('button', { name: label, exact: true });
+    await expect(button).toBeVisible();
+    await expect(button.locator('svg')).toHaveCount(1);
+    expect((await button.boundingBox())!.height).toBeGreaterThanOrEqual(48);
+    await expect(button).toHaveText('');
+  }
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('a saved Japanese caption track survives reload when transcription is unavailable', async ({ page }) => {
+  let calls = 0;
+  await page.route('**/api/immersion/transcribe?**', route => {
+    calls++;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify(calls === 1 ? { status: 'ready', cues: [{ start: 0, end: 2, text: '公園に行きます。' }] } : { status: 'unavailable', reason: 'NETWORK_BLOCKED' }) });
+  });
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 公園', exact: true })).toBeVisible({ timeout: 10000 });
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('immersed.captions.ja.v1.M7lc1UVf-VE'))).not.toBeNull();
+  await page.reload();
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 公園', exact: true })).toBeVisible();
+  await page.clock.install(); await page.clock.fastForward(4000);
+  expect(calls).toBe(1);
 });
 
 test('the player’s actual timedtext response is captured when a copied caption URL is empty', async ({ page }) => {

@@ -60,7 +60,7 @@ See [THIRD_PARTY.md](THIRD_PARTY.md) for JMdict's CC BY-SA 4.0 attribution, pars
 
 ## Versions and GitHub
 
-Repository: https://github.com/Somamill/immersed. [CHANGELOG.md](CHANGELOG.md) and Settings → Version history record released updates. Current release: 0.5.2.
+Repository: https://github.com/Somamill/immersed. [CHANGELOG.md](CHANGELOG.md) and Settings → Version history record released updates. Current release: 0.5.3.
 
 For each user-facing update:
 
@@ -119,3 +119,13 @@ Caption language is verified from the selected player/text track and Japanese-on
 The browse-page adapter removes YouTube's duplicate bottom pivot bar and its reserved body/app padding, in addition to disabling native WebView insets. This is scoped to discovery pages and does not reposition player ancestors. The native WebView reloads its adapter when the app release version changes. Explicit embed errors automatically use the original player rather than requiring a restore button.
 
 Temporary service/recognition failures retry automatically at most three times with backoff and request timeouts. Network-policy denials, source-access denials and missing-worker configuration stop with a passive status; automation cannot repair those conditions. A direct audio-access retest still returned the proxy's 403. No captionless YouTube ASR success or live iPhone validation is claimed.
+
+## Focused player, icons and device caption cache (0.5.3)
+
+Navigation now uses large vector icons with accessible labels, active states and 52-point touch targets. The generated mint play/book mark appears in the browse header and is configured as the project/app icon and web favicon. Expo Go itself retains its own installed Home Screen icon.
+
+The player no longer falls back to a full YouTube watch page after errors, and top-level non-embed navigation is blocked while watching. This keeps comments and the full watch-page interface out of the viewing screen; embedding-disabled videos now report an error rather than opening a page with comments. The full-width Japanese reading/dictionary area remains beneath the video.
+
+Verified Japanese timed tracks and successfully generated captions are cached on the device for repeat visits: up to eight tracks, 30-day expiry, 5,000 cues/128,000 serialized characters per track. Larger tracks remain live-only. Captions load automatically from cache before requesting recognition; cache writes are serialized and failures do not interrupt live playback. This does not provide offline video or an offline dictionary.
+
+[RELIABILITY.md](RELIABILITY.md) records the production architecture and physical-iPhone release gates. Automatic creation of subtitles for captionless YouTube videos remains blocked by source-audio access. The core end-to-end acceptance test is explicitly unfinished.
