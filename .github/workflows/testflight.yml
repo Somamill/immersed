@@ -1,0 +1,49 @@
+name: Send iPhone update to TestFlight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**/*.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      ASC_APP_ID: ${{ vars.ASC_APP_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Check one-time account setup
+        run: |
+          node <<'JS'
+          const fs = require('node:fs');
+          const config = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+          if (!process.env.EXPO_TOKEN) throw new Error('Add the EXPO_TOKEN repository secret. See TESTFLIGHT.md.');
+          if (!config.expo.extra?.eas?.projectId) throw new Error('Link the project using EAS init and commit app.json. See TESTFLIGHT.md.');
+          if (!/^\d+$/.test(process.env.ASC_APP_ID ?? '')) throw new Error('Add the numeric ASC_APP_ID repository variable. See TESTFLIGHT.md.');
+          const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
+          eas.submit.production.ios.ascAppId = process.env.ASC_APP_ID;
+          fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2) + '\n');
+          JS
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - name: Queue signed iOS build and automatic TestFlight upload
+        run: npx eas-cli@latest build --platform ios --profile production --auto-submit --non-interactive --no-wait
+      - name: Explain queued status
+        run: |
+          echo 'Build queued on Expo. Follow the EAS link above for build and submission status.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'A successful workflow means the build was queued, not that Apple has processed it. Open TestFlight after processing.' >> "$GITHUB_STEP_SUMMARY"
