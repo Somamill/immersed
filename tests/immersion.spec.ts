@@ -1,32 +1,38 @@
 import { test, expect } from '@playwright/test';
+import { CAPTION_BRIDGE, youtubeUrl } from '../src/youtube';
 
-test('tap, save with context, reload, and remove a Japanese word', async ({ page }) => {
+test('home offers real YouTube discovery and retains the saved-word library', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: /A slower morning in Tokyo/ }).click();
-  await expect(page.getByText('Device-generated Japanese speech', { exact: false })).toBeVisible();
-  await page.getByRole('button', { name: 'Look up 今日', exact: true }).click();
-  await expect(page.getByText('today', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '＋ Save word & sentence', exact: true }).click();
-  await expect(page.getByRole('button', { name: '✓ Saved to your words', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Close word lookup', exact: true }).last().click();
-  await page.getByRole('button', { name: /Your immersion space/ }).click();
-  await page.getByRole('tab', { name: /Words/ }).click();
-  await expect(page.getByText('今日は少し早く起きました。', { exact: true })).toBeVisible();
-  await page.reload();
-  await page.getByRole('tab', { name: /Words/ }).click();
-  await expect(page.getByText('today', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Remove 今日' }).click();
-  await expect(page.getByText('0 saved words', { exact: false })).toBeVisible();
+  for (const name of ['Daily life', 'Food', 'Travel', 'Conversation']) await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+  await expect(page.getByText('Device-generated Japanese speech', { exact: false })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Words · 0', exact: true }).click();
+  await expect(page.getByText('Your saved words and their original video context will appear here.')).toBeVisible();
 });
 
-test('caption preferences apply to the lesson', async ({ page }) => {
-  await page.goto('/');
-  await page.getByRole('tab', { name: /Settings/ }).click();
-  await page.getByRole('switch', { name: 'Show English translations' }).click();
-  await page.getByRole('switch', { name: 'Show furigana' }).click();
-  await page.getByRole('tab', { name: /Immerse/ }).click();
-  await page.getByRole('button', { name: /Finding joy in small things/ }).click();
-  await expect(page.getByText('Hello, everyone.', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('みなさん', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Look up 皆さん' })).toBeVisible();
+test('video links normalize safely', () => {
+  expect(youtubeUrl('https://youtu.be/M7lc1UVf-VE?si=abc')).toBe('https://m.youtube.com/watch?v=M7lc1UVf-VE&hl=ja');
+  expect(youtubeUrl('https://youtube.com/shorts/M7lc1UVf-VE')).toBe('https://m.youtube.com/watch?v=M7lc1UVf-VE&hl=ja');
+  expect(youtubeUrl('https://youtube.com.evil.example/watch?v=M7lc1UVf-VE')).toBeNull();
+  expect(youtubeUrl('javascript:alert(1)')).toBeNull();
+});
+
+test('caption adapter reads player text, pauses, ignores comments, and clears on navigation', async ({ page }) => {
+  // Entirely local fixture: no request is sent to YouTube. This exercises the
+  // adapter contract, not a claim that live YouTube markup has been verified.
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<meta charset="utf-8"><title>日本の日常</title><video></video><div class="ytp-caption-segment">今日は公園に行きます。</div><div class="comment">NOT A CAPTION</div>' }));
+  await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
+  await page.evaluate(() => {
+    const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (message: string) => void }; pausedByApp: boolean };
+    w.messages = [];
+    w.ReactNativeWebView = { postMessage: message => w.messages.push(JSON.parse(message)) };
+    document.querySelector('video')!.pause = () => { w.pausedByApp = true; };
+  });
+  await page.addScriptTag({ content: CAPTION_BRIDGE });
+  const caption = await page.evaluate(() => (window as unknown as { messages: { type: string; text: string; tokens: { text: string }[] }[] }).messages.find(m => m.type === 'caption'));
+  expect(caption?.text).toBe('今日は公園に行きます。');
+  expect(caption?.tokens.map(t => t.text).join('')).toBe(caption?.text);
+  await page.evaluate(() => (window as unknown as { __immersedCommand: (command: string) => void }).__immersedCommand('pause'));
+  expect(await page.evaluate(() => (window as unknown as { pausedByApp: boolean }).pausedByApp)).toBe(true);
+  await page.evaluate(() => { history.pushState({}, '', '/watch?v=OTHER_VIDEO'); document.querySelector('.ytp-caption-segment')!.remove(); });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string }[] }).messages.some(m => m.type === 'reset'))).toBe(true);
 });

@@ -1,143 +1,97 @@
-import React, { useEffect, useState } from 'react';
-import { Alert, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import * as Speech from 'expo-speech';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { lessons, sentence, wordId, type Lesson, type SavedWord, type Token } from './src/content';
+import YouTubeBrowser, { type BrowserHandle } from './src/components/YouTubeBrowser';
+import { topics, topicUrl, youtubeUrl, type Caption, type DictionaryEntry } from './src/youtube';
 
-const C = { bg: '#F7F5EF', ink: '#242D28', muted: '#70776E', green: '#344C3F', accent: '#BD512E', line: '#DFE2D9', white: '#FFFDF8' };
-const STORAGE_KEY = 'immersed.v1.words';
-type Tab = 'Immerse' | 'Words' | 'Settings';
-
-function Button({ title, onPress, secondary = false }: { title: string; onPress: () => void; secondary?: boolean }) {
-  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => [s.button, secondary && s.secondary, pressed && { opacity: 0.65 }]}><Text style={[s.buttonText, secondary && { color: C.ink }]}>{title}</Text></Pressable>;
+type Saved = { key: string; word: string; reading: string; meaning: string; sentence: string; title: string; url: string; time: number };
+type Lookup = { word: string; caption: Caption };
+const STORAGE = 'immersed.youtube.words.v1';
+const cache = new Map<string, DictionaryEntry[]>();
+function Button({ children, onPress }: { children: string; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" onPress={onPress} style={s.button}><Text style={s.buttonText}>{children}</Text></Pressable>;
 }
-
 export default function App() {
-  const [tab, setTab] = useState<Tab>('Immerse');
-  const [lesson, setLesson] = useState<Lesson | null>(null);
-  const [line, setLine] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [repeat, setRepeat] = useState(false);
-  const [cycle, setCycle] = useState(0);
-  const [rate, setRate] = useState(0.85);
-  const [translation, setTranslation] = useState(true);
-  const [furigana, setFurigana] = useState(true);
-  const [selected, setSelected] = useState<{ token: Token; line: number } | null>(null);
-  const [words, setWords] = useState<SavedWord[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const browser = useRef<BrowserHandle>(null);
+  const [uri, setUri] = useState(topicUrl(topics[0].query));
+  const [topic, setTopic] = useState('Daily life');
+  const [input, setInput] = useState('');
+  const [caption, setCaption] = useState<Caption | null>(null);
+  const [error, setError] = useState('');
+  const [lookup, setLookup] = useState<Lookup | null>(null);
+  const [entries, setEntries] = useState<DictionaryEntry[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [dictionaryError, setDictionaryError] = useState('');
+  const [saved, setSaved] = useState<Saved[]>([]);
+  const [library, setLibrary] = useState(false);
+  const [storageReady, setStorageReady] = useState(false);
   const [storageError, setStorageError] = useState('');
-  const [speechError, setSpeechError] = useState('');
-  const [url, setUrl] = useState('');
-  const [showImport, setShowImport] = useState(false);
-
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY).then(raw => {
-      if (raw) {
-        const data: unknown = JSON.parse(raw);
-        if (!Array.isArray(data) || !data.every(w => w && typeof w.id === 'string' && typeof w.token?.surface === 'string' && typeof w.sentence === 'string' && typeof w.language === 'string')) throw new Error('Invalid library');
-        setWords(data);
-      }
-      setLoaded(true);
-    }).catch(() => setStorageError('Your library could not be loaded. Saving is disabled to protect existing data.'));
+    AsyncStorage.getItem(STORAGE).then(raw => {
+      const data: unknown = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(data) || !data.every(w => typeof w?.key === 'string' && typeof w.word === 'string' && typeof w.sentence === 'string' && typeof w.meaning === 'string')) throw new Error('Invalid library');
+      setSaved(data); setStorageReady(true);
+    }).catch(() => setStorageError('Could not load saved words. Saving is disabled to protect your library.'));
   }, []);
-
   useEffect(() => {
-    if (loaded) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(words)).catch(() => setStorageError('Changes could not be stored on this device.'));
-  }, [words, loaded]);
-
+    if (storageReady) AsyncStorage.setItem(STORAGE, JSON.stringify(saved)).catch(() => setStorageError('Could not store your changes on this device.'));
+  }, [saved, storageReady]);
   useEffect(() => {
-    if (!playing || !lesson) return;
+    if (!lookup) return;
+    const controller = new AbortController();
     let active = true;
-    setSpeechError('');
-    void Speech.stop().then(() => {
-      if (!active) return;
-      Speech.speak(sentence(lesson.cues[line]), {
-        language: lesson.language === 'ja' ? 'ja-JP' : lesson.language, rate,
-        onDone: () => {
-          if (!active) return;
-          if (repeat) setCycle(c => c + 1);
-          else if (line < lesson.cues.length - 1) setLine(n => n + 1);
-          else setPlaying(false);
-        },
-        onError: () => { if (active) { setPlaying(false); setSpeechError('Speech is unavailable. Check that a Japanese voice is installed on your device.'); } },
-      });
-    }).catch(() => { if (active) { setPlaying(false); setSpeechError('Audio could not start. Please try again.'); } });
-    return () => { active = false; void Speech.stop(); };
-  }, [playing, lesson, line, repeat, rate, cycle]);
-
-  const openLesson = (item: Lesson) => { setPlaying(false); setLine(0); setLesson(item); setSelected(null); setSpeechError(''); };
-  const closeLesson = () => { setPlaying(false); setLesson(null); setSelected(null); };
-  const tapWord = (token: Token, cueLine: number) => { if (!token.meaning) return; setPlaying(false); setSelected({ token, line: cueLine }); };
-  const saveWord = () => {
-    if (!selected || !lesson || !loaded) return;
-    const id = wordId(lesson.language, selected.token);
-    if (!words.some(w => w.id === id)) setWords(old => [{ id, token: selected.token, sentence: sentence(lesson.cues[selected.line]), translation: lesson.cues[selected.line].translation, lesson: lesson.title, language: lesson.language, savedAt: new Date().toISOString() }, ...old]);
+    setEntries([]); setDictionaryError('');
+    const cached = cache.get(lookup.word);
+    if (cached) { setEntries(cached); setLoading(false); return; }
+    setLoading(true);
+    const timer = setTimeout(() => controller.abort(), 12000);
+    void fetch(`https://jisho.org/api/v1/search/words?keyword=${encodeURIComponent(lookup.word)}`, { signal: controller.signal }).then(async response => {
+      if (!response.ok) throw new Error('Dictionary unavailable');
+      const data = await response.json();
+      if (!Array.isArray(data.data)) throw new Error('Unexpected dictionary response');
+      const result = data.data.filter((entry: DictionaryEntry) => Array.isArray(entry.japanese) && entry.japanese.length && Array.isArray(entry.senses) && entry.senses.length).slice(0, 3);
+      cache.set(lookup.word, result);
+      if (active) setEntries(result);
+    }).catch(() => { if (active) setDictionaryError('Dictionary lookup failed. Check your connection, then tap the word again.'); }).finally(() => { clearTimeout(timer); if (active) setLoading(false); });
+    return () => { active = false; clearTimeout(timer); controller.abort(); };
+  }, [lookup]);
+  const browse = (url: string) => { Keyboard.dismiss(); setError(''); setCaption(null); setLookup(null); setUri(url); };
+  const openInput = () => {
+    const text = input.trim();
+    if (!text) return;
+    const video = youtubeUrl(text);
+    if (/^https?:/i.test(text) && !video) { setError('Use a YouTube video link, or type a topic to search.'); return; }
+    setTopic('Search'); browse(video || topicUrl(`${text} 日本語`));
   };
-  const openYouTube = async () => {
-    let parsed: URL;
-    try { parsed = new URL(url.trim()); } catch { Alert.alert('Add a YouTube link', 'Paste a full https:// YouTube video URL.'); return; }
-    if (parsed.protocol !== 'https:' || !['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be'].includes(parsed.hostname)) { Alert.alert('YouTube links only', 'Use a link from youtube.com or youtu.be.'); return; }
-    try { await Linking.openURL(parsed.toString()); setShowImport(false); } catch { Alert.alert('Could not open link', 'Please try opening it in Safari.'); }
+  const tapWord = (word: string) => { if (caption) { browser.current?.command('pause'); setLookup({ word, caption }); } };
+  const save = (entry: DictionaryEntry) => {
+    if (!lookup || !storageReady) return;
+    const japanese = entry.japanese[0];
+    const key = `${entry.slug}:${japanese.reading ?? ''}`;
+    if (saved.some(w => w.key === key)) return;
+    setSaved(old => [{ key, word: japanese.word || lookup.word, reading: japanese.reading || '', meaning: entry.senses[0].english_definitions.join('; '), sentence: lookup.caption.text, title: lookup.caption.title, url: lookup.caption.url, time: lookup.caption.time }, ...old]);
   };
-
-  return <SafeAreaProvider><SafeAreaView style={s.safe}><StatusBar style="dark" /><View style={s.shell}>
-    <View style={s.header}><Text style={s.brand}>immersed<Text style={{ color: C.accent }}>.</Text></Text><Text style={s.language}>日本語  /  JA</Text></View>
-    {lesson ? <ScrollView contentContainerStyle={s.content}>
-      <Pressable accessibilityRole="button" onPress={closeLesson} style={s.back}><Text style={s.meta}>←  Your immersion space</Text></Pressable>
-      <View style={[s.playerArt, { backgroundColor: lesson.color }]}><Text style={s.artLabel}>{lesson.kind.toUpperCase()} · DEMO LESSON</Text><Text style={s.heroGlyph}>{lesson.glyph}</Text><Text style={s.artFooter}>Small moments. Real understanding.</Text></View>
-      <Text style={s.title}>{lesson.title}</Text><Text style={s.meta}>Original sample · Device-generated Japanese speech</Text>
-      <View style={s.controls}><Button secondary title="↶ Previous" onPress={() => { setLine(n => Math.max(0, n - 1)); setCycle(c => c + 1); }} /><Button title={playing ? 'Ⅱ Pause' : '▶ Listen'} onPress={() => setPlaying(p => !p)} /><Button secondary title="Next ↷" onPress={() => { setLine(n => Math.min(lesson.cues.length - 1, n + 1)); setCycle(c => c + 1); }} /></View>
-      <View style={s.between}><Pressable accessibilityRole="button" onPress={() => setRate(r => r === 0.85 ? 0.65 : r === 0.65 ? 1 : 0.85)}><Text style={s.chip}>{rate}× speech</Text></Pressable><Pressable accessibilityRole="button" onPress={() => setRepeat(v => !v)}><Text style={[s.chip, repeat && { color: C.accent }]}>Repeat sentence {repeat ? 'on' : 'off'}</Text></Pressable></View>
-      {!!speechError && <Text accessibilityRole="alert" style={s.notice}>{speechError}</Text>}
-      <View style={s.sectionHeading}><Text style={s.sectionTitle}>Follow along</Text><Text style={s.meta}>Tap any word to explore</Text></View>
-      {lesson.cues.map((cue, index) => <View key={index} style={[s.cue, index === line && s.activeCue]}>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Select sentence ${index + 1}`} onPress={() => { setLine(index); setCycle(c => c + 1); }}><Text style={s.cueNumber}>{String(index + 1).padStart(2, '0')} {index === line ? '· CURRENT' : '· SELECT SENTENCE'}</Text></Pressable>
-        <View style={s.tokens}>{cue.tokens.map((token, i) => <Pressable key={i} accessibilityRole={token.meaning ? 'button' : undefined} accessibilityLabel={token.meaning ? `Look up ${token.surface}` : token.surface} disabled={!token.meaning} onPress={() => tapWord(token, index)} style={s.token}>
-          {furigana && <Text style={s.reading}>{token.reading ?? ' '}</Text>}<Text style={s.japanese}>{token.surface}</Text>
-        </Pressable>)}</View>
-        {translation && <Text style={s.translation}>{cue.translation}</Text>}
-      </View>)}
-      <Text style={s.notice}>Prototype: the active sentence follows synthesized speech. This is not a video player or live transcription.</Text>
-    </ScrollView> : <>
-      <ScrollView contentContainerStyle={s.content}>
-        {tab === 'Immerse' && <>
-          <Text style={s.eyebrow}>A LITTLE JAPANESE, EVERY DAY</Text><Text style={s.headline}>Less studying.{ '\n' }More living.</Text><Text style={s.lead}>Get lost in something good.{ '\n' }Find the words along the way.</Text>
-          <View style={s.welcome}><Text style={s.welcomeIcon}>ひ</Text><View style={{ flex: 1 }}><Text style={s.welcomeTitle}>Your immersion starts here</Text><Text style={s.welcomeBody}>Listen. Tap a word. Keep going.</Text></View></View>
-          <View style={s.sectionHeading}><Text style={s.sectionTitle}>Try the experience</Text><Text style={s.meta}>2 demo lessons</Text></View>
-          {lessons.map(item => <Pressable key={item.id} accessibilityRole="button" onPress={() => openLesson(item)} style={({ pressed }) => [s.card, pressed && { opacity: 0.7 }]}>
-            <View style={[s.thumbnail, { backgroundColor: item.color }]}><Text style={s.thumbnailGlyph}>{item.glyph}</Text><Text style={s.playBadge}>{item.kind === 'Podcast' ? '♫' : '▶'}</Text></View>
-            <View style={s.cardBody}><Text style={s.eyebrow}>{item.kind.toUpperCase()} · {item.duration.toUpperCase()}</Text><Text style={s.cardTitle}>{item.title}</Text><Text style={s.meta}>{item.subtitle}</Text></View>
-          </Pressable>)}
-          <Pressable accessibilityRole="button" onPress={() => setShowImport(true)} style={s.import}><Text style={s.plus}>＋</Text><View style={{ flex: 1 }}><Text style={s.welcomeTitle}>Bring something you love</Text><Text style={s.meta}>YouTube link · opens externally in this draft</Text></View><Text>↗</Text></Pressable>
-          <Text style={s.footnote}>Built around your curiosity. Japanese first, more languages to come.</Text>
-        </>}
-        {tab === 'Words' && <><Text style={s.eyebrow}>YOUR PERSONAL DICTIONARY</Text><Text style={s.headline}>Words with{ '\n' }a story.</Text><Text style={s.lead}>{words.length} saved {words.length === 1 ? 'word' : 'words'} · stored on this device</Text>
-          {!words.length && <View style={s.empty}><Text style={s.emptyGlyph}>言</Text><Text style={s.cardTitle}>Let curiosity build your library.</Text><Text style={s.lead}>Tap a word in any demo lesson, then save it here with its original sentence.</Text><Button title="Explore a lesson →" onPress={() => setTab('Immerse')} /></View>}
-          {words.map(word => <View key={word.id} style={s.wordCard}><View style={s.between}><Text style={s.wordSurface}>{word.token.surface}</Text><Pressable accessibilityRole="button" accessibilityLabel={`Remove ${word.token.surface}`} onPress={() => setWords(old => old.filter(w => w.id !== word.id))}><Text style={s.remove}>Remove</Text></Pressable></View><Text style={s.meta}>{word.token.reading}</Text><Text style={s.definition}>{word.token.meaning}</Text><Text style={s.example}>{word.sentence}</Text><Text style={s.meta}>{word.translation}</Text><Text style={s.source}>FROM {word.lesson.toUpperCase()}</Text></View>)}
-        </>}
-        {tab === 'Settings' && <><Text style={s.eyebrow}>MAKE IT YOURS</Text><Text style={s.headline}>Your pace.{ '\n' }Your space.</Text><Text style={s.lead}>A few small choices for a smoother flow.</Text><View style={s.setting}><View><Text style={s.welcomeTitle}>Furigana</Text><Text style={s.meta}>Readings above Japanese words</Text></View><Switch accessibilityLabel="Show furigana" value={furigana} onValueChange={setFurigana} trackColor={{ true: C.green }} /></View><View style={s.setting}><View><Text style={s.welcomeTitle}>English translations</Text><Text style={s.meta}>Sentence meanings below subtitles</Text></View><Switch accessibilityLabel="Show English translations" value={translation} onValueChange={setTranslation} trackColor={{ true: C.green }} /></View><View style={s.wordCard}><Text style={s.sectionTitle}>Japanese first. Open by design.</Text><Text style={s.lead}>Lessons and vocabulary carry a language code, ready for more language packs later.</Text><Text style={s.notice}>Draft 0.1 · No account or subscription. Words stay on this device. Display preferences reset when the app restarts. On iPhone, turn Silent Mode off to hear demo speech.</Text></View></>}
-        {!!storageError && <Text accessibilityRole="alert" style={s.notice}>{storageError}</Text>}
+  return <SafeAreaProvider><SafeAreaView style={s.safe}><StatusBar style="dark" />
+    <View style={s.header}><Text style={s.brand}>immersed<Text style={{ color: '#BD512E' }}>.</Text></Text><Button onPress={() => { browser.current?.command('pause'); setLibrary(true); }}>{`Words · ${saved.length}`}</Button></View>
+    <View style={s.search}><TextInput accessibilityLabel="Search Japanese topics or paste a YouTube link" placeholder="Search a topic or paste a YouTube link" value={input} onChangeText={setInput} onSubmitEditing={openInput} returnKeyType="search" autoCapitalize="none" style={s.input} /><Button onPress={openInput}>Go</Button></View>
+    <View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.topics}>{topics.map(item => <Pressable accessibilityRole="button" key={item.label} onPress={() => { setTopic(item.label); browse(topicUrl(item.query)); }} style={[s.topic, topic === item.label && s.activeTopic]}><Text style={s.topicText}>{item.label}</Text></Pressable>)}</ScrollView></View>
+    {!!error && <View style={s.error}><Text style={s.hint}>{error}</Text><Button onPress={() => { setError(''); browser.current?.reload(); }}>Refresh</Button></View>}
+    <View style={s.browser}><YouTubeBrowser ref={browser} uri={uri} onCaption={setCaption} onError={setError} /></View>
+    <View style={s.study}><View style={s.row}><Text style={s.eyebrow}>JAPANESE SUBTITLES</Text><Text style={s.badge}>Experimental</Text></View>
+      <ScrollView style={s.captionScroll} contentContainerStyle={{ paddingVertical: 8 }}>
+        {caption?.text && caption.japanese ? <View style={s.tokens}>{caption.tokens.map((token, i) => <Pressable key={i} accessibilityRole={token.word ? 'button' : undefined} accessibilityLabel={token.word ? `Look up ${token.text}` : token.text} disabled={!token.word} onPress={() => tapWord(token.text)} style={s.token}><Text style={[s.japanese, token.word && s.tappable]}>{token.text}</Text></Pressable>)}</View> : <View><Text style={s.emptyTitle}>{caption?.text ? 'Select Japanese captions in the player' : 'Pick a video. Turn on Japanese captions.'}</Text><Text style={s.hint}>Tap a caption word here for its reading and meaning. This draft reads visible YouTube captions, including auto-generated ones. It cannot yet transcribe videos without captions.</Text></View>}
       </ScrollView>
-      <View style={s.nav}>{(['Immerse', 'Words', 'Settings'] as Tab[]).map((item, i) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: tab === item }} onPress={() => setTab(item)} style={s.navItem}><Text style={[s.navIcon, tab === item && { color: C.accent }]}>{['◉', '▤', '☷'][i]}</Text><Text style={[s.navLabel, tab === item && { color: C.ink }]}>{item}</Text></Pressable>)}</View>
-    </>}
-    <Modal transparent visible={!!selected} animationType="slide" onRequestClose={() => setSelected(null)}><View style={s.overlay}><Pressable accessibilityRole="button" accessibilityLabel="Close word lookup" style={StyleSheet.absoluteFill} onPress={() => setSelected(null)} /><View style={s.sheet}><View style={s.handle} /><View style={s.between}><Text style={s.eyebrow}>WORD LOOKUP · SAMPLE DICTIONARY</Text><Pressable accessibilityRole="button" accessibilityLabel="Close word lookup" onPress={() => setSelected(null)}><Text style={s.close}>×</Text></Pressable></View><Text style={s.lookupWord}>{selected?.token.surface}</Text><Text style={s.lead}>{selected?.token.reading}</Text><Text style={s.definition}>{selected?.token.meaning}</Text>{selected && lesson && <><Text style={s.example}>{sentence(lesson.cues[selected.line])}</Text><Text style={s.meta}>{lesson.cues[selected.line].translation}</Text><View style={{ height: 24 }} /><Button title={!loaded ? 'Library unavailable' : words.some(w => w.id === wordId(lesson.language, selected.token)) ? '✓ Saved to your words' : '＋ Save word & sentence'} onPress={saveWord} /><Button secondary title="Back to the story →" onPress={() => { setLine(selected.line); setSelected(null); setPlaying(true); }} /></>}</View></View></Modal>
-    <Modal transparent visible={showImport} animationType="slide" onRequestClose={() => setShowImport(false)}><View style={s.overlay}><Pressable accessibilityRole="button" accessibilityLabel="Close YouTube link" style={StyleSheet.absoluteFill} onPress={() => setShowImport(false)} /><View style={s.sheet}><Text style={s.sectionTitle}>Bring your own curiosity</Text><Text style={s.lead}>YouTube playback inside the app and caption import are planned. For now, this opens your link in YouTube or Safari.</Text><TextInput accessibilityLabel="YouTube video URL" value={url} onChangeText={setUrl} placeholder="https://www.youtube.com/watch?v=…" autoCapitalize="none" autoCorrect={false} keyboardType="url" style={s.input} /><Button title="Open YouTube ↗" onPress={openYouTube} /><Button secondary title="Keep exploring the demo" onPress={() => setShowImport(false)} /></View></View></Modal>
-  </View></SafeAreaView></SafeAreaProvider>;
+      {caption?.japanese && !!caption.text && <View style={s.row}><Text style={s.hint}>Tap a word to pause & look it up</Text><Button onPress={() => browser.current?.command('replay')}>Replay line</Button></View>}
+    </View>
+    <Modal visible={!!lookup} transparent animationType="slide" onRequestClose={() => setLookup(null)}><View style={s.overlay}><Pressable accessibilityRole="button" accessibilityLabel="Close dictionary" style={StyleSheet.absoluteFill} onPress={() => setLookup(null)} /><View style={s.sheet}><View style={s.row}><Text style={s.eyebrow}>DICTIONARY · JISHO / JMdict</Text><Button onPress={() => setLookup(null)}>Close</Button></View><Text style={s.lookupWord}>{lookup?.word}</Text><ScrollView style={{ maxHeight: 260 }}>{loading && <ActivityIndicator color="#344C3F" />}{!!dictionaryError && <Text style={s.hint}>{dictionaryError}</Text>}{!loading && !dictionaryError && !entries.length && <Text style={s.hint}>No match for this word form. Dictionary-aware conjugation handling is still needed.</Text>}{entries.map((entry, index) => <View key={`${entry.slug}:${index}`} style={s.entry}><Text style={s.reading}>{entry.japanese.map(j => `${j.word || ''} ${j.reading || ''}`).join(' · ')}</Text><Text style={s.meaning}>{entry.senses.slice(0, 2).map(sense => sense.english_definitions.join('; ')).join('\n')}</Text><Button onPress={() => save(entry)}>{!storageReady ? 'Library unavailable' : saved.some(w => w.key === `${entry.slug}:${entry.japanese[0].reading ?? ''}`) ? '✓ Saved' : 'Save word + context'}</Button></View>)}</ScrollView><Text numberOfLines={2} style={s.sentence}>{lookup?.caption.text}</Text><Button onPress={() => { setLookup(null); browser.current?.command('play'); }}>Resume video →</Button></View></View></Modal>
+    <Modal visible={library} animationType="slide" onRequestClose={() => setLibrary(false)}><SafeAreaView style={s.safe}><View style={s.header}><Text style={s.brand}>Your words.</Text><Button onPress={() => setLibrary(false)}>Back to YouTube</Button></View><ScrollView contentContainerStyle={{ padding: 22 }}>{!saved.length && <Text style={s.hint}>Your saved words and their original video context will appear here.</Text>}{!!storageError && <Text style={s.hint}>{storageError}</Text>}{saved.map(word => <View key={word.key} style={s.entry}><Text style={s.lookupWord}>{word.word}</Text><Text style={s.reading}>{word.reading}</Text><Text style={s.meaning}>{word.meaning}</Text><Text style={s.sentence}>{word.sentence}</Text><Text style={s.hint}>{word.title}</Text><View style={s.row}><Button onPress={() => { const link = youtubeUrl(word.url); if (link) { setLibrary(false); browse(`${link}&t=${Math.floor(word.time)}s`); } }}>Watch context ↗</Button><Button onPress={() => setSaved(old => old.filter(w => w.key !== word.key))}>Remove</Button></View></View>)}<Text style={s.attribution}>Dictionary results via Jisho.org. JMdict/EDRDG data: CC BY-SA 4.0, https://www.edrdg.org/edrdg/licence.html. Lookups send the tapped word to Jisho. Topic buttons search YouTube; Japanese-only results are not guaranteed. Earlier sample vocabulary stays stored separately on this device.</Text></ScrollView></SafeAreaView></Modal>
+  </SafeAreaView></SafeAreaProvider>;
 }
-
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: C.bg }, shell: { flex: 1, width: '100%', maxWidth: 640, alignSelf: 'center' },
-  header: { paddingHorizontal: 24, paddingVertical: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomColor: C.line, borderBottomWidth: 1 }, brand: { fontSize: 29, fontWeight: '800', letterSpacing: -1.5, color: C.ink }, language: { color: C.green, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
-  content: { padding: 24, paddingBottom: 40 }, eyebrow: { fontSize: 10, letterSpacing: 1.6, fontWeight: '700', color: C.muted }, headline: { fontSize: 43, lineHeight: 49, fontWeight: '600', letterSpacing: -1.7, color: C.ink, marginTop: 18 }, lead: { fontSize: 16, lineHeight: 25, color: C.muted, marginTop: 14, marginBottom: 20 },
-  welcome: { backgroundColor: '#E8EBE1', padding: 18, borderRadius: 18, flexDirection: 'row', gap: 16, alignItems: 'center', marginTop: 4, marginBottom: 30 }, welcomeIcon: { fontSize: 32, color: C.green }, welcomeTitle: { fontSize: 15, fontWeight: '600', color: C.ink, marginBottom: 5 }, welcomeBody: { color: C.muted, fontSize: 13 },
-  sectionHeading: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 16, marginTop: 14 }, sectionTitle: { fontSize: 19, fontWeight: '600', color: C.ink, letterSpacing: -0.4 }, meta: { color: C.muted, fontSize: 12, lineHeight: 19 },
-  card: { backgroundColor: C.white, borderColor: C.line, borderWidth: 1, borderRadius: 20, overflow: 'hidden', marginBottom: 18 }, thumbnail: { height: 134, justifyContent: 'center', alignItems: 'center' }, thumbnailGlyph: { fontSize: 82, color: C.green, opacity: 0.75, fontWeight: '200' }, playBadge: { position: 'absolute', bottom: 14, right: 16, backgroundColor: C.white, color: C.green, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 24, overflow: 'hidden' }, cardBody: { padding: 18, gap: 9 }, cardTitle: { fontSize: 21, lineHeight: 27, fontWeight: '600', color: C.ink, letterSpacing: -0.5 },
-  import: { flexDirection: 'row', gap: 14, paddingVertical: 24, alignItems: 'center' }, plus: { color: C.accent, fontSize: 30 }, footnote: { color: C.muted, fontSize: 12, lineHeight: 19, paddingTop: 16, borderTopWidth: 1, borderTopColor: C.line },
-  nav: { flexDirection: 'row', backgroundColor: C.bg, borderTopColor: C.line, borderTopWidth: 1, paddingVertical: 10 }, navItem: { flex: 1, alignItems: 'center', padding: 8, gap: 5 }, navIcon: { fontSize: 23, color: C.muted }, navLabel: { color: C.muted, fontSize: 11, fontWeight: '600' },
-  back: { paddingVertical: 8, marginBottom: 16 }, playerArt: { borderRadius: 18, padding: 20, alignItems: 'center', marginBottom: 22 }, artLabel: { color: C.green, fontSize: 10, letterSpacing: 2, alignSelf: 'flex-start' }, heroGlyph: { fontSize: 105, color: C.green, fontWeight: '200', marginVertical: 5 }, artFooter: { color: C.green, fontSize: 12 }, title: { color: C.ink, fontSize: 27, fontWeight: '600', marginBottom: 8, letterSpacing: -0.8 }, controls: { flexDirection: 'row', gap: 8, marginTop: 20, marginBottom: 8 }, button: { backgroundColor: C.green, borderRadius: 12, paddingVertical: 15, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', marginVertical: 5 }, buttonText: { color: C.white, fontSize: 13, fontWeight: '600' }, secondary: { backgroundColor: '#E8EBE1' }, between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }, chip: { fontSize: 12, color: C.green, paddingVertical: 12 },
-  cue: { padding: 16, borderRadius: 16, borderWidth: 1, borderColor: C.line, marginBottom: 12 }, activeCue: { backgroundColor: '#E8EBE1', borderColor: '#A6B19F' }, cueNumber: { fontSize: 9, letterSpacing: 1, color: C.muted, paddingVertical: 7 }, tokens: { flexDirection: 'row', flexWrap: 'wrap', marginVertical: 10 }, token: { paddingHorizontal: 2, paddingVertical: 5, minHeight: 44 }, reading: { color: C.muted, fontSize: 10, textAlign: 'center', marginBottom: 3 }, japanese: { color: C.ink, fontSize: 25, lineHeight: 36 }, translation: { color: C.muted, fontSize: 14, lineHeight: 22 }, notice: { color: C.muted, fontSize: 12, lineHeight: 20, marginTop: 16 },
-  empty: { paddingVertical: 28, gap: 10 }, emptyGlyph: { fontSize: 64, color: C.green }, wordCard: { backgroundColor: C.white, padding: 20, marginTop: 16, borderRadius: 16, borderWidth: 1, borderColor: C.line }, wordSurface: { fontSize: 28, color: C.ink }, definition: { fontSize: 20, color: C.ink, lineHeight: 29, marginVertical: 14 }, example: { fontSize: 17, color: C.green, lineHeight: 28, marginTop: 16, marginBottom: 8 }, source: { color: C.muted, fontSize: 9, letterSpacing: 1, marginTop: 20 }, remove: { color: C.accent, fontSize: 12, paddingVertical: 12 }, setting: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 22, borderBottomColor: C.line, borderBottomWidth: 1 },
-  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#18261D77' }, sheet: { backgroundColor: C.bg, padding: 28, paddingBottom: Platform.OS === 'ios' ? 44 : 28, borderTopLeftRadius: 28, borderTopRightRadius: 28, width: '100%', maxWidth: 640, alignSelf: 'center' }, handle: { height: 4, width: 36, borderRadius: 3, backgroundColor: C.line, alignSelf: 'center', marginBottom: 20 }, close: { color: C.ink, fontSize: 28, padding: 8 }, lookupWord: { fontSize: 46, color: C.ink, marginTop: 12 }, input: { backgroundColor: C.white, borderColor: C.line, borderWidth: 1, borderRadius: 12, padding: 16, color: C.ink, marginBottom: 16, fontSize: 14 },
+  safe: { flex: 1, backgroundColor: '#F7F5EF' }, header: { paddingHorizontal: 20, paddingVertical: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }, brand: { color: '#242D28', fontSize: 28, fontWeight: '800', letterSpacing: -1.5 }, button: { backgroundColor: '#E8EBE1', paddingVertical: 12, paddingHorizontal: 13, borderRadius: 12 }, buttonText: { color: '#344C3F', fontWeight: '600', fontSize: 12 },
+  search: { paddingHorizontal: 16, flexDirection: 'row', gap: 8, marginBottom: 10 }, input: { flex: 1, minWidth: 0, color: '#242D28', backgroundColor: '#FFFDF8', borderWidth: 1, borderColor: '#DFE2D9', borderRadius: 12, padding: 10, fontSize: 13 }, topics: { paddingHorizontal: 16, gap: 8, paddingBottom: 12 }, topic: { paddingVertical: 10, paddingHorizontal: 15, borderRadius: 24, backgroundColor: '#ECEAE3' }, activeTopic: { backgroundColor: '#DCE4D8' }, topicText: { color: '#344C3F', fontSize: 12, fontWeight: '600' },
+  browser: { flex: 1, minHeight: 240, backgroundColor: '#FFF' }, study: { borderTopWidth: 1, borderTopColor: '#DFE2D9', paddingHorizontal: 18, paddingTop: 12, paddingBottom: 10, minHeight: 155, maxHeight: 230 }, row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }, eyebrow: { color: '#70776E', fontSize: 10, fontWeight: '700', letterSpacing: 1 }, badge: { color: '#BD512E', fontSize: 10 }, captionScroll: { flexGrow: 0 }, tokens: { flexDirection: 'row', flexWrap: 'wrap' }, token: { minHeight: 44, paddingHorizontal: 3, justifyContent: 'center' }, japanese: { color: '#242D28', fontSize: 23, lineHeight: 35 }, tappable: { textDecorationLine: 'underline', textDecorationColor: '#BCC8B5' }, emptyTitle: { color: '#242D28', fontSize: 16, fontWeight: '600', marginBottom: 8 }, hint: { color: '#70776E', fontSize: 12, lineHeight: 19 }, error: { padding: 12, backgroundColor: '#F4E3D9', gap: 8 },
+  overlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#18261D77' }, sheet: { backgroundColor: '#F7F5EF', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 38 }, lookupWord: { color: '#242D28', fontSize: 34, marginTop: 12, marginBottom: 10 }, entry: { borderBottomColor: '#DFE2D9', borderBottomWidth: 1, paddingBottom: 18, marginBottom: 18, gap: 10 }, reading: { color: '#344C3F', fontSize: 15, lineHeight: 23 }, meaning: { color: '#242D28', fontSize: 17, lineHeight: 25 }, sentence: { color: '#344C3F', fontSize: 16, lineHeight: 25, marginVertical: 14 }, attribution: { color: '#70776E', fontSize: 11, lineHeight: 18, marginVertical: 20 },
 });
