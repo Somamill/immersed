@@ -18,33 +18,54 @@ export function youtubeUrl(input: string): string | null {
 export const CAPTION_BRIDGE = `(() => {
   if (window.__immersedBridge || !/(^|\\.)youtube\\.com$/.test(location.hostname)) return;
   window.__immersedBridge = true;
-  let last = '', lastHref = location.href, lastVideo = null, captionText = '', captionTokens = [], captionTime = 0;
+  let last = '', lastHref = location.href, lastVideo = null, captionText = '', captionTokens = [], captionTime = 0, clock = 0, attemptedCaptionVideo = null;
+  const focusStyle = document.createElement('style');
+  focusStyle.textContent = 'body[data-immersed-focus] { margin:0!important; background:#000!important; overflow:hidden!important; } body[data-immersed-focus] *:not([data-immersed-ancestor]):not([data-immersed-player]):not([data-immersed-player] *) { display:none!important; } body[data-immersed-focus] [data-immersed-ancestor] { position:static!important; transform:none!important; overflow:visible!important; } body[data-immersed-focus] [data-immersed-player] { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; max-width:none!important; max-height:none!important; margin:0!important; } body[data-immersed-focus] [data-immersed-player] video { width:100%!important; height:100%!important; object-fit:contain!important; }';
+  document.documentElement.appendChild(focusStyle);
+  const focus = video => {
+    const watching = location.pathname === '/watch' || location.pathname.startsWith('/shorts/');
+    if (!watching) { document.body?.removeAttribute('data-immersed-focus'); document.querySelectorAll('[data-immersed-player], [data-immersed-ancestor]').forEach(n => { n.removeAttribute('data-immersed-player'); n.removeAttribute('data-immersed-ancestor'); }); return; }
+    const player = video?.closest('#player-container-id, #player-container') || video?.closest('.html5-video-player');
+    if (!player || player.hasAttribute('data-immersed-player')) return;
+    document.querySelectorAll('[data-immersed-player], [data-immersed-ancestor]').forEach(n => { n.removeAttribute('data-immersed-player'); n.removeAttribute('data-immersed-ancestor'); });
+    player.setAttribute('data-immersed-player', '');
+    for (let parent = player.parentElement; parent && parent !== document.body; parent = parent.parentElement) parent.setAttribute('data-immersed-ancestor', '');
+    document.body.setAttribute('data-immersed-focus', '');
+  };
   const send = value => window.ReactNativeWebView?.postMessage(JSON.stringify(value));
-  const segmenter = typeof Intl.Segmenter === 'function' ? new Intl.Segmenter('ja', { granularity: 'word' }) : null;
-  window.__immersedCommand = command => {
+  window.__immersedCommand = (command, time) => {
     const video = document.querySelector('video');
     if (!video) return;
     if (command === 'pause') video.pause();
     if (command === 'play') video.play().catch(() => {});
-    if (command === 'replay') { video.currentTime = Math.max(0, captionTime); video.play().catch(() => {}); }
+    if (command === 'replay') { video.currentTime = Math.max(0, Number.isFinite(time) ? time : captionTime); video.play().catch(() => {}); }
   };
   const read = () => {
-    if (location.href !== lastHref) { lastHref = location.href; last = ''; captionText = ''; captionTokens = []; send({ type: 'reset' }); }
+    if (location.href !== lastHref) { attemptedCaptionVideo = null; lastHref = location.href; last = ''; captionText = ''; captionTokens = []; send({ type: 'reset' }); }
     const video = document.querySelector('video');
     if (video !== lastVideo) { lastVideo = video; last = ''; captionText = ''; captionTokens = []; }
+    focus(video);
     if (!video) return;
+    if (Date.now() - clock > 350) { clock = Date.now(); send({ type: 'clock', time: video.currentTime || 0, paused: video.paused }); }
+    const currentVideoId = new URL(location.href).searchParams.get('v') || location.pathname;
+    if (attemptedCaptionVideo !== currentVideoId) {
+      const track = [...video.textTracks].find(t => t.language?.startsWith('ja'));
+      const button = document.querySelector('.ytp-subtitles-button[aria-pressed=\"false\"]');
+      if (track) { [...video.textTracks].forEach(t => { if (t !== track) t.mode = 'disabled'; }); track.mode = 'showing'; attemptedCaptionVideo = currentVideoId; }
+      else if (button) { attemptedCaptionVideo = currentVideoId; button.click(); }
+    }
     const visible = node => node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden' && getComputedStyle(node).display !== 'none';
     let nodes = [...document.querySelectorAll('.ytp-caption-segment')].filter(visible);
     if (!nodes.length) nodes = [...document.querySelectorAll('.captions-text .caption-visual-line')].filter(visible);
     if (!nodes.length) nodes = [...document.querySelectorAll('.ytp-caption-window-container .caption-visual-line')].filter(visible);
-    let text = nodes.map(node => node.textContent || '').join(' ').replace(/\\s+/g, ' ').trim();
+    let text = nodes.map(node => node.textContent || '').join('').replace(/\\s+/g, ' ').trim();
     if (!text && video.textTracks) {
       const track = [...video.textTracks].find(t => t.mode === 'showing' && t.language?.startsWith('ja'));
-      if (track?.activeCues) text = [...track.activeCues].map(cue => cue.text || '').join(' ').trim();
+      if (track?.activeCues) text = [...track.activeCues].map(cue => cue.text || '').join('').trim();
     }
     if (text && text !== captionText) {
       captionText = text; captionTime = video.currentTime || 0;
-      captionTokens = segmenter ? [...segmenter.segment(text)].map(t => ({ text: t.segment, word: t.isWordLike })) : [{ text, word: true }];
+      captionTokens = []; // Real morphological analysis happens on the language service.
     }
     if (!text && !video.paused) { captionText = ''; captionTokens = []; }
     const key = [captionText, video.paused, document.title, location.href].join('|');
@@ -52,7 +73,8 @@ export const CAPTION_BRIDGE = `(() => {
     last = key;
     send({ type: 'caption', text: captionText, tokens: captionTokens, time: captionTime, paused: video.paused, title: document.title, url: location.href, japanese: /[ぁ-ヿ一-龯]/.test(captionText) });
   };
-  const observer = new MutationObserver(read);
+  let queued = false;
+  const observer = new MutationObserver(() => { if (!queued) { queued = true; setTimeout(() => { queued = false; read(); }, 100); } });
   observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
   const timer = setInterval(read, 400);
   window.addEventListener('pagehide', () => { observer.disconnect(); clearInterval(timer); }, { once: true });

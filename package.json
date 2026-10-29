@@ -6,8 +6,10 @@
     "@expo/metro-runtime": "~58.0.15",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~58.0.21",
+    "expo-constants": "~58.0.14",
     "expo-speech": "~58.0.3",
     "expo-status-bar": "~58.0.4",
+    "kuromoji": "^0.1.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "react-native": "0.88.1",
@@ -32,7 +34,9 @@
     "test:e2e": "playwright test",
     "export:web": "expo export --platform web",
     "lint": "expo lint",
-    "testflight": "npx eas-cli@latest build --platform ios --profile production --auto-submit"
+    "testflight": "npx eas-cli@latest build --platform ios --profile production --auto-submit",
+    "language:setup": "node scripts/setup-dictionary.cjs",
+    "test:language": "node --test tests/language.test.cjs"
   },
   "private": true
 }

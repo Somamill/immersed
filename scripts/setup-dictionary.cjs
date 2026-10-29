@@ -1,0 +1,13 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const crypto = require('node:crypto');
+const { execFileSync } = require('node:child_process');
+const root = path.join(__dirname, '..', '.data');
+fs.mkdirSync(root, { recursive: true });
+const archive = path.join(root, 'jmdict-eng-3.6.2+20261026175559.json.tgz');
+const sha = '809d104fe3c1e0ab328ff265bdc52b5eed1f9b669088fd199ef4e713812958a3';
+if (!fs.existsSync(archive)) execFileSync('curl', ['--fail', '--location', '--retry', '2', '--output', archive, 'https://github.com/scriptin/jmdict-simplified/releases/download/3.6.2%2B20261026175559/jmdict-eng-3.6.2%2B20261026175559.json.tgz'], { stdio: 'inherit' });
+if (crypto.createHash('sha256').update(fs.readFileSync(archive)).digest('hex') !== sha) throw new Error('Dictionary checksum mismatch');
+const output = execFileSync('tar', ['-xOzf', archive, 'jmdict-eng-3.6.2.json'], { maxBuffer: 200 * 1024 * 1024 });
+fs.writeFileSync(path.join(root, 'jmdict.json'), output);
+console.log('Pinned JMdict English dataset installed. EDRDG CC BY-SA 4.0; see THIRD_PARTY.md.');

@@ -43,3 +43,8 @@ yarn-error.*
 # Browser verification artifacts
 test-results/
 playwright-report/
+
+# Downloaded open-source dictionaries, transcription models/cache, Python runtime
+.data/
+.venv/
+__pycache__/
