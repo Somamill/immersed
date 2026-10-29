@@ -1,4 +1,12 @@
 export type TimedCue = { start: number; end: number; text: string };
+export function japaneseCaptionUrl(input: string, videoId: string): URL | null {
+  try {
+    const url = new URL(input);
+    const language = url.searchParams.get('lang') || '';
+    const translation = url.searchParams.get('tlang');
+    return url.protocol === 'https:' && /(^|\.)youtube\.com$/.test(url.hostname) && url.pathname === '/api/timedtext' && url.searchParams.get('v') === videoId && /^ja(?:-|$)/.test(language) && (!translation || /^ja(?:-|$)/.test(translation)) ? url : null;
+  } catch { return null; }
+}
 // Retain the last spoken line through gaps so study/lookup never disappears.
 // Looking up from the beginning also handles a backwards seek without stale text.
 export function readingCue(cues: TimedCue[], time: number): TimedCue | undefined {

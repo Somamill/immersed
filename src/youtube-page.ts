@@ -6,7 +6,7 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
   window.__immersedBootstrap = true;
   window.__immersedOptions = window.__immersedOptions || { dark: true, hideShorts: true, fillPortrait: true };
   const css = document.createElement('style');
-  css.textContent = 'html[data-immersed-dark] { color-scheme:dark!important; background:#000!important; --yt-spec-base-background:#000!important; --yt-spec-raised-background:#171717!important; --yt-spec-menu-background:#171717!important; --yt-spec-general-background-a:#000!important; --yt-spec-general-background-b:#000!important; --yt-spec-text-primary:#eee!important; --yt-spec-text-secondary:#aaa!important; --yt-spec-brand-background-primary:#000!important; --yt-spec-brand-background-secondary:#171717!important; --yt-spec-brand-background-solid:#000!important; } html[data-immersed-dark] body, html[data-immersed-dark] ytm-app, html[data-immersed-dark] ytm-search, html[data-immersed-dark] ytm-mobile-topbar-renderer, html[data-immersed-dark] ytm-header-bar, html[data-immersed-dark] ytm-searchbox, html[data-immersed-dark] .searchbox-input, html[data-immersed-dark] .pivot-bar-renderer { background-color:#000!important; color:#eee!important; } html[data-immersed-fill] video.html5-main-video { width:100vw!important; height:100vh!important; top:0!important; left:0!important; object-fit:cover!important; } [data-immersed-short] { display:none!important; }';
+  css.textContent = 'html[data-immersed-dark] { color-scheme:dark!important; background:#000!important; --yt-spec-base-background:#000!important; --yt-spec-raised-background:#171717!important; --yt-spec-menu-background:#171717!important; --yt-spec-general-background-a:#000!important; --yt-spec-general-background-b:#000!important; --yt-spec-text-primary:#eee!important; --yt-spec-text-secondary:#aaa!important; --yt-spec-brand-background-primary:#000!important; --yt-spec-brand-background-secondary:#171717!important; --yt-spec-brand-background-solid:#000!important; } html[data-immersed-dark] body, html[data-immersed-dark] ytm-app, html[data-immersed-dark] ytm-search, html[data-immersed-dark] ytm-mobile-topbar-renderer, html[data-immersed-dark] ytm-header-bar, html[data-immersed-dark] ytm-searchbox, html[data-immersed-dark] .searchbox-input, html[data-immersed-dark] .pivot-bar-renderer { background-color:#000!important; color:#eee!important; } html[data-immersed-fill] video.html5-main-video { width:100vw!important; height:100vh!important; top:0!important; left:0!important; object-fit:cover!important; } html[data-immersed-browse], html[data-immersed-browse] body { margin-bottom:0!important; padding-bottom:0!important; min-height:100vh!important; } html[data-immersed-browse] ytm-app, html[data-immersed-browse] ytm-search, html[data-immersed-browse] ytm-browse { padding-bottom:0!important; min-height:100vh!important; } html[data-immersed-browse] ytm-pivot-bar-renderer, html[data-immersed-browse] .pivot-bar-renderer { display:none!important; } html[data-immersed-watch] .ytp-caption-window-container, html[data-immersed-watch] .ytp-caption-window-container *, html[data-immersed-watch] .ytp-caption-segment, html[data-immersed-watch] .captions-text { visibility:hidden!important; pointer-events:none!important; } [data-immersed-short] { display:none!important; }';
   let preferenceDark;
   const flag = (root, name, enabled) => {
     if (enabled && !root.hasAttribute(name)) root.setAttribute(name, '');
@@ -19,7 +19,10 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
     const options = window.__immersedOptions;
     flag(root, 'data-immersed-dark', options.dark);
     flag(root, 'dark', options.dark);
-    flag(root, 'data-immersed-fill', options.fillPortrait && /^\/(embed\/|watch)/.test(location.pathname));
+    const watch = /^\/(embed\/|watch|shorts\/)/.test(location.pathname);
+    flag(root, 'data-immersed-watch', watch);
+    flag(root, 'data-immersed-browse', !watch);
+    flag(root, 'data-immersed-fill', options.fillPortrait && watch);
     root.style.colorScheme = options.dark ? 'dark' : 'light';
     if (preferenceDark !== options.dark) {
       preferenceDark = options.dark;
@@ -63,7 +66,7 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
         }) };
       } else data = JSON.parse(raw);
       if (!Array.isArray(data?.events) || !data.events.some(e => e.segs?.some(s => typeof s.utf8 === 'string' && s.utf8.trim()))) return false;
-      window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'captionData', videoId, data }));
+      window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'captionData', language: 'ja', videoId, data }));
       lastId = videoId; lastResponse = raw;
       return true;
     } catch { return false; }
@@ -98,13 +101,28 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
 export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
   if (window.__immersedBridge || !/(^|\.)youtube\.com$/.test(location.hostname)) return;
   window.__immersedBridge = true;
-  let last = '', lastHref = location.href, lastVideo = null, captionText = '', captionTime = 0, clock = 0, lastModuleAttempt = 0, lastTrackChoice = 0, enabledForVideo = null;
+  let last = '', lastHref = location.href, lastVideo = null, captionText = '', captionTime = 0, clock = 0, lastModuleAttempt = 0, lastTrackChoice = 0, lastErrorVideo = null, staleCaptionText = null;
   const requests = new Map();
   const send = value => window.ReactNativeWebView?.postMessage(JSON.stringify(value));
   const currentId = () => new URL(location.href).searchParams.get('v') || location.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1];
   const selectVideo = () => {
     const videos = [...document.querySelectorAll('video')].filter(v => v.isConnected && v.getClientRects().length);
     return videos.find(v => !v.paused && v.readyState > 0) || videos.sort((a,b) => b.getBoundingClientRect().width * b.getBoundingClientRect().height - a.getBoundingClientRect().width * a.getBoundingClientRect().height)[0] || null;
+  };
+  const readCaptionText = (root, japaneseOnly = false) => {
+    // The caption overlay is deliberately hidden; exclude removed/display:none
+    // windows without requiring visibility, and keep fragments joined as Japanese.
+    const rendered = node => {
+      if (!node.getClientRects().length || getComputedStyle(node).display === 'none') return false;
+      if (!japaneseOnly) return true;
+      // Page locale and Japanese characters alone cannot identify a caption's
+      // language. Unlabelled DOM falls back to verified timedtext/native tracks.
+      const captionWindow = node.closest('.caption-window[lang], .ytp-caption-window-container[lang], .captions-text[lang], .caption-visual-line[lang], .ytp-caption-segment[lang]');
+      return /^ja(?:-|$)/.test(captionWindow?.getAttribute('lang') || '');
+    };
+    let nodes = [...root.querySelectorAll('.ytp-caption-segment')].filter(rendered);
+    if (!nodes.length) nodes = [...root.querySelectorAll('.captions-text .caption-visual-line, .ytp-caption-window-container .caption-visual-line')].filter(rendered);
+    return nodes.map(node => node.textContent || '').join('').replace(/\s+/g, ' ').trim();
   };
   document.addEventListener('click', event => {
     const link = event.target.closest?.('a[href]');
@@ -116,15 +134,17 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     if (command === 'seek') { video.currentTime = Math.max(0, Math.min(Number.isFinite(video.duration) ? video.duration : Infinity, (video.currentTime || 0) + (Number.isFinite(time) ? time : 0))); return; }
     if (command === 'pause') video.pause();
     if (command === 'play') video.play().catch(() => {});
-    if (command === 'replay') { video.currentTime = Math.max(0, Number.isFinite(time) ? time : captionTime); video.play().catch(() => {}); }
   };
-  const isJapanese = track => /^ja(?:-|$)/.test(track?.languageCode || '');
+  const isJapanese = track => {
+    const translation = track?.translationLanguage?.languageCode || track?.translationLanguage;
+    return /^ja(?:-|$)/.test(track?.languageCode || '') && (!translation || /^ja(?:-|$)/.test(translation));
+  };
   const chooseTrack = tracks => Array.isArray(tracks) ? tracks.find(t => isJapanese(t) && t.kind !== 'asr') || tracks.find(isJapanese) : undefined;
   const requestTrack = async (track, videoId) => {
     let url;
     try {
       url = new URL(track.baseUrl);
-      if (url.protocol !== 'https:' || !/(^|\.)youtube\.com$/.test(url.hostname) || url.pathname !== '/api/timedtext' || url.searchParams.get('v') !== videoId) return;
+      if (url.protocol !== 'https:' || !/(^|\.)youtube\.com$/.test(url.hostname) || url.pathname !== '/api/timedtext' || url.searchParams.get('v') !== videoId || !/^ja(?:-|$)/.test(url.searchParams.get('lang') || '') || (url.searchParams.get('tlang') && !/^ja(?:-|$)/.test(url.searchParams.get('tlang')))) return;
     } catch { return; }
     const state = requests.get(videoId) || { attempts: 0, pending: false, ready: false, next: 0, fallback: false };
     if (state.ready || state.pending || state.attempts >= 3 || Date.now() < state.next) return;
@@ -139,11 +159,11 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
       if (response.ok) state.ready = window.__immersedReadCaptionResponse(url.toString(), await response.text());
     } catch {} finally {
       clearTimeout(timer); state.pending = false; state.next = Date.now() + state.attempts * 2000;
-      if (!state.ready && !state.fallback && currentId() === videoId) { state.fallback = true; send({ type: 'captionTrack', videoId, url: track.baseUrl }); }
+      if (!state.ready && !state.fallback && currentId() === videoId) { state.fallback = true; send({ type: 'captionTrack', language: 'ja', videoId, url: track.baseUrl }); }
     }
   };
   const read = () => {
-    if (location.href !== lastHref) { lastHref = location.href; last = ''; captionText = ''; lastTrackChoice = 0; send({ type: 'reset' }); }
+    if (location.href !== lastHref) { lastHref = location.href; last = ''; captionText = ''; staleCaptionText = null; lastTrackChoice = 0; send({ type: 'reset' }); }
     window.__immersedApplyOptions?.();
     const videoId = currentId();
     const player = document.getElementById('movie_player');
@@ -154,6 +174,9 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
       try { response = JSON.parse(window.ytplayer?.config?.args?.player_response || '{}'); } catch {}
     }
     if (response?.videoDetails?.videoId === videoId) tracks = response.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    let selectedJapanese = false;
+    const playerError = player?.querySelector('.ytp-error-content-wrap');
+    if (location.pathname.startsWith('/embed/') && videoId && lastErrorVideo !== videoId && (['UNPLAYABLE', 'ERROR'].includes(response?.playabilityStatus?.status) || (playerError?.getClientRects().length && playerError.textContent.trim()))) { lastErrorVideo = videoId; send({ type: 'playerError', videoId }); }
     if (videoId && /^[A-Za-z0-9_-]{11}$/.test(videoId)) {
       const track = chooseTrack(tracks);
       if (track?.baseUrl) void requestTrack(track, videoId);
@@ -164,30 +187,43 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
         if ((!Array.isArray(available) || !available.length) && Date.now() - lastModuleAttempt > 2000) { lastModuleAttempt = Date.now(); player?.loadModule?.('captions'); }
         const japanese = chooseTrack(Array.isArray(available) ? available : tracks);
         const selected = player?.getOption?.('captions', 'track');
-        if (japanese && !isJapanese(selected) && Date.now() - lastTrackChoice > 2000) { lastTrackChoice = Date.now(); player?.setOption?.('captions', 'track', japanese); }
+        if (japanese && !isJapanese(selected) && Date.now() - lastTrackChoice > 2000) {
+          lastTrackChoice = Date.now();
+          // The API can confirm ja before replacing the old English DOM line.
+          // Never forward that stale line while the track change finishes.
+          staleCaptionText = readCaptionText(player || document);
+          player?.setOption?.('captions', 'track', japanese);
+        }
+        selectedJapanese = isJapanese(player?.getOption?.('captions', 'track'));
       } catch { /* Player APIs are not guaranteed on every YouTube client. */ }
     }
     const video = selectVideo();
     if (video !== lastVideo) { lastVideo = video; last = ''; captionText = ''; }
     if (!video) return;
-    if (Date.now() - clock > 150) { clock = Date.now(); send({ type: 'clock', time: video.currentTime || 0, paused: video.paused }); }
+    if (Date.now() - clock > 150) { clock = Date.now(); send({ type: 'clock', videoId, time: video.currentTime || 0, paused: video.paused }); }
     const japaneseTextTrack = [...video.textTracks].find(t => /^ja(?:-|$)/.test(t.language));
-    if (japaneseTextTrack && japaneseTextTrack.mode !== 'showing') { [...video.textTracks].forEach(t => { if (t !== japaneseTextTrack) t.mode = 'disabled'; }); japaneseTextTrack.mode = 'showing'; }
+    // Native tracks stay active for cue timing, without an on-video overlay.
+    // Every other track is disabled rather than allowing a preferred English CC.
+    [...video.textTracks].forEach(track => {
+      const mode = track === japaneseTextTrack ? 'hidden' : 'disabled';
+      if (track.mode !== mode) track.mode = mode;
+    });
     const button = document.querySelector('.ytp-subtitles-button[aria-pressed="false"]');
-    // Some mobile clients expose only CC and no track metadata. Try it once;
-    // non-Japanese visible text is still rejected by the native caption handler.
-    if (button && (chooseTrack(tracks) || japaneseTextTrack || enabledForVideo !== videoId)) { enabledForVideo = videoId; button.click(); }
-    const visible = node => node.getClientRects().length && getComputedStyle(node).visibility !== 'hidden' && getComputedStyle(node).display !== 'none';
-    let nodes = [...document.querySelectorAll('.ytp-caption-segment')].filter(visible);
-    if (!nodes.length) nodes = [...document.querySelectorAll('.captions-text .caption-visual-line, .ytp-caption-window-container .caption-visual-line')].filter(visible);
-    let text = nodes.map(node => node.textContent || '').join('').replace(/\s+/g, ' ').trim();
-    if (!text && japaneseTextTrack?.activeCues) text = [...japaneseTextTrack.activeCues].map(cue => cue.text || '').join('').trim();
+    if (button && selectedJapanese) button.click();
+    let text = '';
+    if (japaneseTextTrack?.activeCues) text = [...japaneseTextTrack.activeCues].map(cue => cue.text || '').join('').trim();
+    if (!text && selectedJapanese) {
+      const root = player || video.closest('.html5-video-player') || document;
+      // Read only a confirmed Japanese track after any old language is replaced.
+      const candidate = readCaptionText(root, true);
+      if (staleCaptionText === null || candidate !== staleCaptionText) { text = candidate; staleCaptionText = null; }
+    }
     if (text && text !== captionText) { captionText = text; captionTime = video.currentTime || 0; }
-    if (!text && !video.paused) captionText = '';
+    if (!text) captionText = '';
     const key = [captionText, video.paused, document.title, location.href].join('|');
     if (key === last) return;
     last = key;
-    send({ type: 'caption', text: captionText, tokens: [], time: captionTime, paused: video.paused, title: document.title, url: location.href, japanese: /[ぁ-ヿ一-龯]/.test(captionText) });
+    send({ type: 'caption', text: captionText, tokens: [], time: captionTime, paused: video.paused, title: document.title, url: location.href, language: captionText ? 'ja' : null });
   };
   let queued = false;
   const observer = new MutationObserver(() => { if (!queued) { queued = true; setTimeout(() => { queued = false; read(); }, 16); } });

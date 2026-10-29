@@ -2,6 +2,16 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.2 — 2026-10-29
+
+Japanese-only captions, fixed reading area and automatic recovery
+
+- Enforce Japanese source/selected tracks, reject English translations and unknown CC fallback, and prevent old English lines leaking during a track switch.
+- Place subtitles in a fixed full-width section beneath the portrait video; only bottom navigation floats.
+- Remove subtitle retry/details, restore-player, video-fit and duplicate playback controls. Recover temporary subtitle failures automatically with bounded backoff and timeouts.
+- Remove YouTube browse bottom navigation and its reserved padding so discovery continues behind the glass dock; refresh the page adapter with each release.
+- New subtitles for captionless YouTube videos remain blocked by this cloud network’s proxy 403. Live iPhone playback and YouTube caption compatibility remain unverified.
+
 ## 0.5.1 — 2026-10-29
 
 Combined portrait watching and reading with persistent subtitles

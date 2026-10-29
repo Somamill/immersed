@@ -5,8 +5,7 @@ export function embeddedPlayerSource(videoId: string, applicationId: string) {
   const params = new URLSearchParams({ playsinline: '1', fs: '0', cc_load_policy: '1', cc_lang_pref: 'ja', hl: 'ja', autoplay: '1', enablejsapi: '1', origin: referer });
   return { uri: `https://www.youtube.com/embed/${videoId}?${params}`, headers: { Referer: referer } };
 }
-export function swipeAction(dx: number, dy: number): 'forward' | 'backward' | 'expand' | 'collapse' | null {
+export function swipeAction(dx: number, dy: number): 'forward' | 'backward' | null {
   if (Math.abs(dx) >= 45 && Math.abs(dx) > Math.abs(dy) * 1.4) return dx < 0 ? 'forward' : 'backward';
-  if (Math.abs(dy) >= 45 && Math.abs(dy) > Math.abs(dx) * 1.4) return dy < 0 ? 'expand' : 'collapse';
   return null;
 }

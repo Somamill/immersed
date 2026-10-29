@@ -47,4 +47,4 @@ if __name__ == '__main__':
         main()
     except Exception as error:
         print(str(error), file=sys.stderr)
-        print(json.dumps({'error': 'TRANSCRIPTION_FAILED', 'message': 'Automatic subtitle generation failed. Please try another video.'}))
+        print(json.dumps({'error': 'TRANSCRIPTION_FAILED', 'message': 'Japanese speech recognition is unavailable for this video.'}))

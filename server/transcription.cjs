@@ -33,7 +33,7 @@ function createTranscriptionService({ execute = execFile, storage = fs, now = Da
         Object.assign(job, { status: 'ready', cues: data.cues });
         // A cache-write failure must never invalidate successfully generated cues.
         try { await storage.promises.mkdir(root, { recursive: true }); await storage.promises.writeFile(path.join(root, videoId + '.json'), JSON.stringify(data.cues)); } catch {}
-      } catch { fail('TRANSCRIPTION_FAILED', 'Japanese subtitle preparation failed. Retry or use the video’s existing captions.'); }
+      } catch { fail('TRANSCRIPTION_FAILED', 'Japanese subtitle preparation failed. Existing Japanese captions can still be used.'); }
     });
     return job;
   }
