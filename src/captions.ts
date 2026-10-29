@@ -1,4 +1,14 @@
 export type TimedCue = { start: number; end: number; text: string };
+// Retain the last spoken line through gaps so study/lookup never disappears.
+// Looking up from the beginning also handles a backwards seek without stale text.
+export function readingCue(cues: TimedCue[], time: number): TimedCue | undefined {
+  let result: TimedCue | undefined;
+  for (const cue of cues) {
+    if (cue.start > time) break;
+    result = cue;
+  }
+  return result;
+}
 // YouTube JSON3 is an optional fast path fetched on the phone. Keep visible
 // captions as a fallback: these public page structures can change independently.
 export function parseCaptionTrack(value: unknown): TimedCue[] {

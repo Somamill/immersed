@@ -4,15 +4,15 @@ iPhone-first Japanese immersion: choose a natural Japanese video, watch in a foc
 
 ## Current implementation
 
-- Browse Japanese topics in YouTube; selecting a video opens the dedicated embedded player. No watch-page CSS is used to hide or reposition the player. Discovery is still search-based, not a strictly language-filtered feed.
+- Browse Japanese topics in YouTube; selecting a video opens one portrait watch-and-read view. The video fills the viewport with side cropping by default; Settings → Fit entire video restores the whole frame. Only the video element's fit/dimensions change; player ancestors and controls are not hidden or repositioned. Discovery is still search-based, not a strictly language-filtered feed.
 - Closing any dictionary lookup resumes playback if it was playing before the lookup; a manually paused video remains paused. Smart groups are on by default, including a one-time migration from the earlier experimental preset.
-- The subtitle pane is hidden during browsing and appears only for a selected video.
-- Automatically enable Japanese native text tracks or YouTube's exposed captions button where available. Read actual player captions; text fragments are concatenated without adding spaces between characters.
-- When exposed by the page, load a signed Japanese timed caption track directly on the phone; existing caption capture remains the fallback. This is not new speech recognition.
+- The subtitle pane is hidden during browsing and always present for a selected video. It retains the last real line through speech gaps, with tappable words and dictionary lookup. There are no separate watch/reading modes. No subtitle loading spinner is shown; unavailable captions have a visible retry/details action.
+- Explicitly select an available Japanese player caption track, including YouTube auto-generated tracks, and enable Japanese native text tracks. Read actual player captions; text fragments are concatenated without adding spaces between characters.
+- Fetch exposed Japanese timed caption tracks in the YouTube page session first. Observe only completed Japanese timedtext fetch/XHR responses, including player requests with session-specific parameters; parse JSON3 or XML. Separate native fetching and visible caption capture remain fallbacks. This is source-caption access, not new speech recognition.
 - Capture batching is reduced from 100 ms to 16 ms. Completed partial analyses are retained, cached results display immediately, and word definitions are prefetched with analysis. On-phone latency is not yet benchmarked.
 - Real Kuromoji/IPADIC morphological analysis runs on the preview server. Smart grouping joins inflection chains, suru verbs, dictionary-recognized noun compounds, and a small set of common grammar constructions. Readings, dictionary forms, parts of speech, and heuristic grammar labels accompany each group.
 - The full pinned JMdict English dataset (218,963 entries) is installed and indexed on the preview server. Lookups use dictionary forms rather than the displayed conjugated word. No Jisho request or dictionary subscription is needed. This is server-local, not an offline-on-phone dictionary.
-- Settings persist: grouping, furigana, portrait layout, theme, JLPT level and Shorts controls. Automatic transcription attempts are mandatory. Save a dictionary entry with the caption and video context.
+- Settings persist: grouping, furigana, video fit, theme, JLPT level and Shorts controls. Automatic transcription attempts are mandatory. Save a dictionary entry with the caption and video context.
 - If no source caption has appeared after four seconds on a selected video, start a self-hosted ASR job and poll its status. The worker attempts audio acquisition using yt-dlp, then Whisper base via faster-whisper on CPU; completed cues are cached and synchronized against the observed video clock.
 
 ## Important current limitation
@@ -60,7 +60,7 @@ See [THIRD_PARTY.md](THIRD_PARTY.md) for JMdict's CC BY-SA 4.0 attribution, pars
 
 ## Versions and GitHub
 
-Repository: https://github.com/Somamill/immersed. [CHANGELOG.md](CHANGELOG.md) and Settings → Version history record released updates. Current release: 0.5.0.
+Repository: https://github.com/Somamill/immersed. [CHANGELOG.md](CHANGELOG.md) and Settings → Version history record released updates. Current release: 0.5.1.
 
 For each user-facing update:
 
@@ -101,3 +101,11 @@ Full-screen portrait is now the default and fills the application viewport; it i
 Navigation uses Expo Router. Swipe horizontally from either content edge to move among Content → Words → Settings; in Words and Settings, horizontal swipes work across the panel. Vertical scrolling and video controls remain separate. Swipe down from the dictionary header to dismiss and resume according to the prior playback state. The subtitle handle retains seek/layout gestures.
 
 Transcription needs no API credentials. A compatible recognizer was tested successfully on a public test recording, but YouTube fetching still returns `Tunnel connection failed: 403 Forbidden` from this environment's proxy. The recognizer cannot generate subtitles without the audio. Repeated extraction attempts are now limited; no successful captionless YouTube transcription is claimed. No hosting account or API key is required for the installed recognizer.
+
+## Unified portrait viewing and caption capture (0.5.1)
+
+This supersedes 0.5.0's layout-only full-screen control: the video element now fills the portrait viewport with `object-fit: cover` and viewport dimensions, including when YouTube's video container has no intrinsic height. Wide videos crop at the sides; Fit entire video in Settings restores YouTube's original fitting. The app has one combined watch/read mode and no Reading/Full screen toggle. The subtitle panel stays mounted, retains the latest real caption, and has Play/Pause and replay controls. Horizontal handle swipes seek; vertical handle swipes expand/collapse the subtitle panel without switching playback layouts. On a subtitle failure the panel offers Retry/Details instead of disappearing.
+
+Browsing reaches the bottom behind the floating glass dock. WebView automatic content insets are disabled. YouTube dark appearance is requested before content loads through its theme preference and reinforced with dark color variables/backgrounds; the unofficial YouTube preference format may change. Thumbnails and media colors are untouched.
+
+Japanese tracks are selected explicitly through available player APIs and read before a video element is created. Caption requests use the page session first, and a narrow observer reads the player's own Japanese timedtext responses when a copied signed URL is empty. JSON3 and XML formats are supported. Local tests exercise session responses, Japanese track selection, caption gaps, dictionary lookup, portrait video geometry and dark browsing. They do not establish live YouTube/iPhone compatibility. The cloud audio download was retested and still receives a proxy 403; generating new subtitles for videos without accessible source captions remains unresolved.

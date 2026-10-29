@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
-import { CAPTION_BRIDGE, youtubeUrl } from '../src/youtube';
+import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, youtubeUrl } from '../src/youtube';
 import { embeddedPlayerSource, swipeAction } from '../src/player';
 import { familiarity } from '../src/learning';
-import { parseCaptionTrack } from '../src/captions';
+import { parseCaptionTrack, readingCue } from '../src/captions';
 
 test('home offers real YouTube discovery and retains the saved-word library', async ({ page }) => {
   await page.goto('/');
@@ -30,8 +30,8 @@ test('caption adapter reads player text, pauses, ignores comments, and clears on
     const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (message: string) => void }; pausedByApp: boolean; ytInitialPlayerResponse?: unknown };
     w.messages = [];
     w.ytInitialPlayerResponse = { videoDetails: { videoId: 'M7lc1UVf-VE' }, captions: { playerCaptionsTracklistRenderer: { captionTracks: [
-      { languageCode: 'ja', kind: 'asr', baseUrl: 'https://www.youtube.com/api/timedtext?v=M7lc1UVf-VE&name=auto' },
-      { languageCode: 'ja', baseUrl: 'https://www.youtube.com/api/timedtext?v=M7lc1UVf-VE&name=manual' },
+      { languageCode: 'ja', kind: 'asr', baseUrl: 'https://m.youtube.com/api/timedtext?v=M7lc1UVf-VE&lang=ja&name=auto' },
+      { languageCode: 'ja', baseUrl: 'https://m.youtube.com/api/timedtext?v=M7lc1UVf-VE&lang=ja&name=manual' },
     ] } } };
     w.ReactNativeWebView = { postMessage: message => w.messages.push(JSON.parse(message)) };
     document.querySelector('video')!.pause = () => { w.pausedByApp = true; };
@@ -39,6 +39,7 @@ test('caption adapter reads player text, pauses, ignores comments, and clears on
   await page.addScriptTag({ content: CAPTION_BRIDGE });
   const caption = await page.evaluate(() => (window as unknown as { messages: { type: string; text: string; tokens: { text: string }[] }[] }).messages.find(m => m.type === 'caption'));
   expect(caption?.text).toBe('今日は公園に行きます。');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string }[] }).messages.filter(m => m.type === 'captionTrack').length)).toBe(1);
   const tracks = await page.evaluate(() => (window as unknown as { messages: { type: string; url?: string }[] }).messages.filter(m => m.type === 'captionTrack'));
   expect(tracks).toHaveLength(1);
   expect(tracks[0].url).toContain('name=manual');
@@ -92,6 +93,10 @@ test('timed captions join fragments, normalize line breaks and resolve overlap',
     { tStartMs: 3000, segs: [{ utf8: '\n' }] },
   ] });
   expect(cues).toEqual([{ start: 0, end: 2, text: '日本語 です。' }, { start: 2, end: 3, text: '食べました。' }]);
+  expect(readingCue(cues, 1)?.text).toBe('日本語 です。');
+  expect(readingCue(cues, 8)?.text).toBe('食べました。');
+  expect(readingCue(cues, 1)?.text).toBe('日本語 です。');
+  expect(readingCue(cues, -1)).toBeUndefined();
 });
 
 test('JLPT highlighting uses level estimates and explicit personal knowledge', () => {
@@ -108,17 +113,19 @@ test('viewing preferences persist and navigation stays near the bottom', async (
   const settingsButton = page.getByRole('button', { name: 'Settings', exact: true });
   const dockBounds = await settingsButton.boundingBox();
   expect(dockBounds!.y).toBeGreaterThan(650);
+  const browserBounds = await page.getByTestId('video-surface').boundingBox();
+  expect(browserBounds!.y + browserBounds!.height).toBe(844);
   await settingsButton.click();
   await expect(page.getByRole('switch', { name: 'AMOLED dark mode' })).toBeChecked();
   await expect(page.getByRole('switch', { name: 'Hide Shorts' })).toBeChecked();
   await page.getByRole('radio', { name: 'Completed N3', exact: true }).click();
   await expect(page.getByRole('radio', { name: 'Completed N3', exact: true })).toBeChecked();
-  await page.getByRole('switch', { name: 'Full-screen portrait' }).click();
+  await page.getByRole('switch', { name: 'Fit entire video' }).click();
   await page.getByRole('switch', { name: 'Hide Shorts' }).click();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('radio', { name: 'Completed N3', exact: true })).toBeChecked();
-  await expect(page.getByRole('switch', { name: 'Full-screen portrait' })).not.toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Fit entire video' })).toBeChecked();
   await expect(page.getByRole('switch', { name: 'Hide Shorts' })).not.toBeChecked();
 });
 
@@ -152,8 +159,8 @@ test('swipes reject taps/diagonals and select unambiguous player actions', () =>
   expect(swipeAction(90, 90)).toBeNull();
   expect(swipeAction(-90, 8)).toBe('forward');
   expect(swipeAction(90, 8)).toBe('backward');
-  expect(swipeAction(5, -90)).toBe('portrait');
-  expect(swipeAction(5, 90)).toBe('compact');
+  expect(swipeAction(5, -90)).toBe('expand');
+  expect(swipeAction(5, 90)).toBe('collapse');
 });
 
 test('portrait playback controls appear for a selected video and automatic subtitles cannot be disabled', async ({ page }) => {
@@ -166,13 +173,100 @@ test('portrait playback controls appear for a selected video and automatic subti
   await page.getByRole('button', { name: 'Go', exact: true }).click();
   const full = await page.getByTestId('video-surface').boundingBox();
   expect(full!.height).toBeGreaterThan(800);
-  await page.getByRole('button', { name: 'Reading', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Full screen', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Full screen', exact: true }).click();
+  await expect(page.getByTestId('subtitle-panel')).toBeVisible();
+  expect((await page.getByTestId('subtitle-panel').boundingBox())!.height).toBeGreaterThanOrEqual(148);
+  await expect(page.getByRole('button', { name: 'Reading', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Full screen', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('switch', { name: 'Automatic subtitles' })).toHaveCount(0);
   await expect.poll(() => attempts.length, { timeout: 7000 }).toBeGreaterThan(0);
-  await expect(page.getByRole('switch', { name: 'Full-screen portrait' })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Fit entire video' })).not.toBeChecked();
+});
+
+test('a subtitle failure stays visible with a retry instead of an empty player', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'unavailable', canRetry: true, message: 'Audio access blocked.' }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByTestId('subtitle-panel')).toBeVisible();
+  await expect(page.getByText('Japanese subtitles unavailable', { exact: true })).toBeVisible({ timeout: 7000 });
+  await expect(page.getByRole('button', { name: 'Retry subtitles', exact: true })).toBeVisible();
+});
+
+test('generated captions appear with tappable dictionary words in the combined portrait view', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 2, text: '食べていました。' }] }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await page.getByRole('button', { name: 'Look up 食べていました', exact: true }).click({ timeout: 12000 });
+  await expect(page.getByText(/^to eat\b/)).toBeVisible();
+  await page.getByRole('button', { name: 'Done →', exact: true }).click();
+  await expect(page.getByTestId('subtitle-panel')).toBeVisible();
+});
+
+test('page-session Japanese tracks load before a video element and are selected explicitly', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="movie_player"></div>' }));
+  await page.route('https://m.youtube.com/api/timedtext?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ events: [{ tStartMs: 1000, dDurationMs: 2000, segs: [{ utf8: '自然な日本語です。' }] }] }) }));
+  await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
+  await page.evaluate(() => {
+    const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (raw: string) => void }; ytInitialPlayerResponse: unknown };
+    w.messages = []; w.ReactNativeWebView = { postMessage: raw => w.messages.push(JSON.parse(raw)) };
+    const tracks = [{ languageCode: 'en' }, { languageCode: 'ja', kind: 'asr', baseUrl: 'https://m.youtube.com/api/timedtext?v=M7lc1UVf-VE&lang=ja&kind=asr' }];
+    w.ytInitialPlayerResponse = { videoDetails: { videoId: 'M7lc1UVf-VE' }, captions: { playerCaptionsTracklistRenderer: { captionTracks: tracks } } };
+    const player = document.getElementById('movie_player') as HTMLElement & { getOption: (module: string, key: string) => unknown; setOption: (module: string, key: string, track: { languageCode: string }) => void };
+    player.getOption = (_module, key) => key === 'tracklist' ? tracks : { languageCode: player.dataset.selected || 'en' };
+    player.setOption = (_module, _key, track) => { player.dataset.selected = track.languageCode; };
+  });
+  await page.addScriptTag({ content: CAPTION_BRIDGE });
+  await expect(page.locator('#movie_player')).toHaveAttribute('data-selected', 'ja');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string }[] }).messages.filter(m => m.type === 'captionData').length)).toBe(1);
+  const data = await page.evaluate(() => (window as unknown as { messages: { type: string; data: unknown }[] }).messages.find(m => m.type === 'captionData')!.data);
+  expect(parseCaptionTrack(data)[0].text).toBe('自然な日本語です。');
+});
+
+test('portrait fill changes the video itself and YouTube discovery is forced dark', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<meta name="viewport" content="width=device-width, initial-scale=1"><style>html,body{margin:0;height:100%;background:white}.html5-video-container{position:relative}video{width:320px;height:180px}</style><div class="html5-video-container"><video class="html5-main-video"></video></div>' }));
+  await page.goto('https://m.youtube.com/embed/M7lc1UVf-VE');
+  await page.addScriptTag({ content: YOUTUBE_BOOTSTRAP });
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+  await expect(page.locator('video')).toHaveCSS('object-fit', 'cover');
+  expect((await page.locator('video').boundingBox())!.height).toBe(844);
+  await page.evaluate(() => { (window as unknown as { __immersedOptions: { fillPortrait: boolean }; __immersedApplyOptions: () => void }).__immersedOptions.fillPortrait = false; (window as unknown as { __immersedApplyOptions: () => void }).__immersedApplyOptions(); });
+  await expect(page.locator('html')).not.toHaveAttribute('data-immersed-fill');
+  await page.goto('https://m.youtube.com/results?search_query=test');
+  await page.addScriptTag({ content: YOUTUBE_BOOTSTRAP });
+  await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+  await expect(page.locator('html')).toHaveAttribute('dark', '');
+});
+
+test('caption interception reads XML from the player and ignores other languages', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<div>Local caption fixture</div>' }));
+  await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
+  await page.evaluate(() => { const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (raw: string) => void } }; w.messages = []; w.ReactNativeWebView = { postMessage: raw => w.messages.push(JSON.parse(raw)) }; });
+  await page.addScriptTag({ content: YOUTUBE_BOOTSTRAP });
+  const results = await page.evaluate(() => {
+    const w = window as unknown as { __immersedReadCaptionResponse: (url: string, body: string) => boolean; messages: { data: unknown }[] };
+    const japanese = w.__immersedReadCaptionResponse('https://m.youtube.com/api/timedtext?v=M7lc1UVf-VE&lang=ja', '<timedtext><body><p t="1000" d="2000"><s>今日</s><s>は散歩です。</s></p></body></timedtext>');
+    const english = w.__immersedReadCaptionResponse('https://m.youtube.com/api/timedtext?v=M7lc1UVf-VE&lang=en', '{"events":[]}');
+    return { japanese, english, data: w.messages[0].data };
+  });
+  expect(results.japanese).toBe(true); expect(results.english).toBe(false);
+  expect(parseCaptionTrack(results.data)).toEqual([{ start: 1, end: 3, text: '今日は散歩です。' }]);
+});
+
+test('the player’s actual timedtext response is captured when a copied caption URL is empty', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="movie_player"></div>' }));
+  await page.route('https://m.youtube.com/api/timedtext?**', route => route.fulfill({ contentType: 'application/json', body: route.request().url().includes('session=player') ? JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 3000, segs: [{ utf8: '字幕が届きました。' }] }] }) : '' }));
+  await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
+  await page.evaluate(() => { const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (raw: string) => void } }; w.messages = []; w.ReactNativeWebView = { postMessage: raw => w.messages.push(JSON.parse(raw)) }; });
+  await page.addScriptTag({ content: YOUTUBE_BOOTSTRAP });
+  await page.evaluate(async () => {
+    await fetch('/api/timedtext?v=M7lc1UVf-VE&lang=ja');
+    await new Promise<void>(resolve => { const xhr = new XMLHttpRequest(); xhr.open('GET', '/api/timedtext?v=M7lc1UVf-VE&lang=ja&session=player'); xhr.onload = () => resolve(); xhr.send(); });
+  });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { messages: unknown[] }).messages.length)).toBe(1);
+  const data = await page.evaluate(() => (window as unknown as { messages: { data: unknown }[] }).messages[0].data);
+  expect(parseCaptionTrack(data)[0].text).toBe('字幕が届きました。');
 });
 
 test('horizontal gestures navigate settings and words using the floating dock routes', async ({ page }) => {

@@ -4,9 +4,9 @@ import { embeddedPlayerSource } from '../player';
 import { Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { parseCaptionTrack } from '../captions';
-import { CAPTION_BRIDGE, youtubeUrl } from '../youtube';
+import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, youtubeUrl } from '../youtube';
 import type { BrowserHandle, BrowserProps } from './YouTubeBrowser';
-export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, onCaption, onError, onPage, onClock, onTranscript }, ref) {
+export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, fillPortrait = true, hideShorts = true, onCaption, onError, onPage, onClock, onTranscript }, ref) {
   // WebView 14 defaults its extra-props generic to undefined, which intersects
   // its props to never under TS 6 strict mode. Explicit object preserves props.
   const initial = youtubeUrl(uri);
@@ -14,7 +14,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
   const [originalPlayer, setOriginalPlayer] = useState(false);
   const web = useRef<WebView<object>>(null);
   const source = useMemo(() => playerId ? originalPlayer ? { uri: `https://m.youtube.com/watch?v=${playerId}` } : embeddedPlayerSource(playerId, Application.applicationId || 'com.somamill.immersed') : { uri }, [playerId, originalPlayer, uri]);
-  const optionsScript = `window.__immersedOptions = ${JSON.stringify({ dark, hideShorts })}; true;`;
+  const optionsScript = `window.__immersedOptions = ${JSON.stringify({ dark, hideShorts, fillPortrait })}; window.__immersedApplyOptions?.(); true;`;
   useEffect(() => { web.current?.injectJavaScript(optionsScript); }, [optionsScript]);
   const currentVideo = useRef<string | null>(null);
   const pendingTrack = useRef<AbortController | null>(null);
@@ -48,7 +48,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     },
     reload: () => web.current?.reload(),
   }));
-  return <WebView<object> ref={web} source={source} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ backgroundColor: dark ? '#000' : '#fff' }} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
+  return <WebView<object> ref={web} source={source} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo={false} injectedJavaScriptBeforeContentLoaded={optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
     onNavigationStateChange={state => { if (state.url !== 'about:blank') pageChanged(state.url); }} onLoadStart={() => onCaption(null)} onError={event => onError(event.nativeEvent.description)}
     onShouldStartLoadWithRequest={request => {
       if (request.url === 'about:blank' || request.isTopFrame === false) return true;
@@ -69,6 +69,11 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     onMessage={event => {
       try {
         const v = JSON.parse(event.nativeEvent.data);
+        if (v.type === 'captionData' && typeof v.videoId === 'string' && v.videoId === currentVideo.current) {
+          const cues = parseCaptionTrack(v.data);
+          if (cues.length) { pendingTrack.current?.abort(); onTranscript?.(cues, v.videoId); }
+          return;
+        }
         if (v.type === 'captionTrack' && typeof v.url === 'string' && /^[A-Za-z0-9_-]{11}$/.test(v.videoId)) { void loadTrack(v.url, v.videoId); return; }
         if (v.type === 'clock' && Number.isFinite(v.time) && typeof v.paused === 'boolean') { onClock?.(v.time, v.paused); return; }
         if (v.type === 'reset') { onCaption(null); return; }

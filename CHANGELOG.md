@@ -2,6 +2,16 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.1 — 2026-10-29
+
+Combined portrait watching and reading with persistent subtitles
+
+- Replace watch/reading modes with one portrait player; fill the video itself vertically with side cropping, with Fit entire video available in Settings.
+- Keep the subtitle panel visible, retain the last real line through gaps, and provide playback, dictionary and retry controls together.
+- Read Japanese caption tracks in the YouTube page session and observe actual Japanese timedtext responses; support JSON3/XML and explicitly select Japanese tracks.
+- Disable WebView automatic content insets so browsing extends behind the floating glass dock; request and reinforce YouTube dark appearance before loading.
+- Speech transcription still cannot acquire YouTube audio from this cloud network (proxy 403). Live iPhone playback and caption access remain unverified.
+
 ## 0.5.0 — 2026-10-29
 
 Full-viewport portrait, native floating glass and app-wide swipes
