@@ -12,7 +12,6 @@ export default function StudySubtitles({ tokens, tail, dark, level, knowledge, r
     else if (!token.word && /^[、。，．！？!?…」』）)\]】]+$/.test(token.text) && groups.length && !prefix) groups[groups.length - 1].punctuation += token.text;
     else { groups.push({ token, punctuation: '', prefix }); prefix = ''; }
   }
-  const hasReadings = tokens.some(token => /[一-龯]/.test(token.text) && !!token.reading && showFurigana(token.lemma, token.reading, level, knowledge, readings));
   const ink = dark ? '#F3F3F3' : '#242D28';
   return <View testID="subtitle-words" style={styles.words}>
     {groups.map(({ token, punctuation, prefix }, index) => {
@@ -22,7 +21,7 @@ export default function StudySubtitles({ tokens, tail, dark, level, knowledge, r
       const furigana = /[一-龯]/.test(token.text) && !!token.reading && showFurigana(token.lemma, token.reading, level, knowledge, readings);
       return <View key={`${token.start}:${index}`} style={styles.group}>
         {!!prefix && <Text selectable={false} style={[styles.japanese, { color: ink, paddingBottom: 2 }]}>{prefix}</Text>}
-        <Pressable accessibilityRole={token.word ? 'button' : undefined} accessibilityLabel={token.word ? `Look up ${token.text}` : token.text} disabled={!token.word} onPress={() => onWord(token)} style={[styles.word, { paddingTop: hasReadings ? 20 * fontScale : 0 }]}>
+        <Pressable accessibilityRole={token.word ? 'button' : undefined} accessibilityLabel={token.word ? `Look up ${token.text}` : token.text} disabled={!token.word} onPress={() => onWord(token)} style={[styles.word, { paddingTop: readings ? 20 * fontScale : 0 }]}>
           {furigana && <View pointerEvents="none" style={styles.ruby}><Text selectable={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} testID={`furigana-${token.lemma}`} style={[styles.reading, { color }]}>{token.reading}</Text></View>}
           <Text selectable={false} style={[styles.japanese, { color }]}>{token.text}</Text>
         </Pressable>
@@ -30,7 +29,7 @@ export default function StudySubtitles({ tokens, tail, dark, level, knowledge, r
       </View>;
     })}
     {!!prefix && <Text selectable={false} style={[styles.japanese, { color: ink }]}>{prefix}</Text>}
-    {!!tail && <Text selectable={false} style={[styles.japanese, { color: ink }]}>{tail}</Text>}
+    {!!tail && <Text selectable={false} style={[styles.japanese, { color: ink, paddingTop: readings ? 20 * fontScale : 0 }]}>{tail}</Text>}
   </View>;
 }
 const styles = StyleSheet.create({

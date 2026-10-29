@@ -1,4 +1,14 @@
 export type TimedCue = { start: number; end: number; text: string };
+// Caption boundaries are the best available sentence units; creator tracks can
+// divide a grammatical sentence across several cues. Never invent timestamps.
+export function sentenceTarget(cues: TimedCue[], time: number, direction: -1 | 1): number | undefined {
+  if (!cues.length) return undefined;
+  if (direction === 1) return cues.find(cue => cue.start > time + 0.05)?.start;
+  let current = -1;
+  for (let i = 0; i < cues.length && cues[i].start <= time + 0.05; i++) current = i;
+  if (current < 0) return cues[0].start;
+  return cues[Math.max(0, current - (time < cues[current].end ? 1 : 0))].start;
+}
 export type CaptionSource = 'human' | 'youtube-asr' | 'unknown';
 export const captionSourceRank = (source: CaptionSource) => source === 'human' ? 3 : source === 'youtube-asr' ? 2 : 1;
 export function normalizeJapaneseCaption(text: string): string {

@@ -1,6 +1,7 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
-export type AnalyzedToken = { text: string; word: boolean; lemma: string; reading: string; pos: string; grammar: string[]; start: number; end: number };
+export type AnalyzedToken = { text: string; word: boolean; lemma: string; reading: string; pos: string; proper?: boolean; grammar: string[]; start: number; end: number };
+export const dictionaryKey = (token: AnalyzedToken) => token.proper ? `${token.lemma}:name:${token.reading}` : token.lemma;
 export type GeneratedCue = { start: number; end: number; text: string };
 export type Transcription = { status: 'processing' | 'ready' | 'busy' | 'unavailable'; message?: string; cues?: GeneratedCue[]; reason?: string; canRetry?: boolean };
 export function serviceUrl(route: string, params: Record<string, string>) {

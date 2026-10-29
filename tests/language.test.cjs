@@ -41,3 +41,19 @@ test('particle boundaries, compounds, grammar expressions, and raw morphology ar
   assert.ok(raw.some(t => t.pos === 'particle'));
   assert.ok(grouped.some(t => t.reading));
 });
+
+test('names use JMnedict alongside general words, with categories and alternative readings', async () => {
+  const named = await lookup('鈴木', { proper: true, reading: 'すずき' });
+  assert.equal(named[0].source, 'JMnedict');
+  assert.ok(named.some(e => e.japanese.some(j => j.reading === 'すずき')));
+  assert.ok(named.some(e => e.senses.some(s => s.parts_of_speech.includes('family or surname'))));
+  assert.ok((await search('Suzuki')).some(e => e.source === 'JMnedict'));
+  assert.ok((await search('鈴木')).some(e => e.source === 'JMnedict'));
+  const text = '鈴木さんは東京に行きました。';
+  const tokens = await analyze(text);
+  assert.equal(tokens.map(t => t.text).join(''), text);
+  assert.equal(tokens.find(t => t.text === '鈴木').proper, true);
+  const ordinary = await lookup('食べる');
+  assert.equal(ordinary[0].source, 'JMdict');
+  assert.ok(ordinary[0].senses.some(s => s.english_definitions.includes('to eat')));
+});

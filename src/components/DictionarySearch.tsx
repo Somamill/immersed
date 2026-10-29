@@ -31,6 +31,7 @@ export default function DictionarySearch({ dark }: { dark: boolean }) {
       {current?.entries.map(entry => <View key={entry.slug} style={{ paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: dark ? '#252525' : '#ddd', gap: 7 }}>
         <Text selectable={false} style={{ color: ink, fontSize: 25 }}>{entry.japanese[0]?.word || entry.japanese[0]?.reading}</Text>
         {!!entry.japanese[0]?.word && <Text selectable={false} style={{ color: muted, fontSize: 16 }}>{entry.japanese[0]?.reading}</Text>}
+        {entry.source === 'JMnedict' && <Text style={{ color: muted, fontSize: 13 }}>{[...new Set(entry.senses.flatMap(sense => sense.parts_of_speech))].join(' · ')}</Text>}
         <Text selectable={false} style={{ color: ink, fontSize: 16, lineHeight: 24 }}>{entry.senses.slice(0, 2).map(sense => sense.english_definitions.join('; ')).join('\n')}</Text>
       </View>)}
     </View>}

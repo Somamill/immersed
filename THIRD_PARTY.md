@@ -41,3 +41,12 @@ No Migaku implementation code or paid dictionary content has been copied. The cu
 ## JLPT estimates (v0.3.0)
 
 The bundled word/reading-to-level map is derived from OpenJLPT by evanclan and its credited sources, including Jonathan Waller and EDRDG. Pinned commit and form count: `src/data/jlpt-source.json`. It contains 13,513 word/reading forms. Only level metadata is extracted; no example sentences are copied. This derived data remains CC BY-SA 4.0. Full upstream attribution and license are in `licenses/OpenJLPT-NOTICE.md` and `licenses/OpenJLPT-LICENSE`. The app credits the source in Settings. JLPT levels are community estimates, not official post-2010 examination vocabulary lists. Unlisted words stay neutral; per-word user knowledge overrides the estimate.
+
+## JMnedict / ENAMDICT names (0.5.7)
+
+- EDRDG Japanese Multilingual Named Entity Dictionary: https://www.edrdg.org/enamdict/enamdict_doc.html
+- Copyright EDRDG. CC BY-SA 4.0; license and attribution: https://www.edrdg.org/edrdg/licence.html
+- Same scriptin/jmdict-simplified release `3.6.2+20261026175559`, `jmnedict-all` dataset; 743,685 entries.
+- Source asset SHA-256: `552f279d250b162aa0311259130ee82ad1db0879ed32e8d9318b56a9400b1165`.
+- Setup creates a derived SQLite index with Japanese/reading and romanized-name forms, preserving original name translations and type labels. The API display records and index data remain CC BY-SA 4.0. The app credits both dictionaries in Settings → About. The generated database lives in ignored `.data/`; run `npm run language:setup` to reproduce it.
+- Names can have several readings. These data supplement common-word definitions, not identify speakers or correct transcription errors.

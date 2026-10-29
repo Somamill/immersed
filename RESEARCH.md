@@ -12,7 +12,7 @@ Local tests verify frame timestamp forwarding, immediate seek/pause updates, cue
 
 [Google OAuth policies](https://developers.google.com/identity/protocols/oauth2/policies) state: “Developers must not direct a Google OAuth 2.0 authorization request to an embedded user-agent under the developer's control.” [Google's native-app guide](https://developers.google.com/identity/protocols/oauth2/native-app) documents browser-based authorization for native applications.
 
-The app's separate Google sign-in button is removed. YouTube's own sign-in link is the only entry point. Top-level and popup links to the supported Google/YouTube account hosts open the system browser with HTTPS. The app does not spoof a browser user-agent, capture credentials or import browser cookies into the embedded player. Therefore signing into the browser does **not** establish authenticated embedded YouTube playback. A supported native OAuth integration would require a registered client; that is not configured in this credential-free preview.
+The app's separate Google sign-in button is removed. The earlier preview opened YouTube's own sign-in links in the system browser. Version 0.5.7 removes that redirect and explains that account sign-in is unavailable. The app does not spoof a browser user-agent, capture credentials or import browser cookies into the embedded player. Therefore signing into the browser does **not** establish authenticated embedded YouTube playback. A supported native OAuth integration would require a registered client; that is not configured in this credential-free preview.
 
 ## Navigation edges
 
@@ -25,3 +25,11 @@ A YouTube client-side history change can select a watch URL without an ordinary 
 ## Japanese text and recognition quality
 
 The [subtitle quality findings](docs/SUBTITLE_QUALITY.md) cover source-track priority, rolling caption parsing, W3C Japanese typography references, a real-audio wrong-kanji diagnostic, and the proposed model-evaluation/alignment pipeline. Japanese-only spaces are normalized without changing source kanji. Furigana no longer widens the underlying learning token. These improvements do not establish end-to-end recognition accuracy; access to YouTube audio remains blocked in this preview environment.
+
+## Names dictionaries and sign-in update (0.5.7)
+
+[Yomitan's dictionary guide](https://yomitan.wiki/dictionaries/) recommends complementary resources: Jitendex/JMdict for words, JMnedict for proper names, and KANJIDIC for character information. [EDRDG's JMnedict documentation](https://www.edrdg.org/enamdict/enamdict_doc.html) describes surnames, given names, places, organizations and other named entities. This release adds JMnedict to the existing JMdict pipeline. Jitendex is an improved JMdict-based resource, not evidence that a single commercial or universal dictionary fixes names. Arbitrary commercial dictionary archives are not automatically redistributable.
+
+The old Safari redirect cannot establish a WebView sign-in session and is removed. [Google OAuth policies](https://developers.google.com/identity/protocols/oauth2/policies) prohibit embedded user-agent authorization and require a registered OAuth client. A supported native account integration would be separate work; an API access token does not create YouTube browser cookies or guarantee authenticated iframe playback.
+
+The app now uses available player pause/play/seek methods and does not synthesize caption-button taps. The provider owns its playback controls; their transient appearance has not been measured on a physical iPhone. See the development guide for cue-boundary navigation and gesture limits.

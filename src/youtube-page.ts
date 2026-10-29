@@ -132,9 +132,17 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
   window.__immersedCommand = (command, time) => {
     const video = selectVideo();
     if (!video) return;
-    if (command === 'seek') { video.currentTime = Math.max(0, Math.min(Number.isFinite(video.duration) ? video.duration : Infinity, (video.currentTime || 0) + (Number.isFinite(time) ? time : 0))); return; }
-    if (command === 'pause') video.pause();
-    if (command === 'play') video.play().catch(() => {});
+    const player = document.getElementById('movie_player');
+    if (command === 'seek' || command === 'seekTo') {
+      if (!Number.isFinite(time)) return;
+      const target = Math.max(0, Math.min(Number.isFinite(video.duration) ? video.duration : Infinity, command === 'seekTo' ? time : (video.currentTime || 0) + time));
+      if (typeof player?.seekTo === 'function') player.seekTo(target, true); else video.currentTime = target;
+      return;
+    }
+    // Use player methods without synthesizing touches or revealing its toolbar.
+    // YouTube still owns the visibility of its playback controls.
+    if (command === 'pause' && !video.paused) { if (typeof player?.pauseVideo === 'function') player.pauseVideo(); else video.pause(); }
+    if (command === 'play' && video.paused) { if (typeof player?.playVideo === 'function') player.playVideo(); else video.play().catch(() => {}); }
   };
   const isJapanese = track => {
     const translation = track?.translationLanguage?.languageCode || track?.translationLanguage;
@@ -164,6 +172,7 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     }
   };
   let stopClock = () => {}, lastFrameAt = 0;
+  const observedTracks = new WeakSet();
   const emitClock = (video, time = video.currentTime || 0, force = false) => {
     if (!force && Date.now() - clock < 40) return;
     clock = Date.now();
@@ -230,14 +239,13 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     if (!video) return;
     if (Date.now() - lastFrameAt > 250) emitClock(video);
     const japaneseTextTrack = [...video.textTracks].find(t => /^ja(?:-|$)/.test(t.language));
+    if (japaneseTextTrack && !observedTracks.has(japaneseTextTrack)) { observedTracks.add(japaneseTextTrack); japaneseTextTrack.addEventListener('cuechange', read); }
     // Native tracks stay active for cue timing, without an on-video overlay.
     // Every other track is disabled rather than allowing a preferred English CC.
     [...video.textTracks].forEach(track => {
       const mode = track === japaneseTextTrack ? 'hidden' : 'disabled';
       if (track.mode !== mode) track.mode = mode;
     });
-    const button = document.querySelector('.ytp-subtitles-button[aria-pressed="false"]');
-    if (button && selectedJapanese) button.click();
     let text = '';
     if (japaneseTextTrack?.activeCues) text = [...japaneseTextTrack.activeCues].map(cue => cue.text || '').join('').trim();
     if (!text && selectedJapanese) {

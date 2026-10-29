@@ -2,6 +2,16 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.7 — 2026-10-29
+
+Quicker lookup, sentence controls and Japanese names
+
+- Tap dictionary text, empty space or the backdrop to dismiss immediately and restore the prior playback intent; action buttons retain their functions.
+- Add previous/next caption controls in the reading area and lookup, absolute seeking, and a dedicated left-edge back gesture with panel history.
+- Prefetch nearby word analysis, stabilize the furigana lane, render at cue boundaries and forward native cue changes promptly. Use player APIs without synthetic CC taps.
+- Add 743,685 JMnedict name entries beside JMdict, with proper-name priority, reading alternatives, name categories and Japanese/romanized-name search.
+- Remove the ineffective Safari sign-in redirect. In-app YouTube account sign-in remains unsupported; provider toolbar behavior and edge gestures need physical-iPhone testing. Fresh YouTube transcription remains blocked by audio access.
+
 ## 0.5.6 — 2026-10-29
 
 Natural Japanese subtitles and a clearer project showcase

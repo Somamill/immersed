@@ -11,3 +11,4 @@ if (crypto.createHash('sha256').update(fs.readFileSync(archive)).digest('hex') !
 const output = execFileSync('tar', ['-xOzf', archive, 'jmdict-eng-3.6.2.json'], { maxBuffer: 200 * 1024 * 1024 });
 fs.writeFileSync(path.join(root, 'jmdict.json'), output);
 console.log('Pinned JMdict English dataset installed. EDRDG CC BY-SA 4.0; see THIRD_PARTY.md.');
+require('./setup-names.cjs');

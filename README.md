@@ -37,14 +37,14 @@
 - **Natural content:** browse ordinary Japanese daily life, food, travel, science, gaming and conversation. Discovery is language-biased search, not a verified Japanese-only feed.
 - **Tap to understand:** automatic word/grammar grouping, dictionary forms and readings. Lookup pauses playback and resumes it when dismissed if it was playing.
 - **Your level, less clutter:** choose a completed JLPT level. Harder words are amber; particles are mint. Optional furigana appears on harder kanji words. Known/unknown choices override estimates.
-- **One place for words:** search English or Japanese and keep vocabulary with its original caption/video context. Uses the full JMdict English dataset; no paid dictionary subscription or manual import.
+- **One place for words:** search English or Japanese and keep vocabulary with its original caption/video context. Uses the full JMdict English dataset plus JMnedict name readings and name categories; no paid dictionary subscription or manual import.
 - **A focused view:** portrait video, a fixed subtitle area, a compact glass navigation pill, light/dark themes and optional Shorts hiding. Selected videos use the dedicated embed instead of a watch page with comments.
-- **Move naturally:** swipe the glass dock left/right between content, Words and Settings. Swipe the reading area to seek 10 seconds; swipe down on the dictionary header to close it. Content-edge and panel swipes also navigate.
+- **Move naturally:** swipe the glass dock left/right between content, Words and Settings. Use previous/next buttons to revisit caption boundaries, or swipe the reading area to seek 10 seconds; swipe down on the dictionary header to close it. Swipe from the left edge to return to the previous panel or leave the selected video. These are app gestures; a full native interactive stack transition is not implemented.
 - **Keep useful captions:** verified Japanese tracks are cached on the device for repeat visits. Creator-provided tracks take priority over automatic tracks. Caption caches do not make videos or the server dictionary available offline.
 
 ## Try it on your iPhone
 
-Install **Expo Go** on your iPhone. From a clone of this repository:
+Install **Expo Go** on your iPhone. Using Node.js 24, from a clone of this repository:
 
 ```sh
 npm ci
@@ -54,7 +54,7 @@ npx expo start --tunnel --go
 
 Open the printed link/QR code in Expo Go. The development server supplies dictionary/analysis and must stay running. No Apple Developer subscription is needed for this preview; Expo Go keeps its own installed Home Screen icon. Preview links are temporary and can stop when their server/workspace stops.
 
-For the optional self-hosted recognition worker, setup details and platform limits, see the [development guide](docs/DEVELOPMENT.md). A static web export or signed app does not include a running backend. Videos that prohibit embedding or require inaccessible account/region permissions may not play. Google sign-in opens the system browser and does not import that session into the embedded player. Locked-screen audio is not supported in this preview.
+For the optional self-hosted recognition worker, setup details and platform limits, see the [development guide](docs/DEVELOPMENT.md). A static web export or signed app does not include a running backend. Videos that prohibit embedding or require inaccessible account/region permissions may not play. YouTube account sign-in is unavailable in this preview; unsupported sign-in links show an explanation instead of redirecting to Safari. Native OAuth would require a registered client and would not itself establish an authenticated embedded-player session. Locked-screen audio is not supported in this preview.
 
 ## Accuracy comes before appearance
 

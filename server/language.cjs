@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const kuromoji = require('kuromoji');
+const names = require('./names.cjs');
 let ready;
 let englishIndex;
 const normalizeEnglish = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/^(?:to|an?|the)\s+/, '').replace(/\s+/g, ' ').trim();
@@ -25,13 +26,16 @@ async function initialize() {
 function dictionaryEntry(entry, tags) {
   return {
     slug: `jmdict-${entry.id}`,
+    source: 'JMdict',
     japanese: entry.kana.map(k => ({ word: entry.kanji.find(w => !k.appliesToKanji || k.appliesToKanji.includes('*') || k.appliesToKanji.includes(w.text))?.text, reading: k.text })),
     senses: entry.sense.map(s => ({ english_definitions: s.gloss.filter(g => g.lang === 'eng').map(g => g.text), parts_of_speech: s.partOfSpeech.map(tag => tags[tag] || tag) })),
   };
 }
-async function lookup(word) {
+async function lookup(word, options = {}) {
   const { index, tags } = await initialize();
-  return (index.get(word) || []).slice(0, 5).map(entry => dictionaryEntry(entry, tags));
+  const general = (index.get(word) || []).slice(0, 5).map(entry => dictionaryEntry(entry, tags));
+  const named = options.proper || !general.length ? names.lookup(word, options.reading) : [];
+  return options.proper ? [...named, ...general] : [...general, ...named];
 }
 async function search(query) {
   const { index, forms, words, tokenizer, tags } = await initialize();
@@ -57,7 +61,7 @@ async function search(query) {
     const terms = [...new Set(englishTerms(text))];
     if (!terms.length) return [];
     const lists = terms.map(term => englishIndex.get(term));
-    if (lists.some(list => !list)) return [];
+    if (lists.some(list => !list)) return names.lookup(text);
     lists.sort((a, b) => a.size - b.size);
     for (const entry of lists[0]) if (lists.every(list => list.has(entry))) candidates.add(entry);
   }
@@ -70,7 +74,7 @@ async function search(query) {
     const primary = entry.sense[0]?.gloss.filter(g => g.lang === 'eng').map(g => normalizeEnglish(g.text)) || [];
     return common + (primary[0] === normalized ? 500 + (primary.length === 1 ? 30 : 0) : primary.includes(normalized) ? 400 : definitions.includes(normalized) ? 200 : definitions.some(d => d.startsWith(normalized)) ? 80 : 0);
   };
-  return [...candidates].map(entry => ({ entry, score: score(entry) })).sort((a, b) => b.score - a.score || String(a.entry.id).localeCompare(String(b.entry.id))).slice(0, 20).map(({ entry }) => {
+  const results = [...candidates].map(entry => ({ entry, score: score(entry) })).sort((a, b) => b.score - a.score || String(a.entry.id).localeCompare(String(b.entry.id))).slice(0, 20).map(({ entry }) => {
     const result = dictionaryEntry(entry, tags);
     if (!japanese) {
       const relevance = sense => sense.english_definitions.some(d => normalizeEnglish(d) === normalized) ? 2 : sense.english_definitions.some(d => wanted.every(term => englishTerms(d).includes(term))) ? 1 : 0;
@@ -78,6 +82,7 @@ async function search(query) {
     }
     return result;
   });
+  return [...results.slice(0, 15), ...names.lookup(text)].slice(0, 20);
 }
 const auxiliaries = { ます: 'polite', た: 'past', ない: 'negative', ぬ: 'negative', ん: 'negative', たい: 'desire', れる: 'passive / potential', られる: 'passive / potential', せる: 'causative', させる: 'causative', う: 'volitional', です: 'polite copula', だ: 'copula' };
 const patterns = [ ['について', 'about / concerning'], ['として', 'as / in the role of'], ['なければならない', 'must / have to'], ['かもしれない', 'might / may'], ['わけではない', 'does not necessarily mean'], ['ことができる', 'can / be able to'] ];
@@ -88,7 +93,7 @@ async function analyze(text, grouped = true) {
   const tokens = raw.map(t => {
     const start = text.indexOf(t.surface_form, offset);
     offset = start + t.surface_form.length;
-    return { text: t.surface_form, start, end: offset, lemma: t.basic_form === '*' ? t.surface_form : t.basic_form, reading: hira(t.reading === '*' ? '' : t.reading), pos: posLabels[t.pos] || t.pos, detail: t.pos_detail_1, word: t.pos !== '記号' && !/^\s+$/.test(t.surface_form), grammar: [] };
+    return { text: t.surface_form, start, end: offset, lemma: t.basic_form === '*' ? t.surface_form : t.basic_form, reading: hira(t.reading === '*' ? '' : t.reading), pos: posLabels[t.pos] || t.pos, detail: t.pos_detail_1, proper: t.pos_detail_1 === '固有名詞', word: t.pos !== '記号' && !/^\s+$/.test(t.surface_form), grammar: [] };
   });
   if (!grouped) return tokens;
   const result = [];
@@ -104,7 +109,7 @@ async function analyze(text, grouped = true) {
     } else if (head.pos === 'noun' || head.pos === 'prefix') {
       let best = end;
       for (let j = end; j < Math.min(tokens.length, i + 5) && tokens[j].pos === 'noun' && tokens[j].start === tokens[j - 1].end; j++) {
-        if (index.has(text.slice(head.start, tokens[j].end))) best = j + 1;
+        if (index.has(text.slice(head.start, tokens[j].end)) || (head.proper && tokens.slice(i, j + 1).every(t => t.proper) && names.has(text.slice(head.start, tokens[j].end)))) best = j + 1;
       }
       end = best;
     }

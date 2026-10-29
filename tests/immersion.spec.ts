@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
 import { embeddedPlayerSource, swipeAction } from '../src/player';
 import { familiarity, showFurigana } from '../src/learning';
-import { japaneseCaptionUrl, parseCaptionTrack, readingCue, normalizeJapaneseCaption, captionSourceRank } from '../src/captions';
+import { japaneseCaptionUrl, parseCaptionTrack, readingCue, normalizeJapaneseCaption, captionSourceRank, sentenceTarget } from '../src/captions';
 import { automaticRetryDelay } from '../src/subtitle-policy';
 
 test('home offers real YouTube discovery and retains the saved-word library', async ({ page }) => {
@@ -22,7 +22,7 @@ test('video links normalize safely', () => {
   expect(youtubeUrl('javascript:alert(1)')).toBeNull();
 });
 
-test('only YouTube sign-in and trusted account links enter the system sign-in browser', () => {
+test('only trusted HTTPS YouTube account links are classified as sign-in requests', () => {
   expect(isYouTubeSignInUrl('https://m.youtube.com/signin?next=%2F')).toBe(true);
   expect(isYouTubeSignInUrl('https://accounts.google.com/ServiceLogin?service=youtube')).toBe(true);
   expect(isYouTubeSignInUrl('https://accounts.youtube.com/accounts/ServiceLogin')).toBe(true);
@@ -45,6 +45,7 @@ test('caption adapter reads player text, pauses, ignores comments, and clears on
     ] } } };
     w.ReactNativeWebView = { postMessage: message => w.messages.push(JSON.parse(message)) };
     (document.getElementById('movie_player') as HTMLElement & { getOption: () => unknown }).getOption = () => ({ languageCode: 'ja' });
+    Object.defineProperty(document.querySelector('video')!, 'paused', { get: () => false });
     document.querySelector('video')!.pause = () => { w.pausedByApp = true; };
   });
   await page.addScriptTag({ content: CAPTION_BRIDGE });
@@ -56,7 +57,7 @@ test('caption adapter reads player text, pauses, ignores comments, and clears on
   expect(tracks[0].url).toContain('name=manual');
   await expect(page.locator('.comment')).toBeVisible();
   await expect(page.locator('ytm-reel-shelf-renderer')).toBeHidden();
-  await expect(page.locator('.ytp-subtitles-button')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.ytp-subtitles-button')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.ytp-caption-segment').first()).toHaveCSS('visibility', 'hidden');
   await expect(page.locator('[data-immersed-player]')).toHaveCount(0);
   await page.evaluate(() => (window as unknown as { __immersedCommand: (command: string) => void }).__immersedCommand('pause'));
@@ -180,6 +181,7 @@ test('caption controls ignore hidden video elements without modifying player lay
   await page.evaluate(() => {
     (window as unknown as { ReactNativeWebView: { postMessage: () => void } }).ReactNativeWebView = { postMessage: () => {} };
     const v = document.querySelector('#visible') as HTMLVideoElement;
+    Object.defineProperty(v, 'paused', { get: () => false });
     v.pause = () => v.setAttribute('data-paused-by-app', 'yes');
   });
   await page.addScriptTag({ content: CAPTION_BRIDGE });
@@ -307,7 +309,8 @@ test('generated captions appear with tappable dictionary words in the combined p
   await page.getByRole('button', { name: 'Go', exact: true }).click();
   await page.getByRole('button', { name: 'Look up 食べていました', exact: true }).click({ timeout: 12000 });
   await expect(page.getByText(/^to eat\b/)).toBeVisible();
-  await page.getByRole('button', { name: 'Done →', exact: true }).click();
+  await page.getByText(/^to eat\b/).click();
+  await expect(page.getByTestId('dictionary-sheet')).toHaveCount(0);
   await expect(page.getByTestId('subtitle-panel')).toBeVisible();
 });
 
@@ -554,4 +557,87 @@ test('horizontal gestures navigate settings and words using the floating dock ro
   await page.mouse.move(60, 435, { steps: 12 }); await page.mouse.up();
   await expect(page.getByText('Settings.', { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/panel=settings/);
+});
+
+test('sentence navigation follows cue boundaries, gaps and video ends', () => {
+  const cues = [{ start: 0, end: 2, text: '一' }, { start: 4, end: 6, text: '二' }, { start: 8, end: 10, text: '三' }];
+  expect(sentenceTarget(cues, 4.8, -1)).toBe(0);
+  expect(sentenceTarget(cues, 4.8, 1)).toBe(8);
+  expect(sentenceTarget(cues, 3, -1)).toBe(0);
+  expect(sentenceTarget(cues, 3, 1)).toBe(4);
+  expect(sentenceTarget(cues, 0, -1)).toBe(0);
+  expect(sentenceTarget(cues, 8, 1)).toBeUndefined();
+  expect(sentenceTarget([], 0, -1)).toBeUndefined();
+});
+
+test('lookup actions stay open, any text dismisses, and sentence controls seek the reading view', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 2, text: '食べる。' }, { start: 4, end: 6, text: '明日は旅行です。' }] }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await page.getByRole('button', { name: 'Look up 食べる', exact: true }).click({ timeout: 12000 });
+  const sheet = page.getByTestId('dictionary-sheet');
+  await sheet.getByRole('button', { name: 'Mark known', exact: true }).click();
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole('button', { name: 'Next sentence', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Look up 旅行', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Previous sentence', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 食べる', exact: true })).toBeVisible();
+});
+
+test('left-edge back leaves a selected video and follows the actual panel history', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: '{"status":"processing"}' }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  const back = async () => { await page.mouse.move(8, 420); await page.mouse.down(); await page.mouse.move(240, 422, { steps: 15 }); await page.mouse.up(); };
+  await back();
+  await expect(page.getByTestId('subtitle-panel')).toHaveCount(0);
+  await expect(page.getByRole('textbox')).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByText('Settings.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Words · 0', exact: true }).click();
+  await expect(page.getByText('Words.', { exact: true })).toBeVisible();
+  await back();
+  await expect(page.getByText('Settings.', { exact: true })).toBeVisible();
+  await back();
+  await expect(page.getByText('Settings.', { exact: true })).toHaveCount(0);
+});
+
+test('playback commands use player APIs and absolute sentence timestamps without clicking controls', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="movie_player"><video></video><button class="ytp-subtitles-button" aria-pressed="false" onclick="this.dataset.clicked=\'yes\'">CC</button></div>' }));
+  await page.goto('https://m.youtube.com/embed/M7lc1UVf-VE');
+  await page.evaluate(() => {
+    const video = document.querySelector('video')!;
+    let paused = false;
+    Object.defineProperty(video, 'paused', { get: () => paused });
+    const player = document.getElementById('movie_player') as HTMLElement & { pauseVideo: () => void; playVideo: () => void; seekTo: (time: number) => void; getOption: () => unknown };
+    player.pauseVideo = () => { paused = true; video.dataset.paused = 'true'; };
+    player.playVideo = () => { paused = false; video.dataset.paused = 'false'; };
+    player.seekTo = time => { video.dataset.seek = String(time); };
+    player.getOption = () => ({ languageCode: 'ja' });
+  });
+  await page.addScriptTag({ content: CAPTION_BRIDGE });
+  await page.evaluate(() => { const w = window as unknown as { __immersedCommand: (command: string, time?: number) => void }; w.__immersedCommand('pause'); w.__immersedCommand('seekTo', 12.75); w.__immersedCommand('play'); });
+  await expect(page.locator('video')).toHaveAttribute('data-seek', '12.75');
+  await expect(page.locator('video')).toHaveAttribute('data-paused', 'false');
+  await expect(page.locator('.ytp-subtitles-button')).not.toHaveAttribute('data-clicked');
+});
+
+test('native Japanese cue clears are forwarded on cuechange without waiting for a poll', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<video></video>' }));
+  await page.goto('https://m.youtube.com/embed/M7lc1UVf-VE');
+  await page.clock.install();
+  await page.evaluate(() => {
+    const w = window as unknown as { messages: unknown[]; track: EventTarget & { language: string; mode: string; activeCues: { text: string }[] }; ReactNativeWebView: { postMessage: (raw: string) => void } };
+    w.messages = []; w.ReactNativeWebView = { postMessage: raw => w.messages.push(JSON.parse(raw)) };
+    w.track = Object.assign(new EventTarget(), { language: 'ja', mode: 'hidden', activeCues: [{ text: '日本語です。' }] });
+    Object.defineProperty(document.querySelector('video'), 'textTracks', { get: () => [w.track] });
+  });
+  await page.addScriptTag({ content: CAPTION_BRIDGE });
+  const texts = () => page.evaluate(() => (window as unknown as { messages: { type: string; text?: string }[] }).messages.filter(m => m.type === 'caption').map(m => m.text));
+  expect(await texts()).toContain('日本語です。');
+  await page.evaluate(() => { const track = (window as unknown as { track: EventTarget & { activeCues: unknown[] } }).track; track.activeCues = []; track.dispatchEvent(new Event('cuechange')); });
+  expect((await texts()).at(-1)).toBe('');
 });

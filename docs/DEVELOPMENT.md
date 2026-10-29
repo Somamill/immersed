@@ -136,7 +136,7 @@ Verified Japanese timed tracks and successfully generated captions are cached on
 
 ## One learning mode, dictionary search and timing (0.5.4)
 
-Word/grammar grouping, lookup and furigana are always on, including after restoring older disabled preferences. Settings has one Dark mode switch (off = light), learner level and Shorts filtering. Provider, attribution, limitations and version details live under the closed About disclosure. The separate Google button is removed; only YouTube's own sign-in links can open the system sign-in browser. Google prohibits embedded-browser authentication, and the resulting browser session is not imported into the player.
+Word/grammar grouping, lookup and furigana are always on, including after restoring older disabled preferences. Settings has one Dark mode switch (off = light), learner level and Shorts filtering. Provider, attribution, limitations and version details live under the closed About disclosure. The separate Google button is removed; YouTube sign-in now reports that account access is unavailable in this preview. Google prohibits embedded-browser authentication, and external browser sessions cannot be imported into the player.
 
 Words combines saved vocabulary with automatic English ↔ Japanese dictionary search. The server searches Japanese spellings, readings, inflected dictionary forms and prefixes, or English gloss terms/phrases, ranking exact/common matches first. This is a word dictionary, not sentence translation or arbitrary-language translation. No dictionary import or paid API is required.
 
@@ -149,3 +149,17 @@ The dock fits its three icons in a centered 182-point pill with 56-point-wide to
 Furigana now has an on/off switch. With N2 selected, estimated N1 words receive readings while N2–N5 words do not. Personal known/unknown choices override the estimate; words without a listed level do not get an invented classification. Grouping, word lookup and grammar remain always enabled. The setting applies to subtitle furigana; pronunciation remains available in dictionary entries.
 
 The page bridge now reports JavaScript/history-only navigation even before a video element exists. Both those events and native navigation select the dedicated embed, remount the player WebView for each video, and keep the old watch page invisible until the embed has loaded. This covers a route that could previously leave the full watch page, channel information and comments inside the viewing area. This behavior is fixture-tested; physical-iPhone compatibility still needs confirmation. YouTube's own controls/title overlays within an embed are distinct from a full watch-page comments/channel section.
+
+## Lookup, names and navigation (0.5.7)
+
+Use Node.js 24. `npm run language:setup` installs JMdict and verifies the pinned JMnedict archive before building `.data/names.sqlite`. The 743,685 name entries are queried through a read-only disk index rather than parsed into the Metro JavaScript heap. It is server-side data, not an offline iPhone dictionary. The database is generated locally and not committed.
+
+Proper-noun tokens prioritize matching JMnedict names, with general JMdict senses still available. Ordinary words retain JMdict priority; names supplement misses and exact-name searches in Japanese or romanized English (for example, Suzuki). Names can have multiple readings and identities; morphology and dictionary matches do not prove which person is speaking. Name data does not repair incorrect source subtitles. No paid dictionaries are installed.
+
+Tap the backdrop, text or empty sheet space to close lookup. Save/known/unknown and sentence controls retain their actions. Dismissal has no slide animation, and playback resumes only if it was playing when lookup opened. Previous/next controls use actual cue boundaries, which may divide a grammatical sentence; next is disabled at the final known cue and both are disabled without a timed track. Seeking from the lookup closes it and restores the prior play/pause intent.
+
+The left edge is reserved for an app back gesture so the embedded page cannot consume it. It returns through visited panels, leaves a selected video for its prior browse URL, or uses available WebView history while browsing. This is not an interactive native UINavigationController transition; hardware feel and provider controls need a physical-iPhone check.
+
+Nearby captions are analyzed in advance, in-flight requests are shared, ruby has a stable lane, and React redraws on cue/playback changes instead of every clock message. Native text-track cue clears are forwarded on cuechange. Playback uses available YouTube player methods without simulating CC taps; YouTube still controls its own toolbar, and this does not promise its controls never appear.
+
+The Safari sign-in redirect has been removed. The preview reports that YouTube account sign-in is unavailable. Registered native OAuth may enable account API features but cannot be advertised as importing a Safari account into the embedded player.

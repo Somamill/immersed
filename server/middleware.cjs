@@ -16,14 +16,17 @@ module.exports = function middleware(next) {
         const tokens = await language.analyze(text, true);
         const dictionary = {};
         if (url.searchParams.get('dictionary') === 'true') {
-          for (const lemma of [...new Set(tokens.filter(t => t.word).map(t => t.lemma))].slice(0, 24)) dictionary[lemma] = await language.lookup(lemma);
+          for (const token of tokens.filter(t => t.word).slice(0, 24)) {
+            const key = token.proper ? `${token.lemma}:name:${token.reading}` : token.lemma;
+            if (!dictionary[key]) dictionary[key] = await language.lookup(token.lemma, token);
+          }
         }
         return json(200, { tokens, dictionary });
       }
       if (url.pathname.endsWith('/dictionary')) {
         const word = url.searchParams.get('word') || '';
         if (!word || word.length > 120) return json(400, { error: 'Invalid word' });
-        return json(200, { data: await language.lookup(word), source: 'JMdict / EDRDG', license: 'CC BY-SA 4.0' });
+        return json(200, { data: await language.lookup(word, { proper: url.searchParams.get('proper') === 'true', reading: (url.searchParams.get('reading') || '').slice(0, 120) }), source: 'JMdict + JMnedict / EDRDG', license: 'CC BY-SA 4.0' });
       }
       if (url.pathname.endsWith('/search')) {
         const query = (url.searchParams.get('query') || '').trim();

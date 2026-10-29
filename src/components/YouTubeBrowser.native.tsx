@@ -1,7 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import * as Application from 'expo-application';
 import { embeddedPlayerSource } from '../player';
-import { Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { japaneseCaptionUrl, parseCaptionTrack, captionSourceRank, type CaptionSource } from '../captions';
 import history from '../version-history.json';
@@ -20,6 +19,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
   const currentVideo = useRef<string | null>(playerId);
   const pendingTrack = useRef<AbortController | null>(null);
   const pendingRank = useRef(0);
+  const canGoBack = useRef(false);
   useEffect(() => () => pendingTrack.current?.abort(), []);
   const pageChanged = (url: string) => {
     const canonical = youtubeUrl(url);
@@ -29,10 +29,10 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     if (currentVideo.current !== id) { pendingTrack.current?.abort(); currentVideo.current = id; }
     onPage?.(url);
   };
-  const openYouTubeSignIn = (url: string) => {
+  const explainYouTubeSignIn = (url: string) => {
     try {
       const target = new URL(url);
-      if (isYouTubeSignInUrl(target.toString())) void Linking.openURL(target.toString()).catch(() => onError('Could not open the sign-in browser.'));
+      if (isYouTubeSignInUrl(target.toString())) onError('YouTube account sign-in is not available in this preview.');
     } catch { /* Ignore unrelated popup URLs. */ }
   };
   const loadTrack = async (url: string, videoId: string, source: CaptionSource) => {
@@ -54,19 +54,20 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     } catch { /* Expired or inaccessible tracks fall back to visible captions. */ }
   };
   useImperativeHandle(ref, () => ({
+    back: () => { if (!playerId && canGoBack.current) web.current?.goBack(); },
     command: (command, time) => {
       web.current?.injectJavaScript(`window.__immersedCommand?.(${JSON.stringify(command)}, ${Number.isFinite(time) ? time : 'null'}); true;`);
     },
   }));
   return <WebView<object> key={`${history[0].version}:${playerId || 'browse'}`} ref={web} source={source} style={{ flex: 1, opacity: playerId && !embedReady ? 0 : 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo={false} injectedJavaScriptBeforeContentLoaded={optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
     onLoad={event => { try { const url = new URL(event.nativeEvent.url); if (url.pathname === `/embed/${currentVideo.current}`) setEmbedReady(true); } catch {} }}
-    onNavigationStateChange={state => { if (state.url !== 'about:blank') pageChanged(state.url); }} onLoadStart={() => { onCaption(null); onError(''); }} onError={event => onError(event.nativeEvent.description)}
+    onNavigationStateChange={state => { canGoBack.current = state.canGoBack; if (state.url !== 'about:blank') pageChanged(state.url); }} onLoadStart={() => { onCaption(null); onError(''); }} onError={event => onError(event.nativeEvent.description)}
     onShouldStartLoadWithRequest={request => {
       if (request.url === 'about:blank' || request.isTopFrame === false) return true;
       try {
         const u = new URL(request.url);
         if (u.protocol !== 'https:') return false;
-        if (isYouTubeSignInUrl(u.toString())) { openYouTubeSignIn(u.toString()); return false; }
+        if (isYouTubeSignInUrl(u.toString())) { explainYouTubeSignIn(u.toString()); return false; }
         if (hideShorts && u.pathname.startsWith('/shorts/')) return false;
         if (!/(^|\.)youtube\.com$/.test(u.hostname)) return false;
         const watch = youtubeUrl(request.url);
@@ -78,7 +79,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
         return true;
       } catch { return false; }
     }}
-    onOpenWindow={event => openYouTubeSignIn(event.nativeEvent.targetUrl)}
+    onOpenWindow={event => explainYouTubeSignIn(event.nativeEvent.targetUrl)}
     onMessage={event => {
       try {
         const v = JSON.parse(event.nativeEvent.data);
