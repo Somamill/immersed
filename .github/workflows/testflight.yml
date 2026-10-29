@@ -2,10 +2,6 @@ name: Send iPhone update to TestFlight
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths-ignore:
-      - '**/*.md'
 
 permissions:
   contents: read

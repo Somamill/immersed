@@ -6,7 +6,9 @@ An iPhone-first language immersion app. Japanese first; a language-neutral conte
 
 ## Try it on your iPhone
 
-For a standalone install and repeatable cloud-built updates, use the [TestFlight setup guide](TESTFLIGHT.md). Expo and Apple account setup are still required; the committed configuration is prepared but no signed build has been uploaded yet.
+**Current choice: free previews using Expo Go.** No paid Apple Developer membership or TestFlight build is needed. While the cloud development server is running, open its preview link in Expo Go on the iPhone; compatible code changes refresh in the app. The preview link stops working when the server/session stops. Expo Go supports this draft's bundled native modules, but future native features may require a different distribution approach.
+
+TestFlight remains an optional future route for a standalone install: see the [setup guide](TESTFLIGHT.md). Its workflow is manual-only, so pushing code does not trigger builds. No signed build has been uploaded.
 
 1. Install **Expo Go** from the App Store.
 2. In this cloud workspace, run `npm ci`, then `npx expo start --tunnel --go`.
