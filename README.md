@@ -4,7 +4,7 @@ iPhone-first Japanese immersion: choose a natural Japanese video, watch in a foc
 
 ## Current implementation
 
-- Browse Japanese topics in YouTube; selecting a watch/Shorts URL switches the app to focused viewing. An injected player adapter isolates the player from surrounding comments, likes, and recommendations while retaining the player and its controls. Discovery is still search-based, not a strictly language-filtered feed.
+- Browse Japanese topics in YouTube; selecting a video opens the dedicated embedded player. No watch-page CSS is used to hide or reposition the player. Discovery is still search-based, not a strictly language-filtered feed.
 - Closing any dictionary lookup resumes playback if it was playing before the lookup; a manually paused video remains paused. Smart groups are on by default, including a one-time migration from the earlier experimental preset.
 - The subtitle pane is hidden during browsing and appears only for a selected video.
 - Automatically enable Japanese native text tracks or YouTube's exposed captions button where available. Read actual player captions; text fragments are concatenated without adding spaces between characters.
@@ -12,7 +12,7 @@ iPhone-first Japanese immersion: choose a natural Japanese video, watch in a foc
 - Capture batching is reduced from 100 ms to 16 ms. Completed partial analyses are retained, cached results display immediately, and word definitions are prefetched with analysis. On-phone latency is not yet benchmarked.
 - Real Kuromoji/IPADIC morphological analysis runs on the preview server. Smart grouping joins inflection chains, suru verbs, dictionary-recognized noun compounds, and a small set of common grammar constructions. Readings, dictionary forms, parts of speech, and heuristic grammar labels accompany each group.
 - The full pinned JMdict English dataset (218,963 entries) is installed and indexed on the preview server. Lookups use dictionary forms rather than the displayed conjugated word. No Jisho request or dictionary subscription is needed. This is server-local, not an offline-on-phone dictionary.
-- Settings persist: smart groups vs. morphemes, furigana, automatic transcription attempts. Save a dictionary entry with the caption and video context.
+- Settings persist: grouping, furigana, portrait layout, theme, JLPT level and Shorts controls. Automatic transcription attempts are mandatory. Save a dictionary entry with the caption and video context.
 - If no source caption has appeared after four seconds on a selected video, start a self-hosted ASR job and poll its status. The worker attempts audio acquisition using yt-dlp, then Whisper base via faster-whisper on CPU; completed cues are cached and synchronized against the observed video clock.
 
 ## Important current limitation
@@ -83,3 +83,13 @@ The version script synchronizes app/package/lockfile versions, in-app release no
 - Focused viewing selects a visible/playing video, avoids forcibly changing ancestor positioning, and retains video/controls visibility. Settings includes Restore original player layout; a terminated WebView process reloads. Local markup tests do not prove the intermittent black-frame issue is fully fixed on actual iPhones.
 - Google account links are handed to the system browser. Google sign-in inside an injected WebView is unsupported, and a browser login is not imported into the in-app YouTube player. Full account integration needs a proper Google OAuth client and API/session design.
 - Locked-screen YouTube audio **is not implemented** in this Expo Go WebView. Picture-in-picture is permitted where YouTube/iOS supports it; it is not a guarantee of background audio. Reliable native background playback needs a supported media source and an appropriately configured native build. No fake working background-audio switch is provided.
+
+## Player correction and gestures (0.4.0)
+
+This release supersedes the earlier CSS-focused watch-page approach. Selecting a video now opens `youtube.com/embed/VIDEO_ID` directly in WKWebView. It requests inline playback and Japanese captions and supplies the HTTP Referer using the **actual installed host application's ID** from expo-application (Expo Go's ID while previewing). Subframes required by YouTube remain allowed. The caption bridge no longer hides, resizes, repositions, or changes visibility of player/ancestor elements. Existing native/timed caption adapters remain experimental.
+
+YouTube can refuse embedding for particular videos. Settings → Open original YouTube player is the fallback; it opens the full watch page without the old layout-hiding code. This architecture removes a known fragile rendering layer; actual iPhone playback remains unverified in this cloud environment.
+
+The bottom Portrait / Compact control and Settings → Portrait player choose the player height. In the swipe handle **below** the video, swipe left/right to seek forward/backward 10 seconds, up for Portrait, down for Compact. The handle does not cover YouTube controls and the subtitle list can still scroll independently.
+
+Automatic subtitle generation is now mandatory whenever no Japanese source captions are detected. There is no toggle, and older `automatic: false` preferences are ignored. This does **not** solve the audio-access failure: a direct worker reproduction returned `NETWORK_BLOCKED` in this environment. The current server cannot generate captions for a captionless YouTube video until its audio is accessible from an authorized transcription environment. No end-to-end YouTube ASR success is claimed.

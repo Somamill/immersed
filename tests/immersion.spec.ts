@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { CAPTION_BRIDGE, youtubeUrl } from '../src/youtube';
+import { embeddedPlayerSource, swipeAction } from '../src/player';
 import { familiarity } from '../src/learning';
 import { parseCaptionTrack } from '../src/captions';
 
@@ -41,14 +42,12 @@ test('caption adapter reads player text, pauses, ignores comments, and clears on
   const tracks = await page.evaluate(() => (window as unknown as { messages: { type: string; url?: string }[] }).messages.filter(m => m.type === 'captionTrack'));
   expect(tracks).toHaveLength(1);
   expect(tracks[0].url).toContain('name=manual');
-  await expect(page.locator('.comment')).toBeHidden();
+  await expect(page.locator('.comment')).toBeVisible();
   await expect(page.locator('ytm-reel-shelf-renderer')).toBeHidden();
   await expect(page.locator('.ytp-subtitles-button')).toHaveAttribute('aria-pressed', 'true');
-  const bounds = await page.locator('[data-immersed-player]').boundingBox();
-  expect(bounds?.width).toBe(390);
+  await expect(page.locator('[data-immersed-player]')).toHaveCount(0);
   await page.evaluate(() => (window as unknown as { __immersedCommand: (command: string) => void }).__immersedCommand('pause'));
   expect(await page.evaluate(() => (window as unknown as { pausedByApp: boolean }).pausedByApp)).toBe(true);
-  await page.evaluate(() => (window as unknown as { __immersedCommand: (command: string) => void }).__immersedCommand('restore'));
   await expect(page.locator('.comment')).toBeVisible();
   await page.evaluate(() => { history.pushState({}, '', '/watch?v=OTHER_VIDEO'); document.querySelector('.ytp-caption-segment')!.remove(); });
   await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string }[] }).messages.some(m => m.type === 'reset'))).toBe(true);
@@ -114,16 +113,16 @@ test('viewing preferences persist and navigation stays near the bottom', async (
   await expect(page.getByRole('switch', { name: 'Hide Shorts' })).toBeChecked();
   await page.getByRole('radio', { name: 'Completed N3', exact: true }).click();
   await expect(page.getByRole('radio', { name: 'Completed N3', exact: true })).toBeChecked();
-  await page.getByRole('switch', { name: 'Tall player' }).click();
+  await page.getByRole('switch', { name: 'Portrait player' }).click();
   await page.getByRole('switch', { name: 'Hide Shorts' }).click();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('radio', { name: 'Completed N3', exact: true })).toBeChecked();
-  await expect(page.getByRole('switch', { name: 'Tall player' })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Portrait player' })).toBeChecked();
   await expect(page.getByRole('switch', { name: 'Hide Shorts' })).not.toBeChecked();
 });
 
-test('player focus ignores hidden video elements and retains visible video', async ({ page }) => {
+test('caption controls ignore hidden video elements without modifying player layout', async ({ page }) => {
   await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<meta name="viewport" content="width=device-width, initial-scale=1"><video id="hidden" style="display:none"></video><div class="html5-video-player"><video id="visible"></video><div class="ytp-caption-segment">日本語</div></div>' }));
   await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
   await page.evaluate(() => {
@@ -134,6 +133,42 @@ test('player focus ignores hidden video elements and retains visible video', asy
   await page.addScriptTag({ content: CAPTION_BRIDGE });
   await page.evaluate(() => (window as unknown as { __immersedCommand: (command: string) => void }).__immersedCommand('pause'));
   await expect(page.locator('#visible')).toHaveAttribute('data-paused-by-app', 'yes');
-  await expect(page.locator('[data-immersed-player] #visible')).toBeVisible();
+  await expect(page.locator('#visible')).toBeVisible();
+  await expect(page.locator('[data-immersed-player]')).toHaveCount(0);
   await expect(page.locator('#hidden')).not.toHaveAttribute('data-paused-by-app', 'yes');
+});
+
+test('dedicated embedded player requests Japanese captions and identifies the actual host app', () => {
+  const source = embeddedPlayerSource('M7lc1UVf-VE', 'host.exp.Exponent');
+  const url = new URL(source.uri);
+  expect(url.pathname).toBe('/embed/M7lc1UVf-VE');
+  expect(url.searchParams.get('cc_load_policy')).toBe('1');
+  expect(url.searchParams.get('cc_lang_pref')).toBe('ja');
+  expect(source.headers.Referer).toBe('https://host.exp.exponent');
+});
+
+test('swipes reject taps/diagonals and select unambiguous player actions', () => {
+  expect(swipeAction(5, 3)).toBeNull();
+  expect(swipeAction(90, 90)).toBeNull();
+  expect(swipeAction(-90, 8)).toBe('forward');
+  expect(swipeAction(90, 8)).toBe('backward');
+  expect(swipeAction(5, -90)).toBe('portrait');
+  expect(swipeAction(5, 90)).toBe('compact');
+});
+
+test('portrait playback controls appear for a selected video and automatic subtitles cannot be disabled', async ({ page }) => {
+  const attempts: string[] = [];
+  await page.route('**/api/immersion/transcribe?**', route => { attempts.push(route.request().url()); return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'processing' }) }); });
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('immersed.preferences.v1', JSON.stringify({ schema: 2, grouped: true, automatic: false })));
+  await page.reload();
+  await page.getByRole('textbox', { name: 'Search Japanese topics or paste a YouTube link' }).fill('https://www.youtube.com/watch?v=M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await page.getByRole('button', { name: 'Portrait', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Compact', exact: true })).toBeVisible();
+  await expect(page.getByText('↔ Seek 10s · ↑ Portrait · ↓ Compact')).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('switch', { name: 'Automatic subtitles' })).toHaveCount(0);
+  await expect.poll(() => attempts.length, { timeout: 7000 }).toBeGreaterThan(0);
+  await expect(page.getByRole('switch', { name: 'Portrait player' })).toBeChecked();
 });

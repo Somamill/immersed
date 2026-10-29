@@ -2,7 +2,7 @@ import React, { forwardRef, useImperativeHandle } from 'react';
 import { Text, View } from 'react-native';
 import type { TimedCue } from '../captions';
 import type { Caption } from '../youtube';
-export type BrowserHandle = { command: (command: 'pause' | 'play' | 'replay' | 'restore', time?: number) => void; reload: () => void };
+export type BrowserHandle = { command: (command: 'pause' | 'play' | 'replay' | 'restore' | 'seek', time?: number) => void; reload: () => void };
 export type BrowserProps = { uri: string; dark?: boolean; hideShorts?: boolean; onCaption: (caption: Caption | null) => void; onError: (message: string) => void; onPage?: (url: string) => void; onClock?: (time: number, paused: boolean) => void; onTranscript?: (cues: TimedCue[], videoId: string) => void };
 export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ dark = true }, ref) {
   useImperativeHandle(ref, () => ({ command: () => {}, reload: () => {} }));

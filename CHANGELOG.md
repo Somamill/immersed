@@ -2,6 +2,16 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.4.0 — 2026-10-29
+
+Dedicated YouTube player and mandatory subtitle fallback
+
+- Replace watch-page CSS isolation with the dedicated YouTube embedded player and a Referer identifying the actual installed app; keep the original player as a fallback.
+- Remove layout manipulation from the caption bridge and allow the subframes needed by the YouTube player.
+- Add explicit Portrait / Compact controls and a separate swipe handle: left/right seek 10 seconds, up/down change layout.
+- Remove the automatic-subtitles option and ignore older disabled preferences: captionless videos always trigger the speech-recognition attempt.
+- A live worker reproduction still returns NETWORK_BLOCKED: generation for captionless YouTube videos remains unavailable on this server. Live iPhone playback is not verified by the automated fixtures.
+
 ## 0.3.0 — 2026-10-29
 
 Portrait viewing, AMOLED theme and learner controls
