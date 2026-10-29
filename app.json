@@ -1,13 +1,14 @@
 {
   "expo": {
-    "name": "immersed",
+    "name": "Immersed",
     "slug": "immersed",
-    "version": "1.0.0",
+    "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.somamill.immersed"
     },
     "android": {
       "adaptiveIcon": {
