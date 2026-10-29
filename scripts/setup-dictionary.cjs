@@ -12,3 +12,4 @@ const output = execFileSync('tar', ['-xOzf', archive, 'jmdict-eng-3.6.2.json'], 
 fs.writeFileSync(path.join(root, 'jmdict.json'), output);
 console.log('Pinned JMdict English dataset installed. EDRDG CC BY-SA 4.0; see THIRD_PARTY.md.');
 require('./setup-names.cjs');
+require('./setup-pitch.cjs');

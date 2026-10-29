@@ -13,7 +13,7 @@ async function main() {
     await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: ['この街の雰囲気が好きです。', '今日は友達と東京の公園を散歩しました。', '近くのお店で温かいお茶を飲みます。', '電車で海まで行って、美しい景色を見たいです。', '初めての料理を食べながら、旅行の話をしました。', 'この場所には古い建物や面白い歴史があります。', '明日は天気がよければ、山の近くで写真を撮ります。', '新しい言葉を少しずつ覚えると、毎日が楽しくなります。'].map((text, i) => ({ start: i * 20, end: (i + 1) * 20, text })) }) }));
     const origin = process.env.IMMERSED_DOCS_ORIGIN || 'http://127.0.0.1:8081';
     await page.goto(origin);
-    await page.evaluate(() => localStorage.setItem('immersed.preferences.v1', JSON.stringify({ schema: 2, level: 4, readings: true, dark: true })));
+    await page.evaluate(() => localStorage.setItem('immersed.preferences.v1', JSON.stringify({ schema: 3, level: 4, readings: true, pitchAccent: true, dark: true })));
     await page.reload();
     await page.getByRole('textbox', { name: 'Search Japanese topics or paste a YouTube link' }).fill('https://youtu.be/M7lc1UVf-VE');
     await page.getByRole('button', { name: 'Go', exact: true }).click();
@@ -33,6 +33,7 @@ async function main() {
     await page.getByRole('button', { name: 'Look up 雰囲気', exact: true }).click();
     await page.getByRole('switch', { name: 'Known word', exact: true }).waitFor();
     await page.screenshot({ path: path.join(folder, 'lookup.png') });
+    await page.getByRole('button', { name: 'Close', exact: true }).click();
     await page.getByRole('button', { name: 'Words · 0', exact: true }).click();
     await page.getByRole('textbox', { name: 'Search English or Japanese words' }).fill('eat');
     await page.getByText('食べる', { exact: true }).first().waitFor({ timeout: 15000 });
@@ -48,7 +49,7 @@ async function main() {
     await page.screenshot({ path: path.join(folder, 'dictionary.png') });
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.screenshot({ path: path.join(folder, 'settings.png') });
-    console.log('Saved study, inline lookup/dictionary/settings and full-screen panel previews. Study uses labelled illustrative media/sample captions.');
+    console.log('Saved study, popup lookup and inline dictionary/settings and full-screen panel previews. Study uses labelled illustrative media/sample captions.');
   } finally { await browser.close(); }
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

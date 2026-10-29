@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { refineCaptionTrack } from '../src/caption-reflow';
+import { accentHeights, accentMorae } from '../src/pitch';
+import { restorePreferences } from '../src/preferences';
 import { estimateVocabulary, sampleCaptionVocabulary } from '../src/coverage';
 import type { AnalyzedToken } from '../src/language';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
@@ -807,7 +809,7 @@ test('a reflow response that changes Japanese text is rejected before it reaches
   expect(displayed).toBe(false);
 });
 
-test('dictionary, lookup and settings occupy the reading area while the selected player stays mounted', async ({ page }) => {
+test('dictionary and settings occupy the reading area while the selected player stays mounted', async ({ page }) => {
   await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 10, text: '食べる。' }] }) }));
   await page.goto('/');
   await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
@@ -815,18 +817,20 @@ test('dictionary, lookup and settings occupy the reading area while the selected
   await expect(page.getByRole('button', { name: 'Look up 食べる', exact: true })).toBeVisible({ timeout: 12000 });
   await page.getByRole('button', { name: 'Play video', exact: true }).click();
   const player = page.getByTestId('video-surface');
-  const before = (await player.boundingBox())!;
   await player.evaluate(node => { node.firstElementChild!.setAttribute('data-mounted-marker', 'same-player'); });
   const expectBelowPlayer = async (testId: string) => {
+    const video = (await player.boundingBox())!;
     const bounds = (await page.getByTestId(testId).boundingBox())!;
-    expect(bounds.y).toBeGreaterThanOrEqual(before.y + before.height);
-    expect(bounds.height).toBeLessThan(360);
-    expect(await player.boundingBox()).toEqual(before);
+    expect(bounds.y).toBeGreaterThanOrEqual(video.y + video.height);
+    expect(video.height).toBeGreaterThan(128);
+    expect(bounds.height).toBeGreaterThan(350);
     await expect(player.locator('[data-mounted-marker="same-player"]')).toHaveCount(1);
   };
   await page.getByRole('button', { name: 'Look up 食べる', exact: true }).click();
-  await expectBelowPlayer('dictionary-sheet');
-  await expect(page.getByTestId('dictionary-sheet').getByRole('button', { name: 'Pause video', exact: true })).toBeVisible();
+  await expect(page.getByTestId('dictionary-sheet')).toBeVisible();
+  await expect(page.getByTestId('dictionary-sheet').getByRole('button', { name: 'Play video', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Pause video', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Words · 0', exact: true }).click();
   await expectBelowPlayer('words-panel');
   await expect(page.getByTestId('dictionary-sheet')).toHaveCount(0);
@@ -879,10 +883,42 @@ test('video vocabulary indicator changes with known-word choices without inventi
   await page.goto('/');
   await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
   await page.getByRole('button', { name: 'Go', exact: true }).click();
-  await expect(page.getByTestId('video-coverage')).toContainText('100% familiar words', { timeout: 15000 });
+  await expect(page.getByTestId('video-coverage')).toHaveAttribute('aria-label', /^100% familiar words/, { timeout: 15000 });
   await page.getByRole('button', { name: 'Look up 食べる', exact: true }).click();
   await page.getByRole('switch', { name: 'Known word', exact: true }).uncheck();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(page.getByTestId('video-coverage')).toContainText('0% familiar words');
+  await expect(page.getByTestId('video-coverage')).toHaveAttribute('aria-label', /^0% familiar words/);
   await expect(page.getByTestId('video-coverage')).toHaveAttribute('aria-label', /listening comprehension can differ/);
+});
+
+test('pitch setting persists and shows verified patterns in popup and separate dictionary', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 10, text: '食べる。' }] }) }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const toggle = page.getByRole('switch', { name: 'Pitch accent', exact: true });
+  await expect(toggle).not.toBeChecked();
+  await toggle.check();
+  await page.reload();
+  await expect(page.getByRole('switch', { name: 'Pitch accent', exact: true })).toBeChecked();
+  await page.getByRole('button', { name: 'Browse', exact: true }).click();
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await page.getByRole('button', { name: 'Look up 食べる', exact: true }).click({ timeout: 12000 });
+  await expect(page.getByTestId('dictionary-sheet').getByTestId('pitch-patterns').first()).toBeVisible();
+  await expect(page.getByTestId('dictionary-sheet').getByLabel('たべる, Tokyo pitch accent downstep after mora 2')).toBeVisible();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByRole('button', { name: 'Words · 0', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Search English or Japanese words' }).fill('eat');
+  await expect(page.getByTestId('words-panel').getByTestId('pitch-patterns').first()).toBeVisible();
+});
+
+test('pitch charts count morae and distinguish flat, initial and final drops', () => {
+  expect(accentMorae('きょう')).toEqual(['きょ', 'う']);
+  expect(accentMorae('がっこう')).toEqual(['が', 'っ', 'こ', 'う']);
+  expect(accentHeights({ reading: 'はし', downstep: 0 }).map(m => m.high)).toEqual([false, true]);
+  expect(accentHeights({ reading: 'はし', downstep: 1 }).map(m => m.high)).toEqual([true, false]);
+  expect(accentHeights({ reading: 'はし', downstep: 2 }).map(m => m.high)).toEqual([false, true]);
+  expect(accentHeights({ reading: 'はし', downstep: 3 })).toEqual([]);
+  expect(restorePreferences({}).pitchAccent).toBe(false);
+  expect(restorePreferences({ pitchAccent: true }).pitchAccent).toBe(true);
 });

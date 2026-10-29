@@ -2,6 +2,15 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.11 — 2026-10-30
+
+Separate word lookup, better expressions and optional pitch accents
+
+- Restored subtitle word popup with pause/resume; Dictionary search and Settings keep playing in a larger lower panel.
+- Dictionary-backed expressions including 気を抜く retain whole meanings across supported inflections. Vocabulary indicator now shows one conservative familiar-word percentage.
+- Optional recorded Tokyo pitch accents from pinned Kanjium data in word lookups and dictionary search; absent patterns are hidden.
+- Fresh captionless YouTube transcription, embedded Google sign-in and locked-screen playback remain unsupported in this preview; native playback and keyboard behavior still need iPhone testing.
+
 ## 0.5.10 — 2026-10-30
 
 Keep watching with inline panels and vocabulary estimates

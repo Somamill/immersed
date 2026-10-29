@@ -85,3 +85,26 @@ test('caption reflow joins split words and inflections without changing text or 
   ];
   for (const cues of separate) assert.deepEqual(await reflowCaptions(cues), cues);
 });
+
+test('dictionary expressions preserve whole 気を抜く across tense and negation', async () => {
+  for (const surface of ['気を抜く', '気を抜いた', '気を抜かない', '気を抜いて', '気を抜きました']) {
+    const text = `${surface}。`;
+    const tokens = await analyze(text);
+    assert.equal(tokens[0].text, surface);
+    assert.equal(tokens[0].lemma, '気を抜く');
+    assert.equal(tokens.map(t => t.text).join(''), text);
+    assert.ok((await lookup(tokens[0].lemma))[0].senses.some(s => s.english_definitions.some(d => /relax|guard/i.test(d))));
+    assert.ok((await search(surface))[0].japanese.some(j => j.word === '気を抜く'));
+  }
+  assert.ok(!(await analyze('気。を抜く')).some(t => t.lemma === '気を抜く'));
+  assert.ok(!(await analyze('気 を抜く')).some(t => t.lemma === '気を抜く'));
+});
+
+test('pitch patterns come from pinned Kanjium and retain multiple recorded accents', async () => {
+  const entries = await lookup('食べる');
+  assert.ok(entries[0].pitch.some(p => p.reading === 'たべる' && p.downstep === 2));
+  const { lookup: accents } = require('../server/pitch.cjs');
+  assert.ok(accents('橋', 'はし').some(p => p.downstep === 2));
+  assert.ok(accents('箸', 'はし').some(p => p.downstep === 1));
+  assert.deepEqual(accents('NOT_A_WORD'), []);
+});

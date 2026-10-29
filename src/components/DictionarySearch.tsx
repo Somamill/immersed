@@ -1,9 +1,10 @@
+import PitchAccent from './PitchAccent';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Text, TextInput, View } from 'react-native';
 import { languageRequest } from '../language';
 import type { DictionaryEntry } from '../youtube';
 
-export default function DictionarySearch({ dark, compact = false }: { dark: boolean; compact?: boolean }) {
+export default function DictionarySearch({ dark, compact = false, pitchAccent = false }: { pitchAccent?: boolean; dark: boolean; compact?: boolean }) {
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<{ query: string; entries: DictionaryEntry[]; error?: string } | null>(null);
   const text = query.trim();
@@ -31,6 +32,7 @@ export default function DictionarySearch({ dark, compact = false }: { dark: bool
       {current?.entries.map(entry => <View key={entry.slug} style={{ paddingVertical: compact ? 8 : 16, borderBottomWidth: 1, borderBottomColor: dark ? '#252525' : '#ddd', gap: 7 }}>
         <Text selectable={false} style={{ color: ink, fontSize: compact ? 21 : 25 }}>{entry.japanese[0]?.word || entry.japanese[0]?.reading}</Text>
         {!!entry.japanese[0]?.word && <Text selectable={false} style={{ color: muted, fontSize: 16 }}>{entry.japanese[0]?.reading}</Text>}
+        {pitchAccent && <PitchAccent accents={entry.pitch} dark={dark} />}
         {entry.source === 'JMnedict' && <Text style={{ color: muted, fontSize: 13 }}>{[...new Set(entry.senses.flatMap(sense => sense.parts_of_speech))].join(' · ')}</Text>}
         <Text selectable={false} style={{ color: ink, fontSize: compact ? 15 : 16, lineHeight: compact ? 22 : 24 }}>{entry.senses.slice(0, 2).map(sense => sense.english_definitions.join('; ')).join('\n')}</Text>
       </View>)}

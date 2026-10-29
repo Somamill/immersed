@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const kuromoji = require('kuromoji');
 const names = require('./names.cjs');
+const pitch = require('./pitch.cjs');
 let ready;
 let englishIndex;
 const normalizeEnglish = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/^(?:to|an?|the)\s+/, '').replace(/\s+/g, ' ').trim();
@@ -27,6 +28,7 @@ function dictionaryEntry(entry, tags) {
   return {
     slug: `jmdict-${entry.id}`,
     source: 'JMdict',
+    pitch: entry.kana.flatMap(k => [...entry.kanji.map(w => w.text), k.text].flatMap(form => pitch.lookup(form, k.text))).filter((v, i, all) => all.findIndex(o => o.reading === v.reading && o.downstep === v.downstep) === i),
     japanese: entry.kana.map(k => ({ word: entry.kanji.find(w => !k.appliesToKanji || k.appliesToKanji.includes('*') || k.appliesToKanji.includes(w.text))?.text, reading: k.text })),
     senses: entry.sense.map(s => ({ english_definitions: s.gloss.filter(g => g.lang === 'eng').map(g => g.text), parts_of_speech: s.partOfSpeech.map(tag => tags[tag] || tag) })),
   };
@@ -43,8 +45,11 @@ async function search(query) {
   if (!text || text.length > 120) return [];
   const japanese = /[ぁ-ヿ㐀-鿿々]/.test(text);
   const candidates = new Set();
+  let phraseLemma = '';
   if (japanese) {
     for (const entry of index.get(text) || index.get(hira(text)) || []) candidates.add(entry);
+    phraseLemma = (await analyze(text))[0]?.lemma || '';
+    for (const entry of index.get(phraseLemma) || []) candidates.add(entry);
     const lemma = tokenizer.tokenize(text)[0]?.basic_form;
     if (lemma && lemma !== '*') for (const entry of index.get(lemma) || []) candidates.add(entry);
     let low = 0, high = forms.length;
@@ -69,7 +74,7 @@ async function search(query) {
   const wanted = englishTerms(text);
   const score = entry => {
     const common = [...entry.kanji, ...entry.kana].some(form => form.common) ? 20 : 0;
-    if (japanese) return common + ([...entry.kanji, ...entry.kana].some(form => form.text === text) ? 200 : 0);
+    if (japanese) return common + ([...entry.kanji, ...entry.kana].some(form => form.text === text) ? 200 : 0) + ([...entry.kanji, ...entry.kana].some(form => form.text === phraseLemma) ? 100 : 0);
     const definitions = entry.sense.flatMap(s => s.gloss.filter(g => g.lang === 'eng').map(g => normalizeEnglish(g.text)));
     const primary = entry.sense[0]?.gloss.filter(g => g.lang === 'eng').map(g => normalizeEnglish(g.text)) || [];
     return common + (primary[0] === normalized ? 500 + (primary.length === 1 ? 30 : 0) : primary.includes(normalized) ? 400 : definitions.includes(normalized) ? 200 : definitions.some(d => d.startsWith(normalized)) ? 80 : 0);
@@ -102,8 +107,21 @@ async function analyze(text, grouped = true) {
     let end = i + 1;
     const grammar = [];
     const remaining = text.slice(head.start);
-    const pattern = patterns.find(([surface]) => remaining.startsWith(surface) && tokens.some(t => t.end === head.start + surface.length));
-    if (pattern) {
+    // Longest dictionary-backed expression, including an inflected final verb.
+    // Require an internal particle so ordinary noun grouping keeps its rules.
+    let expression = null;
+    for (let j = i + 2; j < Math.min(tokens.length, i + 9); j++) {
+      const part = tokens.slice(i, j + 1);
+      if (part.some(t => !t.word || /\s/.test(t.text)) || part.some((t, n) => n && t.start !== part[n - 1].end)) break;
+      if (!part.slice(1, -1).some(t => t.pos === 'particle')) continue;
+      const last = tokens[j];
+      const surface = text.slice(head.start, last.end);
+      const normalized = text.slice(head.start, last.start) + last.lemma;
+      const lemma = index.has(surface) ? surface : index.has(normalized) ? normalized : '';
+      if (lemma) expression = { lemma, end: j + 1, pos: last.pos };
+    }
+    const pattern = !expression && patterns.find(([surface]) => remaining.startsWith(surface) && tokens.some(t => t.end === head.start + surface.length));
+    if (expression) { end = expression.end; grammar.push('expression'); } else if (pattern) {
       while (end < tokens.length && tokens[end - 1].end < head.start + pattern[0].length) end++;
       grammar.push(pattern[1]);
     } else if (head.pos === 'noun' || head.pos === 'prefix') {
@@ -113,20 +131,21 @@ async function analyze(text, grouped = true) {
       }
       end = best;
     }
-    const compoundNoun = !pattern && ['noun', 'prefix'].includes(head.pos) && end > i + 1;
-    const nounLemma = compoundNoun ? text.slice(head.start, tokens[end - 1].end) : head.lemma;
-    const suruVerb = !pattern && (head.pos === 'noun' || compoundNoun) && tokens[end - 1].detail === 'サ変接続' && tokens[end]?.lemma === 'する';
+    const compoundNoun = !expression && !pattern && ['noun', 'prefix'].includes(head.pos) && end > i + 1;
+    const nounLemma = expression ? expression.lemma : compoundNoun ? text.slice(head.start, tokens[end - 1].end) : head.lemma;
+    const suruVerb = !expression && !pattern && (head.pos === 'noun' || compoundNoun) && tokens[end - 1].detail === 'サ変接続' && tokens[end]?.lemma === 'する';
     if (suruVerb) { end++; grammar.push('suru verb'); }
-    if (!pattern && (suruVerb || ['verb', 'adjective'].includes(head.pos))) {
+    if (!pattern && (suruVerb || ['verb', 'adjective'].includes(expression?.pos || head.pos))) {
       while (end < tokens.length && tokens[end].start === tokens[end - 1].end) {
         const t = tokens[end];
         if (t.pos === 'auxiliary') { if (auxiliaries[t.lemma]) grammar.push(auxiliaries[t.lemma]); end++; }
         else if (['て', 'で'].includes(t.text) && tokens[end + 1]?.pos === 'verb' && tokens[end + 1].detail === '非自立') { grammar.push('て-form construction'); end += 2; }
+        else if (['て', 'で'].includes(t.text)) { grammar.push('て-form'); end++; }
         else break;
       }
     }
     const part = tokens.slice(i, end);
-    result.push({ ...head, pos: suruVerb ? 'verb' : compoundNoun ? 'noun' : head.pos, text: text.slice(head.start, part.at(-1).end), end: part.at(-1).end, lemma: pattern ? pattern[0] : nounLemma, reading: part.map(t => t.reading || t.text).join(''), grammar: [...new Set(grammar)] });
+    result.push({ ...head, pos: expression ? expression.pos : suruVerb ? 'verb' : compoundNoun ? 'noun' : head.pos, text: text.slice(head.start, part.at(-1).end), end: part.at(-1).end, lemma: pattern ? pattern[0] : nounLemma, reading: part.map(t => t.reading || t.text).join(''), grammar: [...new Set(grammar)] });
     i = end;
   }
   return result;

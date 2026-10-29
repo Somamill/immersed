@@ -1,3 +1,4 @@
+import PitchAccent from './PitchAccent';
 import React, { useMemo } from 'react';
 import { ActivityIndicator, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Switch, Text, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,14 +7,14 @@ import type { AnalyzedToken } from '../language';
 import type { Caption, DictionaryEntry } from '../youtube';
 
 type Props = {
-  inline?: boolean;
+  inline?: boolean; pitchAccent?: boolean;
   lookup: { token: AnalyzedToken; caption: Caption } | null;
   dark: boolean; entries: DictionaryEntry[]; loading: boolean; error: string;
   known: boolean; onKnown: (known: boolean) => void;
   saved: boolean; canSave: boolean; onSave: (entry: DictionaryEntry) => void;
   onClose: () => void; controls: React.ReactNode;
 };
-export default function LookupSheet({ inline = false, lookup, dark, entries, loading, error, known, onKnown, saved, canSave, onSave, onClose, controls }: Props) {
+export default function LookupSheet({ inline = false, pitchAccent = false, lookup, dark, entries, loading, error, known, onKnown, saved, canSave, onSave, onClose, controls }: Props) {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const ink = dark ? '#F3F3F3' : '#242D28', muted = dark ? '#A0AAA4' : '#66746A', accent = dark ? '#B4DEC4' : '#344C3F';
@@ -41,6 +42,7 @@ export default function LookupSheet({ inline = false, lookup, dark, entries, loa
           {!loading && !error && !entries.length && <Text selectable={false} style={{ color: muted }}>No matching word found.</Text>}
           {entries.map((entry, index) => <View key={entry.slug} style={{ paddingVertical: inline ? 3 : 10, borderTopWidth: index ? StyleSheet.hairlineWidth : 0, borderTopColor: dark ? '#29322C' : '#D8DED5' }}>
             {(index > 0 || entry.source === 'JMnedict') && <Text selectable={false} style={{ color: muted, fontSize: 13, lineHeight: 21 }}>{[...new Set(entry.japanese.map(j => [j.word, j.reading].filter(Boolean).join(' ')))].join(' · ')}{entry.source === 'JMnedict' ? ` · ${[...new Set(entry.senses.flatMap(sense => sense.parts_of_speech))].join(' · ')}` : ''}</Text>}
+            {pitchAccent && <PitchAccent accents={entry.pitch} dark={dark} />}
             <Text selectable={false} style={{ color: ink, fontSize: inline ? 15 : 17, lineHeight: inline ? 21 : 25 }}>{entry.senses.slice(0, 2).map(sense => sense.english_definitions.join('; ')).join('\n')}</Text>
           </View>)}
         </ScrollView>

@@ -36,7 +36,7 @@ module.exports = function middleware(next) {
       if (url.pathname.endsWith('/dictionary')) {
         const word = url.searchParams.get('word') || '';
         if (!word || word.length > 120) return json(400, { error: 'Invalid word' });
-        return json(200, { data: await language.lookup(word, { proper: url.searchParams.get('proper') === 'true', reading: (url.searchParams.get('reading') || '').slice(0, 120) }), source: 'JMdict + JMnedict / EDRDG', license: 'CC BY-SA 4.0' });
+        return json(200, { data: await language.lookup(word, { proper: url.searchParams.get('proper') === 'true', reading: (url.searchParams.get('reading') || '').slice(0, 120) }), source: 'JMdict + JMnedict / EDRDG; Kanjium pitch accents / Uros O.', license: 'CC BY-SA 4.0' });
       }
       if (url.pathname.endsWith('/search')) {
         const query = (url.searchParams.get('query') || '').trim();

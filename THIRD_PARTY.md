@@ -50,3 +50,11 @@ The bundled word/reading-to-level map is derived from OpenJLPT by evanclan and i
 - Source asset SHA-256: `552f279d250b162aa0311259130ee82ad1db0879ed32e8d9318b56a9400b1165`.
 - Setup creates a derived SQLite index with Japanese/reading and romanized-name forms, preserving original name translations and type labels. The API display records and index data remain CC BY-SA 4.0. The app credits both dictionaries in Settings → About. The generated database lives in ignored `.data/`; run `npm run language:setup` to reproduce it.
 - Names can have several readings. These data supplement common-word definitions, not identify speakers or correct transcription errors.
+
+## Kanjium pitch accent data (0.5.11)
+
+- Pitch accent notation and additions © Uros O., Kanjium: https://github.com/mifunetoshiro/kanjium
+- CC BY-SA 4.0, preserved in [licenses/Kanjium-CC-BY-SA-4.0.txt](licenses/Kanjium-CC-BY-SA-4.0.txt). Upstream also credits EDRDG; see its README.
+- Pinned commit `9ebca4589565c696e7c39e089e2e928ad65f678c`, unmodified `data/source_files/raw/accents.txt`. SHA-256: `8bd0dd127dab32ceec94cb03ab1ba6b68858ea73421dfa1731af2f373deb4f20`.
+- `npm run language:setup` downloads and verifies the source into ignored `.data/`. `server/pitch.cjs` parses headword/reading/mora downstep records; derived API pattern data remains CC BY-SA 4.0. The client renders a stepped line and downstep number. Alternative recorded readings/patterns are preserved; absent records are hidden.
+- These are lexical Tokyo accent patterns, not audio measurements or predictions for inflected words, full expressions, dialects, or connected speech. The setting is off by default.
