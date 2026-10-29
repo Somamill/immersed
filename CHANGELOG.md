@@ -2,6 +2,17 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.3.0 — 2026-10-29
+
+Portrait viewing, AMOLED theme and learner controls
+
+- Add a tall-player layout and a rounded blurred navigation dock at the bottom.
+- Add persisted N5–N1 level estimates with advanced-word highlighting and personal Known/Unknown overrides; familiar and unlisted words display normally.
+- Add pure-black AMOLED mode, a Shorts toggle, and ordinary native-content topic searches.
+- Remove subtitle-loading messages from the player and keep diagnostic status in Settings.
+- Improve video selection/focus styles, expose original-layout recovery, and reload terminated WebViews; live iPhone black-frame recovery remains unverified.
+- Hand Google account links to the system browser; an external login does not sign the embedded player in. Locked-screen audio and strict original-audio language filtering remain unsupported.
+
 ## 0.2.0 — 2026-10-29
 
 Faster subtitles and smoother word lookup

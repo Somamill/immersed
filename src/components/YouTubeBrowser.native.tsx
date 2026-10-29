@@ -1,12 +1,15 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
+import { Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { parseCaptionTrack } from '../captions';
 import { CAPTION_BRIDGE, youtubeUrl } from '../youtube';
 import type { BrowserHandle, BrowserProps } from './YouTubeBrowser';
-export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, onCaption, onError, onPage, onClock, onTranscript }, ref) {
+export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, onCaption, onError, onPage, onClock, onTranscript }, ref) {
   // WebView 14 defaults its extra-props generic to undefined, which intersects
   // its props to never under TS 6 strict mode. Explicit object preserves props.
   const web = useRef<WebView<object>>(null);
+  const optionsScript = `window.__immersedOptions = ${JSON.stringify({ dark, hideShorts })}; true;`;
+  useEffect(() => { web.current?.injectJavaScript(optionsScript); }, [optionsScript]);
   const currentVideo = useRef<string | null>(null);
   const pendingTrack = useRef<AbortController | null>(null);
   useEffect(() => () => pendingTrack.current?.abort(), []);
@@ -36,11 +39,17 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     command: (command, time) => web.current?.injectJavaScript(`window.__immersedCommand?.(${JSON.stringify(command)}, ${Number.isFinite(time) ? time : 'null'}); true;`),
     reload: () => web.current?.reload(),
   }));
-  return <WebView<object> ref={web} source={{ uri }} style={{ flex: 1 }} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction allowsFullscreenVideo injectedJavaScript={CAPTION_BRIDGE}
+  return <WebView<object> ref={web} source={{ uri }} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ backgroundColor: dark ? '#000' : '#fff' }} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction allowsFullscreenVideo injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
     onNavigationStateChange={state => pageChanged(state.url)} onLoadStart={() => onCaption(null)} onError={event => onError(event.nativeEvent.description)}
     onShouldStartLoadWithRequest={request => {
       if (request.url === 'about:blank') return true;
-      try { const u = new URL(request.url); return u.protocol === 'https:' && /(^|\.)youtube\.com$/.test(u.hostname); } catch { return false; }
+      try {
+        const u = new URL(request.url);
+        if (u.protocol !== 'https:') return false;
+        if (u.hostname === 'accounts.google.com' || u.hostname === 'accounts.youtube.com') { void Linking.openURL(u.toString()).catch(() => onError('Could not open the system browser for sign-in.')); return false; }
+        if (hideShorts && u.pathname.startsWith('/shorts/')) return false;
+        return /(^|\.)youtube\.com$/.test(u.hostname);
+      } catch { return false; }
     }}
     onMessage={event => {
       try {

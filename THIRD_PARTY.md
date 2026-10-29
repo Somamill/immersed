@@ -37,3 +37,7 @@ Reviewed:
 - https://github.com/migaku-official/Migaku-Japanese-Addon — public older Anki add-on, GPL-3.0. Public add-on code does not establish that the current mobile app, parser service, or subtitle-generation service is open source.
 
 No Migaku implementation code or paid dictionary content has been copied. The current app assembles independently licensed dictionary, analysis, and ASR components. JMdict is a general open dictionary; it should not be described as Migaku's source code or as proof of Migaku's current proprietary internals.
+
+## JLPT estimates (v0.3.0)
+
+The bundled word/reading-to-level map is derived from OpenJLPT by evanclan and its credited sources, including Jonathan Waller and EDRDG. Pinned commit and form count: `src/data/jlpt-source.json`. It contains 13,513 word/reading forms. Only level metadata is extracted; no example sentences are copied. This derived data remains CC BY-SA 4.0. Full upstream attribution and license are in `licenses/OpenJLPT-NOTICE.md` and `licenses/OpenJLPT-LICENSE`. The app credits the source in Settings. JLPT levels are community estimates, not official post-2010 examination vocabulary lists. Unlisted words stay neutral; per-word user knowledge overrides the estimate.

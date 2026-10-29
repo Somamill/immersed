@@ -71,3 +71,15 @@ npm run version:check
 ```
 
 The version script synchronizes app/package/lockfile versions, in-app release notes, and the changelog. The GitHub release workflow publishes the corresponding notes whenever a version tag is pushed. Existing remote commits are preserved; no force-push is used.
+
+## Viewing and learner preferences (0.3.0)
+
+- Tall portrait player option keeps a subtitle/word-lookup area below the video. Navigation moves to a rounded, blurred bottom dock. This is a frosted navigation design, not Apple's native Liquid Glass API.
+- AMOLED mode defaults on and uses `#000000` app backgrounds; light mode remains available. YouTube theme overrides are best-effort because its page is externally controlled.
+- Select a completed JLPT level, N5 through N1. Listed words at or below that difficulty remain normal; more advanced listed words receive an amber highlight. Unlisted words remain neutral. Per-word Known/Unknown overrides persist locally. JLPT assignments are community estimates; see THIRD_PARTY.md.
+- Shorts can be hidden (default): supported shelves/cards are hidden, Shorts navigation and pasted Shorts-format URLs are blocked. This is not a duration filter; a short video opened using a normal watch URL is not necessarily identifiable as a Short.
+- No subtitle-loading message is shown in the player. Preparation/error status is available in Settings.
+- Discovery searches target ordinary daily life, cooking, travel, conversation, science and gaming instead of beginner lessons. This remains language-biased discovery, **not verified filtering of original Japanese audio**. Strict audio-language filtering needs dependable video metadata and is not implemented.
+- Focused viewing selects a visible/playing video, avoids forcibly changing ancestor positioning, and retains video/controls visibility. Settings includes Restore original player layout; a terminated WebView process reloads. Local markup tests do not prove the intermittent black-frame issue is fully fixed on actual iPhones.
+- Google account links are handed to the system browser. Google sign-in inside an injected WebView is unsupported, and a browser login is not imported into the in-app YouTube player. Full account integration needs a proper Google OAuth client and API/session design.
+- Locked-screen YouTube audio **is not implemented** in this Expo Go WebView. Picture-in-picture is permitted where YouTube/iOS supports it; it is not a guarantee of background audio. Reliable native background playback needs a supported media source and an appropriately configured native build. No fake working background-audio switch is provided.

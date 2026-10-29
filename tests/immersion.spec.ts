@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { CAPTION_BRIDGE, youtubeUrl } from '../src/youtube';
+import { familiarity } from '../src/learning';
 import { parseCaptionTrack } from '../src/captions';
 
 test('home offers real YouTube discovery and retains the saved-word library', async ({ page }) => {
@@ -22,7 +23,7 @@ test('video links normalize safely', () => {
 test('caption adapter reads player text, pauses, ignores comments, and clears on navigation', async ({ page }) => {
   // Entirely local fixture: no request is sent to YouTube. This exercises the
   // adapter contract, not a claim that live YouTube markup has been verified.
-  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>日本の日常</title><div class="html5-video-player"><video></video><button class="ytp-subtitles-button" aria-pressed="false" onclick="this.setAttribute(&quot;aria-pressed&quot;,&quot;true&quot;)">CC</button><div class="ytp-caption-segment">今日</div><div class="ytp-caption-segment">は公園に行きます。</div></div><div class="comment">NOT A CAPTION</div>' }));
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>日本の日常</title><div class="html5-video-player"><video></video><button class="ytp-subtitles-button" aria-pressed="false" onclick="this.setAttribute(&quot;aria-pressed&quot;,&quot;true&quot;)">CC</button><div class="ytp-caption-segment">今日</div><div class="ytp-caption-segment">は公園に行きます。</div></div><div class="comment">NOT A CAPTION</div><ytm-reel-shelf-renderer>Shorts</ytm-reel-shelf-renderer>' }));
   await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
   await page.evaluate(() => {
     const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (message: string) => void }; pausedByApp: boolean; ytInitialPlayerResponse?: unknown };
@@ -41,11 +42,14 @@ test('caption adapter reads player text, pauses, ignores comments, and clears on
   expect(tracks).toHaveLength(1);
   expect(tracks[0].url).toContain('name=manual');
   await expect(page.locator('.comment')).toBeHidden();
+  await expect(page.locator('ytm-reel-shelf-renderer')).toBeHidden();
   await expect(page.locator('.ytp-subtitles-button')).toHaveAttribute('aria-pressed', 'true');
   const bounds = await page.locator('[data-immersed-player]').boundingBox();
   expect(bounds?.width).toBe(390);
   await page.evaluate(() => (window as unknown as { __immersedCommand: (command: string) => void }).__immersedCommand('pause'));
   expect(await page.evaluate(() => (window as unknown as { pausedByApp: boolean }).pausedByApp)).toBe(true);
+  await page.evaluate(() => (window as unknown as { __immersedCommand: (command: string) => void }).__immersedCommand('restore'));
+  await expect(page.locator('.comment')).toBeVisible();
   await page.evaluate(() => { history.pushState({}, '', '/watch?v=OTHER_VIDEO'); document.querySelector('.ytp-caption-segment')!.remove(); });
   await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string }[] }).messages.some(m => m.type === 'reset'))).toBe(true);
 });
@@ -89,4 +93,47 @@ test('timed captions join fragments, normalize line breaks and resolve overlap',
     { tStartMs: 3000, segs: [{ utf8: '\n' }] },
   ] });
   expect(cues).toEqual([{ start: 0, end: 2, text: '日本語 です。' }, { start: 2, end: 3, text: '食べました。' }]);
+});
+
+test('JLPT highlighting uses level estimates and explicit personal knowledge', () => {
+  expect(familiarity('食べる', 'たべる', 5, {})).toBe('known');
+  expect(familiarity('食べる', 'たべる', 5, { '食べる': false })).toBe('unknown');
+  expect(familiarity('食べる', 'たべる', 5, { '食べる': true })).toBe('known');
+  expect(familiarity('抽象', 'ちゅうしょう', 5, {})).toBe('unknown');
+  expect(familiarity('抽象', 'ちゅうしょう', 1, {})).toBe('known');
+  expect(familiarity('NOT_IN_ANY_JLPT_LIST', '', 1, {})).toBe('unlisted');
+});
+
+test('viewing preferences persist and navigation stays near the bottom', async ({ page }) => {
+  await page.goto('/');
+  const settingsButton = page.getByRole('button', { name: 'Settings', exact: true });
+  const dockBounds = await settingsButton.boundingBox();
+  expect(dockBounds!.y).toBeGreaterThan(650);
+  await settingsButton.click();
+  await expect(page.getByRole('switch', { name: 'AMOLED dark mode' })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Hide Shorts' })).toBeChecked();
+  await page.getByRole('radio', { name: 'Completed N3', exact: true }).click();
+  await expect(page.getByRole('radio', { name: 'Completed N3', exact: true })).toBeChecked();
+  await page.getByRole('switch', { name: 'Tall player' }).click();
+  await page.getByRole('switch', { name: 'Hide Shorts' }).click();
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('radio', { name: 'Completed N3', exact: true })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Tall player' })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Hide Shorts' })).not.toBeChecked();
+});
+
+test('player focus ignores hidden video elements and retains visible video', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<meta name="viewport" content="width=device-width, initial-scale=1"><video id="hidden" style="display:none"></video><div class="html5-video-player"><video id="visible"></video><div class="ytp-caption-segment">日本語</div></div>' }));
+  await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
+  await page.evaluate(() => {
+    (window as unknown as { ReactNativeWebView: { postMessage: () => void } }).ReactNativeWebView = { postMessage: () => {} };
+    const v = document.querySelector('#visible') as HTMLVideoElement;
+    v.pause = () => v.setAttribute('data-paused-by-app', 'yes');
+  });
+  await page.addScriptTag({ content: CAPTION_BRIDGE });
+  await page.evaluate(() => (window as unknown as { __immersedCommand: (command: string) => void }).__immersedCommand('pause'));
+  await expect(page.locator('#visible')).toHaveAttribute('data-paused-by-app', 'yes');
+  await expect(page.locator('[data-immersed-player] #visible')).toBeVisible();
+  await expect(page.locator('#hidden')).not.toHaveAttribute('data-paused-by-app', 'yes');
 });

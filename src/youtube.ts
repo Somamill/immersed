@@ -1,10 +1,12 @@
 export const topics = [
-  { label: 'Daily life', query: '日常 vlog 日本語' },
-  { label: 'Food', query: '料理 食べ歩き 日本語' },
-  { label: 'Travel', query: '国内旅行 日本語 vlog' },
-  { label: 'Conversation', query: '日本語 雑談 ラジオ' },
+  { label: 'Daily life', query: '一人暮らし 日常 vlog -日本語学習 -初心者向け'  },
+  { label: 'Food', query: '料理 作り方 食べ歩き -日本語学習'  },
+  { label: 'Travel', query: '国内旅行 旅 vlog -日本語学習'  },
+  { label: 'Science', query: '科学 宇宙 解説 -日本語学習' },
+  { label: 'Gaming', query: 'ゲーム 実況 -日本語学習' },
+  { label: 'Conversation', query: '雑談 ラジオ 対談 -日本語学習'  },
 ];
-export const topicUrl = (query: string) => `https://m.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=ja&gl=JP`;
+export const topicUrl = (query: string) => `https://m.youtube.com/results?search_query=${encodeURIComponent(query)}&hl=ja&gl=JP&relevanceLanguage=ja`;
 export function youtubeUrl(input: string): string | null {
   try {
     const u = new URL(input.trim());
@@ -19,31 +21,57 @@ export const CAPTION_BRIDGE = `(() => {
   if (window.__immersedBridge || !/(^|\\.)youtube\\.com$/.test(location.hostname)) return;
   window.__immersedBridge = true;
   let last = '', lastHref = location.href, lastVideo = null, captionText = '', captionTokens = [], captionTime = 0, clock = 0, attemptedCaptionVideo = null, attemptedTrackVideo = null;
+  let focusDisabled = false;
+  window.__immersedOptions = window.__immersedOptions || { dark: true, hideShorts: true };
+  const selectVideo = () => {
+    const videos = [...document.querySelectorAll('video')].filter(v => v.isConnected && v.getClientRects().length);
+    return videos.find(v => !v.paused && v.readyState > 0) || videos.sort((a,b) => b.getBoundingClientRect().width * b.getBoundingClientRect().height - a.getBoundingClientRect().width * a.getBoundingClientRect().height)[0] || null;
+  };
   const focusStyle = document.createElement('style');
-  focusStyle.textContent = 'body[data-immersed-focus] { margin:0!important; background:#000!important; overflow:hidden!important; } body[data-immersed-focus] *:not([data-immersed-ancestor]):not([data-immersed-player]):not([data-immersed-player] *) { display:none!important; } body[data-immersed-focus] [data-immersed-ancestor] { position:static!important; transform:none!important; overflow:visible!important; } body[data-immersed-focus] [data-immersed-player] { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; max-width:none!important; max-height:none!important; margin:0!important; } body[data-immersed-focus] [data-immersed-player] video { width:100%!important; height:100%!important; object-fit:contain!important; }';
+  focusStyle.textContent = 'body[data-immersed-focus] { margin:0!important; background:#000!important; overflow:hidden!important; } body[data-immersed-focus] *:not([data-immersed-ancestor]):not([data-immersed-player]):not([data-immersed-player] *) { visibility:hidden!important; pointer-events:none!important; } body[data-immersed-focus] [data-immersed-ancestor] { overflow:visible!important; contain:none!important; transform:none!important; } body[data-immersed-focus] [data-immersed-player] { position:fixed!important; display:block!important; visibility:visible!important; opacity:1!important; z-index:2147483000!important; inset:0!important; width:100vw!important; height:100vh!important; max-width:none!important; max-height:none!important; margin:0!important; } body[data-immersed-focus] [data-immersed-player] * { visibility:visible!important; } body[data-immersed-focus] [data-immersed-player] video { width:100%!important; height:100%!important; object-fit:contain!important; visibility:visible!important; } html[data-immersed-dark] { color-scheme:dark; --yt-spec-base-background:#000; --yt-spec-raised-background:#111; --yt-spec-text-primary:#eee; } html[data-immersed-dark] body, html[data-immersed-dark] ytm-app { background-color:#000!important; color:#eee; } [data-immersed-short] { display:none!important; }';
   document.documentElement.appendChild(focusStyle);
+  const clearFocus = () => { document.body?.removeAttribute('data-immersed-focus'); document.querySelectorAll('[data-immersed-player], [data-immersed-ancestor]').forEach(n => { n.removeAttribute('data-immersed-player'); n.removeAttribute('data-immersed-ancestor'); }); };
+  const applyOptions = () => {
+    const options = window.__immersedOptions;
+    if (options.dark) document.documentElement.setAttribute('data-immersed-dark', ''); else document.documentElement.removeAttribute('data-immersed-dark');
+    document.querySelectorAll('ytm-reel-shelf-renderer, ytm-shorts-lockup-view-model, ytm-shorts-lockup-view-model-v2, ytd-reel-shelf-renderer, ytd-rich-section-renderer:has(a[href*="/shorts/"])').forEach(node => {
+      if (options.hideShorts && !node.hasAttribute('data-immersed-short')) node.setAttribute('data-immersed-short', '');
+      if (!options.hideShorts) node.removeAttribute('data-immersed-short');
+    });
+    document.querySelectorAll('a[href*="/shorts/"]').forEach(link => {
+      const card = link.closest('ytm-rich-item-renderer, ytm-video-with-context-renderer, ytd-rich-item-renderer') || link;
+      if (options.hideShorts && !card.hasAttribute('data-immersed-short')) card.setAttribute('data-immersed-short', '');
+      if (!options.hideShorts) card.removeAttribute('data-immersed-short');
+    });
+  };
+  document.addEventListener('click', event => {
+    const link = event.target.closest?.('a[href]');
+    if (window.__immersedOptions.hideShorts && link?.getAttribute('href')?.includes('/shorts/')) { event.preventDefault(); event.stopImmediatePropagation(); }
+  }, true);
   const focus = video => {
     const watching = location.pathname === '/watch' || location.pathname.startsWith('/shorts/');
-    if (!watching) { document.body?.removeAttribute('data-immersed-focus'); document.querySelectorAll('[data-immersed-player], [data-immersed-ancestor]').forEach(n => { n.removeAttribute('data-immersed-player'); n.removeAttribute('data-immersed-ancestor'); }); return; }
+    if (!watching || focusDisabled) { clearFocus(); return; }
     const player = video?.closest('#player-container-id, #player-container') || video?.closest('.html5-video-player');
-    if (!player || player.hasAttribute('data-immersed-player')) return;
-    document.querySelectorAll('[data-immersed-player], [data-immersed-ancestor]').forEach(n => { n.removeAttribute('data-immersed-player'); n.removeAttribute('data-immersed-ancestor'); });
-    player.setAttribute('data-immersed-player', '');
+    if (!player) { clearFocus(); return; }
+    if (player.hasAttribute('data-immersed-player')) return;
+    clearFocus(); player.setAttribute('data-immersed-player', '');
     for (let parent = player.parentElement; parent && parent !== document.body; parent = parent.parentElement) parent.setAttribute('data-immersed-ancestor', '');
     document.body.setAttribute('data-immersed-focus', '');
   };
   const send = value => window.ReactNativeWebView?.postMessage(JSON.stringify(value));
   window.__immersedCommand = (command, time) => {
-    const video = document.querySelector('video');
+    const video = selectVideo();
+    if (command === 'restore') { focusDisabled = true; clearFocus(); return; }
     if (!video) return;
     if (command === 'pause') video.pause();
     if (command === 'play') video.play().catch(() => {});
     if (command === 'replay') { video.currentTime = Math.max(0, Number.isFinite(time) ? time : captionTime); video.play().catch(() => {}); }
   };
   const read = () => {
-    if (location.href !== lastHref) { attemptedCaptionVideo = null; attemptedTrackVideo = null; lastHref = location.href; last = ''; captionText = ''; captionTokens = []; send({ type: 'reset' }); }
-    const video = document.querySelector('video');
+    if (location.href !== lastHref) { focusDisabled = false; attemptedCaptionVideo = null; attemptedTrackVideo = null; lastHref = location.href; last = ''; captionText = ''; captionTokens = []; send({ type: 'reset' }); }
+    const video = selectVideo();
     if (video !== lastVideo) { lastVideo = video; last = ''; captionText = ''; captionTokens = []; }
+    applyOptions();
     focus(video);
     if (!video) return;
     if (Date.now() - clock > 150) { clock = Date.now(); send({ type: 'clock', time: video.currentTime || 0, paused: video.paused }); }
