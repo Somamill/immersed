@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { refineCaptionTrack } from '../src/caption-reflow';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
 import { embeddedPlayerSource, swipeAction } from '../src/player';
 import { familiarity, showFurigana } from '../src/learning';
@@ -468,8 +469,8 @@ test('N2 furigana shows N1 readings only and can be turned off without disabling
   await page.getByRole('button', { name: 'Watch & read', exact: true }).click();
   await expect(page.getByTestId('furigana-愛想')).toHaveCount(0);
   await page.getByRole('button', { name: 'Look up 愛想', exact: true }).click();
-  await expect(page.getByText('WORD & GRAMMAR', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Mark known', exact: true }).click();
+  await expect(page.getByTestId('dictionary-sheet')).toBeVisible();
+  await page.getByRole('switch', { name: 'Known word', exact: true }).check();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByTestId('unknown-愛想')).toHaveCount(0);
   await expect(page.getByText('愛想', { exact: true })).toHaveCSS('color', 'rgb(243, 243, 243)');
@@ -585,7 +586,7 @@ test('lookup actions stay open, any text dismisses, and sentence controls seek t
   await page.getByRole('button', { name: 'Go', exact: true }).click();
   await page.getByRole('button', { name: 'Look up 食べる', exact: true }).click({ timeout: 12000 });
   const sheet = page.getByTestId('dictionary-sheet');
-  await sheet.getByRole('button', { name: 'Mark known', exact: true }).click();
+  await sheet.getByRole('switch', { name: 'Known word', exact: true }).uncheck();
   await expect(sheet).toBeVisible();
   await sheet.getByRole('button', { name: 'Next sentence', exact: true }).click();
   await expect(sheet).toHaveCount(0);
@@ -724,4 +725,79 @@ test('skip reacts on touch-down once and rapid presses advance distinct captions
   await next.click();
   await expect(page.getByRole('button', { name: 'Look up 公園', exact: true })).toBeVisible();
   await expect(next).toBeDisabled();
+});
+
+test('center playback and a reachable knowledge toggle keep lookup quiet and functional', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 10, text: '食べました。' }] }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 食べました', exact: true })).toBeVisible({ timeout: 12000 });
+  const previous = (await page.getByRole('button', { name: 'Previous sentence', exact: true }).boundingBox())!;
+  const play = page.getByRole('button', { name: 'Play video', exact: true });
+  const center = (await play.boundingBox())!;
+  const next = (await page.getByRole('button', { name: 'Next sentence', exact: true }).boundingBox())!;
+  expect(center.x).toBeGreaterThan(previous.x + previous.width);
+  expect(center.x + center.width).toBeLessThan(next.x);
+  await play.click();
+  await page.getByRole('button', { name: 'Pause video', exact: true }).click();
+  await page.getByRole('button', { name: 'Look up 食べました', exact: true }).click();
+  const sheet = page.getByTestId('dictionary-sheet');
+  await expect(sheet.getByText(/^to eat\b/)).toBeVisible();
+  await expect(sheet.getByText('WORD & GRAMMAR', { exact: true })).toHaveCount(0);
+  const toggle = sheet.getByRole('switch', { name: 'Known word', exact: true });
+  await toggle.uncheck();
+  await expect(sheet).toBeVisible();
+  await expect(toggle).not.toBeChecked();
+  const frame = (await sheet.boundingBox())!, knowledge = (await sheet.getByTestId('word-knowledge-control').boundingBox())!;
+  expect(knowledge.x + knowledge.width).toBeGreaterThan(frame.x + frame.width - 30);
+  expect(knowledge.y).toBeGreaterThan(frame.y + frame.height * 0.65);
+  await sheet.getByRole('button', { name: 'Save word', exact: true }).click();
+  await expect(sheet.getByRole('button', { name: 'Word saved', exact: true })).toBeDisabled();
+  await sheet.getByRole('button', { name: 'Play video', exact: true }).click();
+  await expect(sheet).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Pause video', exact: true })).toBeVisible();
+  await expect(page.getByTestId('unknown-食べる')).toBeVisible();
+});
+
+test('wrapped Japanese rows stay compact without splitting learning tokens', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 10, text: '日本語を勉強します。日本語を勉強します。' }] }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 日本語', exact: true }).first()).toBeVisible({ timeout: 12000 });
+  const ys = await page.getByTestId('subtitle-words').getByRole('button').evaluateAll(nodes => [...new Set(nodes.map(node => Math.round(node.getBoundingClientRect().y)))].sort((a,b) => a-b));
+  expect(ys.length).toBe(2);
+  expect(ys[1] - ys[0]).toBeLessThanOrEqual(56);
+  expect(ys[1] - ys[0]).toBeGreaterThanOrEqual(44);
+});
+
+test('split source words are joined into a dictionary-backed cue automatically', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 1, text: '日' }, { start: 1, end: 3, text: '本語を話します。' }] }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 日本語', exact: true })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole('button', { name: 'Next sentence', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Look up 日本語', exact: true }).click();
+  await expect(page.getByTestId('dictionary-sheet').getByText(/Japanese \(language\)/).first()).toBeVisible();
+});
+
+test('long-track boundary processing carries split words between batches and preserves all source text', async () => {
+  const raw = Array.from({ length: 47 }, (_, i) => ({ start: i, end: i + 1, text: 'はい。' }));
+  raw.push({ start: 47, end: 48, text: '日' }, { start: 48, end: 49, text: '本語' });
+  let result = raw;
+  let updates = 0;
+  await refineCaptionTrack(raw, 'http://127.0.0.1:8082/api/immersion/reflow', new AbortController().signal, cues => { result = cues; updates++; });
+  expect(updates).toBeGreaterThan(1);
+  expect(result).toHaveLength(48);
+  expect(result.at(-1)).toEqual({ start: 47, end: 49, text: '日本語' });
+  expect(result.map(c => c.text).join('')).toBe(raw.map(c => c.text).join(''));
+});
+
+test('a reflow response that changes Japanese text is rejected before it reaches the reading view', async () => {
+  const response: typeof fetch = async () => new Response(JSON.stringify({ cues: [{ start: 0, end: 2, text: '別の言葉' }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  let displayed = false;
+  await expect(refineCaptionTrack([{ start: 0, end: 1, text: '日' }, { start: 1, end: 2, text: '本語' }], 'https://fixture.invalid', new AbortController().signal, () => { displayed = true; }, response)).rejects.toThrow('Invalid caption reflow');
+  expect(displayed).toBe(false);
 });

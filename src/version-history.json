@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.5.9",
+    "date": "2026-10-30",
+    "title": "Compact captions, simpler lookup and joined word fragments",
+    "notes": [
+      "Bring wrapped subtitle rows closer while retaining the base text size. Add central play/pause between previous and next controls in study and lookup.",
+      "Simplify the dictionary sheet: scrollable meanings, one Save action and a reachable known/unknown switch at bottom right. Keep tap-to-dismiss and playback intent.",
+      "Fix compound-prefix lookup forms such as お名前 and 再利用, including suru inflections.",
+      "Automatically join short adjacent cues when Japanese morphology and a dictionary confirm a word or inflection across the boundary; preserve source glyphs and outer timestamps, process progressively and validate every result.",
+      "Boundary joining is conservative and cannot repair all ASR mistakes or DOM-only caption splits. Real iPhone layout and audio accuracy remain unverified; fresh captionless YouTube transcription and in-app account sign-in remain unsupported here."
+    ]
+  },
+  {
     "version": "0.5.8",
     "date": "2026-10-29",
     "title": "Pinch to fit, quicker skipping and quieter subtitles",

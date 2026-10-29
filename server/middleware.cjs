@@ -1,5 +1,6 @@
 const language = require('./language.cjs');
 const transcription = require('./transcription.cjs');
+const { reflowCaptions, validBatch } = require('./caption-reflow.cjs');
 // Development-preview API, shared through the existing Expo tunnel. Production
 // will require a separately hosted service; these files never enter the client.
 module.exports = function middleware(next) {
@@ -8,8 +9,17 @@ module.exports = function middleware(next) {
     const url = new URL(req.url, 'http://localhost');
     if (!url.pathname.startsWith('/api/immersion/')) return next(req, res, fallback);
     const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
-    if (req.method !== 'GET') return json(405, { error: 'Method not allowed' });
     try {
+      if (url.pathname.endsWith('/reflow') && req.method === 'POST') {
+        const chunks = []; let size = 0;
+        for await (const chunk of req) { size += chunk.length; if (size <= 128000) chunks.push(chunk); }
+        if (size > 128000) return json(413, { error: 'Caption batch too large' });
+        let data;
+        try { data = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return json(400, { error: 'Invalid caption batch' }); }
+        if (!validBatch(data.cues)) return json(400, { error: 'Invalid caption batch' });
+        return json(200, { cues: await reflowCaptions(data.cues) });
+      }
+      if (req.method !== 'GET') return json(405, { error: 'Method not allowed' });
       if (url.pathname.endsWith('/analyze')) {
         const text = url.searchParams.get('text') || '';
         if (!text || text.length > 2000) return json(400, { error: 'Caption must be between 1 and 2000 characters' });

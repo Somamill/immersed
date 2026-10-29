@@ -15,9 +15,14 @@ function SkipButton({ dark, direction, action }: { dark: boolean; direction: 'pr
     </Svg>
   </Pressable>;
 }
-export default function SentenceControls({ dark, previous, next }: { dark: boolean; previous?: () => void; next?: () => void }) {
-  return <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 64, minHeight: 52 }}>
+export default function SentenceControls({ dark, previous, next, paused, onTogglePlayback }: { dark: boolean; previous?: () => void; next?: () => void; paused: boolean; onTogglePlayback: () => void }) {
+  return <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 20, minHeight: 52 }}>
     <SkipButton dark={dark} direction="previous" action={previous} />
+    <Pressable accessibilityRole="button" accessibilityLabel={paused ? 'Play video' : 'Pause video'} onPress={event => { event.stopPropagation(); onTogglePlayback(); }} style={({ pressed }) => ({ width: 56, minHeight: 52, borderRadius: 21, alignItems: 'center', justifyContent: 'center', backgroundColor: dark ? '#B4DEC4' : '#344C3F', transform: [{ scale: pressed ? 0.94 : 1 }] })}>
+      <Svg width={26} height={26} viewBox="0 0 24 24" fill="none" stroke={dark ? '#17251C' : '#fff'} strokeWidth={paused ? 2 : 3} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <Path d={paused ? 'M8 5.5a1 1 0 0 1 1.5-.86l9 6.5a1 1 0 0 1 0 1.72l-9 6.5A1 1 0 0 1 8 18.5Z' : 'M9 6v12M15 6v12'} />
+      </Svg>
+    </Pressable>
     <SkipButton dark={dark} direction="next" action={next} />
   </View>;
 }

@@ -57,3 +57,31 @@ test('names use JMnedict alongside general words, with categories and alternativ
   assert.equal(ordinary[0].source, 'JMdict');
   assert.ok(ordinary[0].senses.some(s => s.english_definitions.includes('to eat')));
 });
+
+test('dictionary-backed prefixes retain the whole noun and its suru inflection', async () => {
+  for (const word of ['お名前', 'お勧め', '再利用', '超高速']) {
+    const tokens = await analyze(word);
+    assert.equal(tokens.length, 1);
+    assert.equal(tokens[0].lemma, word);
+    assert.ok((await lookup(tokens[0].lemma)).length);
+  }
+  const reuse = await analyze('再利用していました。');
+  assert.equal(reuse[0].text, '再利用していました');
+  assert.equal(reuse[0].lemma, '再利用');
+  assert.ok(reuse[0].grammar.includes('past'));
+});
+
+test('caption reflow joins split words and inflections without changing text or crossing pauses', async () => {
+  const { reflowCaptions } = require('../server/caption-reflow.cjs');
+  for (const [a, b] of [['日', '本語を話します。'], ['勉強し', 'ていました。'], ['お', '名前を教えてください。'], ['こんに', 'ちは。']]) {
+    const cues = [{ start: 0, end: 1, text: a }, { start: 1, end: 3, text: b }];
+    assert.deepEqual(await reflowCaptions(cues), [{ start: 0, end: 3, text: a + b }]);
+  }
+  const separate = [
+    [{ start: 0, end: 1, text: '日本語。' }, { start: 1, end: 3, text: '勉強します。' }],
+    [{ start: 0, end: 1, text: '日' }, { start: 2, end: 3, text: '本語' }],
+    [{ start: 0, end: 1, text: '今日は' }, { start: 1, end: 3, text: '学校です。' }],
+    [{ start: 0, end: 4, text: '日' }, { start: 4, end: 8, text: '本語' }],
+  ];
+  for (const cues of separate) assert.deepEqual(await reflowCaptions(cues), cues);
+});

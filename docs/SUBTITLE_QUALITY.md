@@ -22,3 +22,13 @@ The cloud still cannot obtain YouTube audio, so end-to-end Japanese ASR quality 
 ## Typography sources
 
 [W3C Japanese Layout Requirements](https://www.w3.org/TR/jlreq/) and [W3C ruby styling](https://w3c.github.io/i18n-drafts/articles/ruby/styling.en) explain why Japanese spacing, punctuation placement and ruby need different treatment from spaced Latin text. The current React Native renderer approximates these rules while keeping words tappable. A production renderer should be compared on physical iPhones at multiple font sizes, including long readings and narrow screens.
+
+## Word boundaries and lexical fixes (0.5.9)
+
+A concrete analysis defect was reproducible: grouped prefix nouns such as `お名前`, `お勧め`, `再利用` and `超高速` displayed together but used only the prefix as their lookup lemma. They now retain the dictionary-backed compound. Suru inflections of compounds retain that noun lemma too (for example `再利用していました` → `再利用`). This corrects dictionary routing without editing the subtitle spelling.
+
+Timed tracks now receive background boundary analysis in batches of up to 48 cues. An adjacent pair can be joined only when Japanese morphology finds a dictionary-backed token or inflection crossing the old boundary. The gap must be at most 120 ms, the combined interval at most six seconds, and combined text at most 48 UTF-16 units. Sentence-ending punctuation, long pauses, overlapping voices and larger spans prevent joining. The joined cue keeps the original first start, last end and exact concatenation of source characters. A batch carries its final cue forward so the processing boundary does not create another split. This is a conservative heuristic, not a guarantee of correct segmentation or recognition.
+
+The client validates that every returned cue is an ordered, unchanged partition of the input before displaying it. A failed or invalid batch leaves source captions usable. Processing updates progressively and stops when the video/source changes; source caches retain original cues. Joined intervals show the whole phrase across the source interval; they do not add word-level audio alignment. Live DOM-only captions cannot look ahead and do not get this cross-cue repair. Existing speech-recognition/homophone limitations remain.
+
+The UI uses shorter ruby lanes and tighter row spacing while retaining the 26-point base text and tappable words. Browser tests measure row separation on a wrapped Japanese example. Physical iPhone typography and real-video recognition quality still need evaluation.

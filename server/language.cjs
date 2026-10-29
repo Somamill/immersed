@@ -113,7 +113,9 @@ async function analyze(text, grouped = true) {
       }
       end = best;
     }
-    const suruVerb = !pattern && head.pos === 'noun' && head.detail === 'サ変接続' && tokens[end]?.lemma === 'する';
+    const compoundNoun = !pattern && ['noun', 'prefix'].includes(head.pos) && end > i + 1;
+    const nounLemma = compoundNoun ? text.slice(head.start, tokens[end - 1].end) : head.lemma;
+    const suruVerb = !pattern && (head.pos === 'noun' || compoundNoun) && tokens[end - 1].detail === 'サ変接続' && tokens[end]?.lemma === 'する';
     if (suruVerb) { end++; grammar.push('suru verb'); }
     if (!pattern && (suruVerb || ['verb', 'adjective'].includes(head.pos))) {
       while (end < tokens.length && tokens[end].start === tokens[end - 1].end) {
@@ -124,7 +126,7 @@ async function analyze(text, grouped = true) {
       }
     }
     const part = tokens.slice(i, end);
-    result.push({ ...head, pos: suruVerb ? 'verb' : head.pos, text: text.slice(head.start, part.at(-1).end), end: part.at(-1).end, lemma: pattern ? pattern[0] : !suruVerb && head.pos === 'noun' && end > i + 1 ? text.slice(head.start, part.at(-1).end) : head.lemma, reading: part.map(t => t.reading || t.text).join(''), grammar: [...new Set(grammar)] });
+    result.push({ ...head, pos: suruVerb ? 'verb' : compoundNoun ? 'noun' : head.pos, text: text.slice(head.start, part.at(-1).end), end: part.at(-1).end, lemma: pattern ? pattern[0] : nounLemma, reading: part.map(t => t.reading || t.text).join(''), grammar: [...new Set(grammar)] });
     i = end;
   }
   return result;

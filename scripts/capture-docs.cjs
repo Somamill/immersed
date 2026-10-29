@@ -28,6 +28,9 @@ async function main() {
       element.style.position = 'relative'; element.replaceChildren(image, label);
     }, poster);
     await page.screenshot({ path: path.join(folder, 'study.png') });
+    await page.getByRole('button', { name: 'Look up 雰囲気', exact: true }).click();
+    await page.getByRole('switch', { name: 'Known word', exact: true }).waitFor();
+    await page.screenshot({ path: path.join(folder, 'lookup.png') });
     await page.goto(origin);
     await page.getByRole('button', { name: 'Words · 0', exact: true }).click();
     await page.getByRole('textbox', { name: 'Search English or Japanese words' }).fill('eat');
@@ -36,7 +39,7 @@ async function main() {
     await page.screenshot({ path: path.join(folder, 'dictionary.png') });
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await page.screenshot({ path: path.join(folder, 'settings.png') });
-    console.log('Saved study, dictionary and settings previews. Study uses labelled illustrative media/sample captions.');
+    console.log('Saved study, lookup, dictionary and settings previews. Study uses labelled illustrative media/sample captions.');
   } finally { await browser.close(); }
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

@@ -173,3 +173,11 @@ Settings persists a minimum length of Any (default), 15, 30 or 60 minutes. The i
 Skip controls have larger rounded targets with more separation. Pointer activation occurs on press-in, with release deduplicated and a fallback for accessibility activation. Targets use the latest media time or pending target so repeated taps can advance separately. During a seek, the requested caption is shown immediately and stale media clocks are ignored until the target cue is observed, for at most 1.2 seconds. The actual player remains authoritative afterward. This improves interface response, not network buffering speed or source timestamps.
 
 Subtitle text and readings are neutral: white in dark mode, dark in light mode. Only unfamiliar words get a soft background, based on the existing JLPT estimates and explicit known/unknown overrides. Grammar remains tappable and grouped without its own color. Unlisted words stay neutral unless marked unknown.
+
+## Compact study and lookup (0.5.9)
+
+The subtitle row gap and line/ruby spacing are reduced while retaining the base font size. The reading area's transport is previous, play/pause, next. Playing from lookup closes the sheet and resumes the video; ordinary dismissal retains the original playback intent.
+
+Lookup is a separate `LookupSheet` component with one header, scrollable meanings, compact transport, Save and a single known-word switch at bottom right. The switch follows inferred/personal knowledge and writes an explicit override when changed. Save stores the primary returned dictionary entry and original video/caption context; alternative dictionary readings and senses remain visible. Tapping text/background dismisses; control taps keep their own action. Credits remain under Settings → About.
+
+`POST /api/immersion/reflow` accepts at most 48 ordered cues and a 128 KB body, processes dictionary-backed boundary joins, and yields to foreground lookups between small groups. Client work is batched, cancellable, capped at 45 seconds per source track and validated before display. Errors fall back to usable original captions. Source captions are not rewritten and the original cache is retained. See [subtitle quality](SUBTITLE_QUALITY.md) for exact heuristics and limitations.

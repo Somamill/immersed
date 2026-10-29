@@ -1,24 +1,26 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Image, Keyboard, PanResponder, Platform, Modal, Pressable, ScrollView, StyleSheet, Switch, Text as NativeText, TextInput, useWindowDimensions, View } from 'react-native';
+import { Image, Keyboard, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Switch, Text as NativeText, TextInput, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import FloatingGlass from './src/components/FloatingGlass';
 import NavigationButton from './src/components/NavigationButton';
 import DictionarySearch from './src/components/DictionarySearch';
 import { loadCaptionCache, saveCaptionCache } from './src/caption-cache';
+import { refineCaptionTrack } from './src/caption-reflow';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { readingCue, normalizeJapaneseCaption, captionSourceRank, sentenceTarget } from './src/captions';
 import { automaticRetryDelay } from './src/subtitle-policy';
 import { swipeAction } from './src/player';
-import { type JlptLevel } from './src/learning';
+import { familiarity, type JlptLevel } from './src/learning';
 import StudySubtitles from './src/components/StudySubtitles';
 import SentenceControls from './src/components/SentenceControls';
+import LookupSheet from './src/components/LookupSheet';
 import { PREFERENCES_SCHEMA, restorePreferences } from './src/preferences';
 import history from './src/version-history.json';
 import YouTubeBrowser, { type BrowserHandle } from './src/components/YouTubeBrowser';
 import { topics, topicUrl, youtubeUrl, type Caption, type DictionaryEntry } from './src/youtube';
-import { dictionaryKey, languageRequest, type AnalyzedToken, type GeneratedCue, type Transcription } from './src/language';
+import { dictionaryKey, languageRequest, serviceUrl, type AnalyzedToken, type GeneratedCue, type Transcription } from './src/language';
 
 type Saved = { key: string; word: string; reading: string; meaning: string; sentence: string; title: string; url: string; time: number };
 type Lookup = { token: AnalyzedToken; caption: Caption };
@@ -115,7 +117,18 @@ export default function App() {
   const canonical = youtubeUrl(pageUrl);
   const videoId = canonical ? new URL(canonical).searchParams.get('v') : null;
   const watching = !!videoId;
-  const timeline = sourceTranscript?.videoId === videoId ? sourceTranscript.cues : generated;
+  const rawTimeline = sourceTranscript?.videoId === videoId ? sourceTranscript.cues : generated;
+  const [refinedTrack, setRefinedTrack] = useState<{ raw: GeneratedCue[]; cues: GeneratedCue[] } | null>(null);
+  const timeline = refinedTrack?.raw === rawTimeline ? refinedTrack.cues : rawTimeline;
+  useEffect(() => {
+    if (rawTimeline.length < 2) return;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45000);
+    void refineCaptionTrack(rawTimeline, serviceUrl('reflow', {}), controller.signal, cues => setRefinedTrack({ raw: rawTimeline, cues })).catch(() => {
+      // Source captions stay usable even if boundary analysis is unavailable.
+    }).finally(() => clearTimeout(timeout));
+    return () => { controller.abort(); clearTimeout(timeout); };
+  }, [rawTimeline]);
   const cueIndex = timeline.findIndex(cue => cue.start <= clock.time && cue.end > clock.time);
   const receiveClock = useCallback((time: number, paused: boolean) => {
     const seek = pendingSeek.current;
@@ -132,10 +145,8 @@ export default function App() {
     // or playback changes, not the entire WebView/sheet tree every 40 ms.
     setClock(old => old.paused === paused && readingCue(timeline, old.time) === readingCue(timeline, time) ? old : { time, paused });
   }, [timeline]);
-  const sourceCue = sourceTranscript?.videoId === videoId ? readingCue(sourceTranscript.cues, clock.time) : undefined;
-  const generatedCue = readingCue(generated, clock.time);
   const hasSourceCaption = !!(nativeCaption?.text && nativeCaption.language === 'ja');
-  const timelineCue = sourceCue || generatedCue;
+  const timelineCue = readingCue(timeline, clock.time);
   const hasTimeline = sourceTranscript?.videoId === videoId || generated.length > 0;
   const observedCaption = !hasTimeline && hasSourceCaption ? nativeCaption : null;
   const caption: Caption | null = timelineCue ? { text: timelineCue.text, tokens: [], time: timelineCue.start, title: nativeCaption?.title || 'YouTube video', url: pageUrl, language: 'ja', paused: clock.paused } : observedCaption ? { ...observedCaption, paused: clock.paused } : null;
@@ -262,6 +273,17 @@ export default function App() {
     setLookup(null);
     if (resume && openedVideo === videoId) browser.current?.command('play');
   }, [videoId]);
+  const togglePlayback = () => {
+    if (lookup) {
+      lookupPlayback.current = { resume: false, videoId: null };
+      setLookup(null);
+      browser.current?.command('play');
+      setClock(old => ({ ...old, paused: false }));
+    } else {
+      browser.current?.command(clock.paused ? 'play' : 'pause');
+      setClock(old => ({ ...old, paused: !old.paused }));
+    }
+  };
   const previousSentence = sentenceTarget(timeline, clock.time, -1);
   const nextSentence = sentenceTarget(timeline, clock.time, 1);
   const jumpSentence = (time: number) => {
@@ -342,10 +364,6 @@ export default function App() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [panel, watching, router]);
   backAction.current = goBack;
-  const dismissGesture = useMemo(() => PanResponder.create({
-    onMoveShouldSetPanResponder: (_event, state) => state.dy > 45 && state.dy > Math.abs(state.dx) * 1.5,
-    onPanResponderRelease: () => closeLookup(),
-  }), [closeLookup]);
   const save = (entry: DictionaryEntry) => {
     if (!lookup || !storageReady) return;
     const japanese = entry.japanese[0]; const key = `${entry.slug}:${japanese.reading ?? ''}`;
@@ -362,7 +380,7 @@ export default function App() {
         <ScrollView style={s.captionScroll} contentContainerStyle={{ paddingVertical: 14, flexGrow: 1, justifyContent: 'center' }}>
           {sentence ? <><StudySubtitles tokens={tokens} tail={unparsedTail} dark={dark} level={level} knowledge={knowledge} readings={readings} onWord={tapWord} />{!!analysisError && <Text style={s.hint}>{analysisError}</Text>}</> : <Text style={s.captionEmpty}>{subtitleStatus ? 'Japanese subtitles unavailable' : '—'}</Text>}
         </ScrollView>
-        <SentenceControls dark={dark} previous={previousSentence === undefined ? undefined : () => skipSentence(-1)} next={nextSentence === undefined ? undefined : () => skipSentence(1)} />
+        <SentenceControls dark={dark} paused={!!lookup || clock.paused} onTogglePlayback={togglePlayback} previous={previousSentence === undefined ? undefined : () => skipSentence(-1)} next={nextSentence === undefined ? undefined : () => skipSentence(1)} />
       </View>}
     </View>
     <FloatingGlass dark={dark} style={[s.dock, { bottom: Math.max(insets.bottom, 12), left: (width - 182) / 2 }]}><View style={s.dockRow} {...dockGestures.panHandlers}>
@@ -370,7 +388,11 @@ export default function App() {
       <NavigationButton icon="words" label={`Words · ${saved.length}`} active={library} dark={dark} onPress={() => { browser.current?.command('pause'); setLibrary(true); }} />
       <NavigationButton icon="settings" label="Settings" active={settings} dark={dark} onPress={() => { browser.current?.command('pause'); setSettings(true); }} />
     </View></FloatingGlass>
-    <Modal visible={!!lookup} transparent animationType="none" onRequestClose={closeLookup}><View style={s.overlay}><Pressable accessibilityRole="button" accessibilityLabel="Close dictionary" style={StyleSheet.absoluteFill} onPress={closeLookup} /><Pressable accessible={false} testID="dictionary-sheet" onPress={closeLookup} style={s.sheet}><View {...dismissGesture.panHandlers} style={s.row}><Text style={s.eyebrow}>WORD & GRAMMAR</Text><Button onPress={closeLookup}>Close</Button></View><Text style={s.lookupWord}>{lookup?.token.text}</Text>{lookup && <View style={s.row}><Button onPress={() => setKnowledge(old => ({ ...old, [lookup.token.lemma]: true }))}>{knowledge[lookup.token.lemma] === true ? "✓ Known" : "Mark known"}</Button><Button onPress={() => setKnowledge(old => ({ ...old, [lookup.token.lemma]: false }))}>Mark unknown</Button></View>}<Text style={s.reading}>{lookup?.token.reading} · {lookup?.token.pos}</Text>{lookup?.token.lemma !== lookup?.token.text && <Text style={s.hint}>Dictionary form: {lookup?.token.lemma}</Text>}{!!lookup?.token.grammar.length && <Text style={s.grammar}>{lookup.token.grammar.join(' · ')}</Text>}<ScrollView style={{ maxHeight: 230 }}>{loading && <ActivityIndicator color={dark ? "#B4DEC4" : "#344C3F"} />}{!!dictionaryError && <Text style={s.hint}>{dictionaryError}</Text>}{!loading && !dictionaryError && !entries.length && <Text style={s.hint}>No matching word found.</Text>}{entries.map((entry, index) => <View key={`${entry.slug}:${index}`} style={s.entry}><Text style={s.reading}>{entry.japanese.map(j => `${j.word || ''} ${j.reading || ''}`).join(' · ')}</Text>{entry.source === 'JMnedict' && <Text style={s.hint}>{[...new Set(entry.senses.flatMap(sense => sense.parts_of_speech))].join(' · ')}</Text>}<Text style={s.meaning}>{entry.senses.slice(0, 2).map(sense => sense.english_definitions.join('; ')).join('\n')}</Text><Button onPress={() => save(entry)}>{!storageReady ? 'Library unavailable' : saved.some(w => w.key === `${entry.slug}:${entry.japanese[0].reading ?? ''}`) ? '✓ Saved' : 'Save word + context'}</Button></View>)}</ScrollView><Text numberOfLines={2} style={s.sentence}>{lookup?.caption.text}</Text><SentenceControls dark={dark} previous={previousSentence === undefined ? undefined : () => skipSentence(-1)} next={nextSentence === undefined ? undefined : () => skipSentence(1)} /></Pressable></View></Modal>
+    <LookupSheet lookup={lookup} dark={dark} entries={entries} loading={loading} error={dictionaryError} onClose={closeLookup}
+      known={!!lookup && familiarity(lookup.token.lemma, lookup.token.reading, level, knowledge) === 'known'}
+      onKnown={known => { if (lookup) setKnowledge(old => ({ ...old, [lookup.token.lemma]: known })); }}
+      canSave={storageReady} saved={!!entries[0] && saved.some(word => word.key === `${entries[0].slug}:${entries[0].japanese[0]?.reading ?? ''}`)} onSave={save}
+      controls={<SentenceControls dark={dark} paused={true} onTogglePlayback={togglePlayback} previous={previousSentence === undefined ? undefined : () => skipSentence(-1)} next={nextSentence === undefined ? undefined : () => skipSentence(1)} />} />
     {settings && <SafeAreaView edges={['top', 'left', 'right']} style={[s.safe, s.panelScreen]}><View style={s.header}><Text style={s.brand}>Settings.</Text></View>
       <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 150 }}>
         <View style={s.setting}><Text style={[s.emptyTitle, { flex: 1 }]}>Dark mode</Text><Switch accessibilityLabel="Dark mode" value={dark} onValueChange={setDark} trackColor={{ true: '#344C3F' }} /></View>
