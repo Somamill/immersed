@@ -2,6 +2,15 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.6 — 2026-10-29
+
+Natural Japanese subtitles and a clearer project showcase
+
+- Remove the permanent subtitle label, separate About from settings, tighten Japanese text spacing, attach punctuation and place furigana above the base text.
+- Prefer creator Japanese captions over automatic tracks, preserve rolling-caption timing, and invalidate old parsed caption caches without touching saved words.
+- Add dock and browse swipes, fix Metro fallback forwarding, and publish a screenshot gallery, project illustration and subtitle-quality findings.
+- YouTube audio access remains blocked here; fresh captionless-video transcription, stronger recognition and physical-iPhone behavior are not validated. A clean-audio diagnostic reproduced a wrong-kanji error in the existing recognizer.
+
 ## 0.5.5 — 2026-10-29
 
 Compact navigation, centered subtitles and level-aware furigana

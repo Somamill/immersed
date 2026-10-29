@@ -32,3 +32,18 @@ test('cached transcripts survive disk failure and concurrent requests share one 
   await callbacks[0](null, JSON.stringify({ cues: [{ start: 0, end: 1, text: '日本語' }] }));
   assert.equal((await service.start(videoId)).status, 'ready');
 });
+
+test('preview middleware preserves Connect fallback for unhandled Metro requests', async () => {
+  const wrap = require('../server/middleware.cjs');
+  const fallback = () => {};
+  const req = { url: '/not-a-metro-source', method: 'GET' };
+  const res = {};
+  let reached = false;
+  await wrap((incoming, response, next) => {
+    assert.equal(incoming, req);
+    assert.equal(response, res);
+    assert.equal(next, fallback);
+    reached = true;
+  })(req, res, fallback);
+  assert.equal(reached, true);
+});

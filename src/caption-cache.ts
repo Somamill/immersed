@@ -14,13 +14,13 @@ export async function loadCaptionCache(videoId: string): Promise<TimedCue[] | nu
     if (!raw || raw.length > 128000) return null;
     const data = JSON.parse(raw);
     const age = Date.now() - data.savedAt;
-    return data.language === 'ja' && data.videoId === videoId && Number.isFinite(age) && age >= 0 && age < lifetime && valid(data.cues) ? data.cues : null;
+    return data.formatVersion === 2 && data.language === 'ja' && data.videoId === videoId && Number.isFinite(age) && age >= 0 && age < lifetime && valid(data.cues) ? data.cues : null;
   } catch { return null; }
 }
 
 export function saveCaptionCache(videoId: string, cues: TimedCue[]): Promise<void> {
   if (!/^[\w-]{11}$/.test(videoId) || !valid(cues)) return Promise.resolve();
-  const value = JSON.stringify({ language: 'ja', videoId, savedAt: Date.now(), cues: [...cues].sort((a, b) => a.start - b.start) });
+  const value = JSON.stringify({ formatVersion: 2, language: 'ja', videoId, savedAt: Date.now(), cues: [...cues].sort((a, b) => a.start - b.start) });
   if (value.length > 128000) return Promise.resolve();
   writes = writes.then(async () => {
     let index: string[] = [];

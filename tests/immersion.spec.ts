@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
 import { embeddedPlayerSource, swipeAction } from '../src/player';
 import { familiarity, showFurigana } from '../src/learning';
-import { japaneseCaptionUrl, parseCaptionTrack, readingCue } from '../src/captions';
+import { japaneseCaptionUrl, parseCaptionTrack, readingCue, normalizeJapaneseCaption, captionSourceRank } from '../src/captions';
 import { automaticRetryDelay } from '../src/subtitle-policy';
 
 test('home offers real YouTube discovery and retains the saved-word library', async ({ page }) => {
@@ -115,12 +115,12 @@ test('timed captions join fragments, normalize line breaks and resolve overlap',
     { tStartMs: 2000, dDurationMs: 1000, segs: [{ utf8: '食べました。' }] },
     { tStartMs: 3000, segs: [{ utf8: '\n' }] },
   ] });
-  expect(cues).toEqual([{ start: 0, end: 2, text: '日本語 です。' }, { start: 2, end: 3, text: '食べました。' }]);
-  expect(readingCue(cues, 1)?.text).toBe('日本語 です。');
+  expect(cues).toEqual([{ start: 0, end: 2, text: '日本語です。' }, { start: 2, end: 3, text: '食べました。' }]);
+  expect(readingCue(cues, 1)?.text).toBe('日本語です。');
   expect(readingCue(cues, 8)).toBeUndefined();
   expect(readingCue(cues, 2)?.text).toBe('食べました。');
   expect(readingCue(cues, 3)).toBeUndefined();
-  expect(readingCue(cues, 1)?.text).toBe('日本語 です。');
+  expect(readingCue(cues, 1)?.text).toBe('日本語です。');
   expect(readingCue(cues, -1)).toBeUndefined();
 });
 
@@ -137,6 +137,21 @@ test('JLPT highlighting uses level estimates and explicit personal knowledge', (
   expect(showFurigana('愛想', 'あいそ', 2, {}, false)).toBe(false);
   expect(showFurigana('愛想', 'あいそ', 2, { '愛想': true }, true)).toBe(false);
   expect(showFurigana('NOT_IN_ANY_JLPT_LIST', '', 2, {}, true)).toBe(false);
+});
+
+test('Japanese caption normalization preserves Latin word spaces and rolling append timing', () => {
+  expect(normalizeJapaneseCaption('日本 語\nです。')).toBe('日本語です。');
+  expect(normalizeJapaneseCaption('YouTube Premium を見る')).toBe('YouTube Premium を見る');
+  const cues = parseCaptionTrack({ events: [
+    { tStartMs: 0, dDurationMs: 3000, wWinId: 1, segs: [{ utf8: '日' }] },
+    { tStartMs: 500, dDurationMs: 2000, wWinId: 1, aAppend: 1, segs: [{ utf8: '本語です。' }] },
+    { tStartMs: 1200, wWinId: 1, segs: [{ utf8: '' }] },
+  ] });
+  expect(readingCue(cues, 0.1)?.text).toBe('日');
+  expect(readingCue(cues, 0.6)?.text).toBe('日本語です。');
+  expect(readingCue(cues, 1.3)).toBeUndefined();
+  expect(captionSourceRank('human')).toBeGreaterThan(captionSourceRank('youtube-asr'));
+  expect(captionSourceRank('youtube-asr')).toBeGreaterThan(captionSourceRank('unknown'));
 });
 
 test('viewing preferences persist and navigation stays near the bottom', async ({ page }) => {
@@ -211,6 +226,7 @@ test('portrait playback controls appear for a selected video and automatic subti
   expect(reading.y + reading.height).toBe(844);
   await expect(page.getByTestId('subtitle-panel')).toHaveCSS('border-radius', '0px');
   await expect(page.getByTestId('subtitle-panel')).toBeVisible();
+  await expect(page.getByText('JAPANESE SUBTITLES', { exact: true })).toHaveCount(0);
   expect((await page.getByTestId('subtitle-panel').boundingBox())!.height).toBeGreaterThanOrEqual(148);
   await expect(page.getByRole('button', { name: 'Reading', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Full screen', exact: true })).toHaveCount(0);
@@ -219,6 +235,29 @@ test('portrait playback controls appear for a selected video and automatic subti
   await expect.poll(() => attempts.length, { timeout: 7000 }).toBeGreaterThan(0);
   await expect(page.getByRole('switch', { name: 'Fit entire video' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: /retry|refresh|original YouTube player/i })).toHaveCount(0);
+});
+
+test('the glass dock supports back/forward swipes while watching', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: '{"status":"processing"}' }));
+  await page.goto('/');
+  await page.getByRole('textbox', { name: 'Search Japanese topics or paste a YouTube link' }).fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  const dock = (await page.getByTestId('navigation-dock').boundingBox())!;
+  await page.mouse.move(dock.x + dock.width - 20, dock.y + 25); await page.mouse.down();
+  await page.mouse.move(dock.x + 20, dock.y + 25, { steps: 12 }); await page.mouse.up();
+  await expect(page.getByText('Words.', { exact: true })).toBeVisible();
+  await page.mouse.move(dock.x + 20, dock.y + 25); await page.mouse.down();
+  await page.mouse.move(dock.x + dock.width - 20, dock.y + 25, { steps: 12 }); await page.mouse.up();
+  await expect(page.getByText('Words.', { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('subtitle-panel')).toBeVisible();
+});
+
+test('About is separated from the settings controls', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const shorts = (await page.getByRole('switch', { name: 'Hide Shorts', exact: true }).boundingBox())!;
+  const about = (await page.getByRole('button', { name: 'About', exact: true }).boundingBox())!;
+  expect(about.y - shorts.y - shorts.height).toBeGreaterThan(16);
 });
 
 test('a blocked subtitle source shows a passive failure without recovery buttons', async ({ page }) => {
@@ -287,7 +326,7 @@ test('page-session Japanese tracks load before a video element and are selected 
   });
   await page.addScriptTag({ content: CAPTION_BRIDGE });
   await expect(page.locator('#movie_player')).toHaveAttribute('data-selected', 'ja');
-  await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string }[] }).messages.filter(m => m.type === 'captionData').length)).toBe(1);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string }[] }).messages.some(m => m.type === 'captionData' && (m as { source?: string }).source === 'youtube-asr'))).toBe(true);
   const data = await page.evaluate(() => (window as unknown as { messages: { type: string; data: unknown }[] }).messages.find(m => m.type === 'captionData')!.data);
   expect(parseCaptionTrack(data)[0].text).toBe('自然な日本語です。');
 });

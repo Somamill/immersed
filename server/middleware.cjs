@@ -4,9 +4,9 @@ const transcription = require('./transcription.cjs');
 // will require a separately hosted service; these files never enter the client.
 module.exports = function middleware(next) {
   void language.initialize().catch(() => {});
-  return async (req, res) => {
+  return async (req, res, fallback) => {
     const url = new URL(req.url, 'http://localhost');
-    if (!url.pathname.startsWith('/api/immersion/')) return next(req, res);
+    if (!url.pathname.startsWith('/api/immersion/')) return next(req, res, fallback);
     const json = (status, value) => { res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(value)); };
     if (req.method !== 'GET') return json(405, { error: 'Method not allowed' });
     try {

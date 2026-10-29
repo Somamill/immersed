@@ -47,12 +47,13 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
       return url.protocol === 'https:' && /(^|\.)youtube\.com$/.test(url.hostname) && url.pathname === '/api/timedtext' && /^ja(?:-|$)/.test(url.searchParams.get('lang') || '') && (!url.searchParams.get('tlang') || url.searchParams.get('tlang') === 'ja') ? url : null;
     } catch { return null; }
   };
-  let lastResponse = '', lastId = '';
-  window.__immersedReadCaptionResponse = (input, raw) => {
+  let lastResponse = '', lastId = '', lastSource = '';
+  window.__immersedReadCaptionResponse = (input, raw, knownSource) => {
     const url = captionUrl(input);
     const videoId = url?.searchParams.get('v');
     if (!videoId || !/^[A-Za-z0-9_-]{11}$/.test(videoId) || typeof raw !== 'string' || !raw.trim() || raw.length > 2 * 1024 * 1024) return false;
-    if (lastId === videoId && lastResponse === raw) return true;
+    const source = url.searchParams.get('kind') === 'asr' ? 'youtube-asr' : knownSource === 'human' || knownSource === 'youtube-asr' ? knownSource : 'unknown';
+    if (lastId === videoId && lastResponse === raw && lastSource === source) return true;
     try {
       let data;
       if (raw.trim().startsWith('<')) {
@@ -66,8 +67,8 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
         }) };
       } else data = JSON.parse(raw);
       if (!Array.isArray(data?.events) || !data.events.some(e => e.segs?.some(s => typeof s.utf8 === 'string' && s.utf8.trim()))) return false;
-      window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'captionData', language: 'ja', videoId, data }));
-      lastId = videoId; lastResponse = raw;
+      window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'captionData', language: 'ja', source, videoId, data }));
+      lastId = videoId; lastResponse = raw; lastSource = source;
       return true;
     } catch { return false; }
   };
@@ -156,10 +157,10 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
       // loses cookies/origin context and can return a successful but empty body.
       url.searchParams.set('fmt', 'json3');
       const response = await fetch(url.toString(), { credentials: 'include', signal: controller.signal });
-      if (response.ok) state.ready = window.__immersedReadCaptionResponse(url.toString(), await response.text());
+      if (response.ok) state.ready = window.__immersedReadCaptionResponse(url.toString(), await response.text(), track.kind === 'asr' ? 'youtube-asr' : 'human');
     } catch {} finally {
       clearTimeout(timer); state.pending = false; state.next = Date.now() + state.attempts * 2000;
-      if (!state.ready && !state.fallback && currentId() === videoId) { state.fallback = true; send({ type: 'captionTrack', language: 'ja', videoId, url: track.baseUrl }); }
+      if (!state.ready && !state.fallback && currentId() === videoId) { state.fallback = true; send({ type: 'captionTrack', language: 'ja', source: track.kind === 'asr' ? 'youtube-asr' : 'human', videoId, url: track.baseUrl }); }
     }
   };
   let stopClock = () => {}, lastFrameAt = 0;

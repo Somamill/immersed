@@ -3,7 +3,7 @@ import * as Application from 'expo-application';
 import { embeddedPlayerSource } from '../player';
 import { Linking } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { japaneseCaptionUrl, parseCaptionTrack } from '../captions';
+import { japaneseCaptionUrl, parseCaptionTrack, captionSourceRank, type CaptionSource } from '../captions';
 import history from '../version-history.json';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../youtube';
 import type { BrowserHandle, BrowserProps } from './YouTubeBrowser';
@@ -19,6 +19,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
   useEffect(() => { web.current?.injectJavaScript(optionsScript); }, [optionsScript]);
   const currentVideo = useRef<string | null>(playerId);
   const pendingTrack = useRef<AbortController | null>(null);
+  const pendingRank = useRef(0);
   useEffect(() => () => pendingTrack.current?.abort(), []);
   const pageChanged = (url: string) => {
     const canonical = youtubeUrl(url);
@@ -34,20 +35,22 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
       if (isYouTubeSignInUrl(target.toString())) void Linking.openURL(target.toString()).catch(() => onError('Could not open the sign-in browser.'));
     } catch { /* Ignore unrelated popup URLs. */ }
   };
-  const loadTrack = async (url: string, videoId: string) => {
+  const loadTrack = async (url: string, videoId: string, source: CaptionSource) => {
     try {
       const target = japaneseCaptionUrl(url, videoId);
       if (!target || currentVideo.current !== videoId) return;
+      if (pendingTrack.current && !pendingTrack.current.signal.aborted && pendingRank.current > captionSourceRank(source)) return;
       pendingTrack.current?.abort();
       const controller = new AbortController(); pendingTrack.current = controller;
+      pendingRank.current = captionSourceRank(source);
       const timer = setTimeout(() => controller.abort(), 8000);
       target.searchParams.set('fmt', 'json3');
       try {
         const response = await fetch(target.toString(), { signal: controller.signal });
         if (!response.ok) return;
         const cues = parseCaptionTrack(await response.json());
-        if (!controller.signal.aborted && currentVideo.current === videoId && cues.length) onTranscript?.(cues, videoId);
-      } finally { clearTimeout(timer); }
+        if (!controller.signal.aborted && currentVideo.current === videoId && cues.length) onTranscript?.(cues, videoId, source);
+      } finally { clearTimeout(timer); if (pendingTrack.current === controller) { pendingTrack.current = null; pendingRank.current = 0; } }
     } catch { /* Expired or inaccessible tracks fall back to visible captions. */ }
   };
   useImperativeHandle(ref, () => ({
@@ -87,10 +90,10 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
         if (v.type === 'playerError' && v.videoId === currentVideo.current) { onError('This video cannot play in the embedded player.'); return; }
         if (v.type === 'captionData' && v.language === 'ja' && typeof v.videoId === 'string' && v.videoId === currentVideo.current) {
           const cues = parseCaptionTrack(v.data);
-          if (cues.length) { pendingTrack.current?.abort(); onTranscript?.(cues, v.videoId); }
+          if (cues.length) onTranscript?.(cues, v.videoId, v.source === 'human' || v.source === 'youtube-asr' ? v.source : 'unknown');
           return;
         }
-        if (v.type === 'captionTrack' && v.language === 'ja' && typeof v.url === 'string' && /^[A-Za-z0-9_-]{11}$/.test(v.videoId)) { void loadTrack(v.url, v.videoId); return; }
+        if (v.type === 'captionTrack' && v.language === 'ja' && typeof v.url === 'string' && /^[A-Za-z0-9_-]{11}$/.test(v.videoId)) { void loadTrack(v.url, v.videoId, v.source === 'human' || v.source === 'youtube-asr' ? v.source : 'unknown'); return; }
         if (v.type === 'clock' && v.videoId === currentVideo.current && Number.isFinite(v.time) && typeof v.paused === 'boolean') { onClock?.(v.time, v.paused); return; }
         if (v.type === 'reset') { onCaption(null); return; }
         if (v.type !== 'caption' || typeof v.text !== 'string' || v.text.length > 2000 || (v.text && v.language !== 'ja') || !Array.isArray(v.tokens) || v.tokens.length > 1000 || !v.tokens.every((t: { text?: unknown; word?: unknown }) => typeof t.text === 'string' && typeof t.word === 'boolean') || !Number.isFinite(v.time) || typeof v.url !== 'string' || typeof v.title !== 'string') return;

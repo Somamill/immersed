@@ -21,3 +21,7 @@ The app's separate Google sign-in button is removed. YouTube's own sign-in link 
 ## JavaScript-only watch navigation (0.5.5)
 
 A YouTube client-side history change can select a watch URL without an ordinary page request. Relying only on request interception leaves a route where the WebView can retain a full watch page. The bridge now reports page URLs on startup and history changes, independent of video availability. The native adapter selects/remounts the embed from either native navigation or bridge page events, ignores stale discovery URLs once watching, and displays the new WebView only after its embed load completes. Local fixtures verify history-only page reporting; they do not establish physical-iPhone behavior or prove every YouTube client follows the same navigation sequence.
+
+## Japanese text and recognition quality
+
+The [subtitle quality findings](docs/SUBTITLE_QUALITY.md) cover source-track priority, rolling caption parsing, W3C Japanese typography references, a real-audio wrong-kanji diagnostic, and the proposed model-evaluation/alignment pipeline. Japanese-only spaces are normalized without changing source kanji. Furigana no longer widens the underlying learning token. These improvements do not establish end-to-end recognition accuracy; access to YouTube audio remains blocked in this preview environment.
