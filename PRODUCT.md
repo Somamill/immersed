@@ -11,14 +11,14 @@ Tap a meaningful word or grammar group to pause playback and see its reading, ba
 - Browser-style YouTube discovery, then player-focused layout via a DOM adapter.
 - Automatic caption-control attempts, with existing source captions as a fast path.
 - Kuromoji/IPADIC analysis; full English JMdict index; grouped inflections, compounds, and selected grammar expressions. Configurable groups/morphemes and furigana.
-- Automatic background ASR job attempt when source captions are missing, using self-hosted faster-whisper. Generated cues can be timed against the player and cached.
+- Automatic background ASR job attempt when source captions are missing, using the Japanese-first ReazonSpeech K2 v2 model. Generated cues can be timed against the player and cached.
 
 **Unresolved core requirement:** this preview's server cannot access YouTube audio under its current network policy. The ASR path is implemented but has not produced real YouTube subtitles here. Package installation and a simulated player test are not an end-to-end success. Fix source-audio access/deployment and validate representative natural Japanese videos before promising universal generation. There is no workaround that a dictionary can provide for missing audio.
 
 ## Next acceptance gates
 
 1. Validate the compact player and automatic Japanese caption controls on actual iPhones against current YouTube layouts.
-2. Establish supported source-audio access from a permitted server environment, validate Whisper's Japanese output and timestamps, and measure processing time/cost. Upgrade the base model or execution hardware if quality/latency is inadequate.
+2. Establish supported source-audio access from a permitted server environment, validate ReazonSpeech K2's Japanese output and timestamps on real videos, and measure processing time/cost.
 3. Select natural content independently across daily life, food, travel, conversation, caption availability, and lengths. Measure coverage and show honest unsupported/preparing/failure states.
 4. Refine dictionary disambiguation, compound segmentation, inflections, and grammar explanations. Current grammar tags are finite rules, not a full semantic parser.
 5. Replace Japanese search queries with a language-verified discovery feed; add podcasts and other languages after the main video loop works reliably.

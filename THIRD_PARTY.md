@@ -21,8 +21,6 @@ Kuromoji uses MeCab-IPADIC data. Preserve the full NAIST/ICOT notices in [licens
 
 ## Speech recognition
 
-- faster-whisper, MIT: https://github.com/SYSTRAN/faster-whisper
-- OpenAI Whisper model/code, MIT: https://github.com/openai/whisper
 - yt-dlp, Unlicense (see upstream dependencies): https://github.com/yt-dlp/yt-dlp
 
 These run on the cloud server, not in Expo Go. Model weights download on the first successful audio-processing job. Self-hosting avoids per-minute API fees but consumes compute. Source-audio access, recognition quality, and throughput must be verified separately.
@@ -58,3 +56,10 @@ The bundled word/reading-to-level map is derived from OpenJLPT by evanclan and i
 - Pinned commit `9ebca4589565c696e7c39e089e2e928ad65f678c`, unmodified `data/source_files/raw/accents.txt`. SHA-256: `8bd0dd127dab32ceec94cb03ab1ba6b68858ea73421dfa1731af2f373deb4f20`.
 - `npm run language:setup` downloads and verifies the source into ignored `.data/`. `server/pitch.cjs` parses headword/reading/mora downstep records; derived API pattern data remains CC BY-SA 4.0. The client renders a stepped line and downstep number. Alternative recorded readings/patterns are preserved; absent records are hidden.
 - These are lexical Tokyo accent patterns, not audio measurements or predictions for inflected words, full expressions, dialects, or connected speech. The setting is off by default.
+
+## ReazonSpeech K2 v2 (0.5.12)
+
+- ReazonSpeech K2 Japanese Zipformer model, Reazon Holdings / Reazon Human Interaction Lab, Apache-2.0: https://huggingface.co/reazon-research/reazonspeech-k2-v2
+- Pinned model revision `291488c8151be24d7da4bf7af26e533fad96e407`. The worker fetches only the Japanese int8 encoder and int8 joiner plus fp32 decoder/token file using that revision; model weights stay in the ignored Hugging Face cache.
+- The inference package `reazonspeech-k2-asr` and Sherpa-ONNX are Apache-2.0. Source is pinned to ReazonSpeech commit `2d4d4762e7ee294ac8e47a177ac2e9b0e8d0d43f` in `server/requirements.txt`. The source notice is preserved at [licenses/ReazonSpeech-Apache-2.0.txt](licenses/ReazonSpeech-Apache-2.0.txt).
+- Audio chunking, cue building and integration are Immersed code. The model license does not convey rights to video/audio processed by the worker.

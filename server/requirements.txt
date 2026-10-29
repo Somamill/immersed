@@ -1,5 +1,5 @@
-faster-whisper==1.2.1
 yt-dlp==2026.10.26
 
-# PyAV 19 removed metadata_errors, which faster-whisper 1.2.1 still passes.
-av==16.1.0
+
+# Compact Japanese-first Zipformer ASR (Apache-2.0 model; no login required).
+reazonspeech-k2-asr @ git+https://github.com/reazon-research/ReazonSpeech.git@2d4d4762e7ee294ac8e47a177ac2e9b0e8d0d43f#subdirectory=pkg/k2-asr

@@ -36,10 +36,10 @@ def main():
         if not files:
             print(json.dumps({'error': 'MEDIA_LIMIT', 'message': 'Audio was unavailable or outside this preview’s 30-minute / 150 MB processing limit.'}))
             return
-        from faster_whisper import WhisperModel
-        model = WhisperModel('base', device='cpu', compute_type='int8', cpu_threads=2)
-        segments, _ = model.transcribe(str(files[0]), language='ja', vad_filter=True, beam_size=3)
-        cues = [{'start': segment.start, 'end': segment.end, 'text': segment.text.strip()} for segment in segments if segment.text.strip()]
+        from reazonspeech.k2.asr import audio_from_path, transcribe
+        from asr_reazon import load_model, recognize
+        model = load_model()
+        cues = recognize(files[0], model, transcribe, audio_from_path)
         print(json.dumps({'cues': cues}, ensure_ascii=False))
 
 if __name__ == '__main__':

@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.12 — 2026-10-30
+
+Improve Japanese subtitle recognition
+
+- Replace Whisper base with open Japanese ReazonSpeech K2 int8; diagnostic sample CER improved from 48.7% to 29.1%, pending real YouTube validation.
+- Use timestamped characters to build short Japanese caption cues, with overlapping bounded audio chunks and a model-versioned cache.
+- Native and creator subtitle tracks may still contain errors; preview network restrictions prevent full YouTube transcription testing and this model does not diarize speakers.
+
 ## 0.5.11 — 2026-10-30
 
 Separate word lookup, better expressions and optional pitch accents

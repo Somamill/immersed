@@ -14,7 +14,7 @@ function createTranscriptionService({ execute = execFile, storage = fs, now = Da
       jobs.delete(videoId);
     }
     try {
-      const cues = JSON.parse(await storage.promises.readFile(path.join(root, videoId + '.json'), 'utf8'));
+      const cues = JSON.parse(await storage.promises.readFile(path.join(root, videoId + '.reazonspeech-k2-v2-int8.json'), 'utf8'));
       if (valid(cues)) return { status: 'ready', cues };
     } catch { /* Missing/stale cache is recomputed. */ }
     if (running) return { status: 'busy', message: 'Another video is being prepared. Waiting for a free subtitle worker…' };
@@ -32,7 +32,7 @@ function createTranscriptionService({ execute = execFile, storage = fs, now = Da
         if (!valid(data.cues)) throw new Error('No speech detected');
         Object.assign(job, { status: 'ready', cues: data.cues });
         // A cache-write failure must never invalidate successfully generated cues.
-        try { await storage.promises.mkdir(root, { recursive: true }); await storage.promises.writeFile(path.join(root, videoId + '.json'), JSON.stringify(data.cues)); } catch {}
+        try { await storage.promises.mkdir(root, { recursive: true }); await storage.promises.writeFile(path.join(root, videoId + '.reazonspeech-k2-v2-int8.json'), JSON.stringify(data.cues)); } catch {}
       } catch { fail('TRANSCRIPTION_FAILED', 'Japanese subtitle preparation failed. Existing Japanese captions can still be used.'); }
     });
     return job;

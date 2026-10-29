@@ -13,7 +13,7 @@ The product's primary acceptance test is a real Japanese video with **no Japanes
 ## Infrastructure required to complete the core feature
 
 1. A persistent API and durable job queue independent of Expo/Metro and this workspace's lifecycle. A worker restart must resume or safely restart jobs; concurrent viewers must share a job for the same video/language/model revision.
-2. A supported, permitted way to obtain the selected video's audio. This workspace's proxy denies YouTube acquisition, so the installed credential-free Whisper recognizer cannot transcribe captionless YouTube videos here. Expo Go cannot capture another player's internal audio. Moving buttons or adding retries does not remove either constraint.
+2. A supported, permitted way to obtain the selected video's audio. This workspace's proxy denies YouTube acquisition, so the installed credential-free ReazonSpeech K2 recognizer cannot transcribe captionless YouTube videos here. Expo Go cannot capture another player's internal audio. Moving buttons or adding retries does not remove either constraint.
 3. Workers that transcribe in small timestamped segments, expose real progress and return early segments before completing long recordings. Persistent caption caching, bounded worker concurrency and cancellation are required. These production capabilities are not implemented by the current one-worker preview.
 4. A stable, configured service origin for the client, health monitoring, request limits and recovery alerts. Expo development tunnels are temporary; restarting one creates a new link. The current preview does not provide always-on hosting.
 
