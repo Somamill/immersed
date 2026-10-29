@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
 import { embeddedPlayerSource, swipeAction } from '../src/player';
-import { familiarity } from '../src/learning';
+import { familiarity, showFurigana } from '../src/learning';
 import { japaneseCaptionUrl, parseCaptionTrack, readingCue } from '../src/captions';
 import { automaticRetryDelay } from '../src/subtitle-policy';
 
@@ -69,7 +69,8 @@ test('caption adapter reads player text, pauses, ignores comments, and clears on
 test('learning has no off switches, sign-in button or exposed dictionary setup', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('switch', { name: /Smart word groups|Furigana|AMOLED/ })).toHaveCount(0);
+  await expect(page.getByRole('switch', { name: /Smart word groups|AMOLED/ })).toHaveCount(0);
+  await expect(page.getByRole('switch', { name: 'Furigana', exact: true })).toBeChecked();
   await expect(page.getByRole('button', { name: /Google|sign.in/i })).toHaveCount(0);
   await expect(page.getByText('Dictionary & credits', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('switch', { name: 'Dark mode', exact: true })).toBeChecked();
@@ -103,7 +104,7 @@ test('old disabled grouping and readings still produce grouped tappable grammar'
   await page.getByRole('button', { name: 'Go', exact: true }).click();
   const word = page.getByRole('button', { name: 'Look up 食べていました', exact: true });
   await expect(word).toBeVisible({ timeout: 10000 });
-  await expect(word).toContainText('たべていました');
+  await expect(word).not.toContainText('たべていました');
   await word.click();
   await expect(page.getByText(/て-form construction.*polite.*past/)).toBeVisible();
 });
@@ -130,6 +131,12 @@ test('JLPT highlighting uses level estimates and explicit personal knowledge', (
   expect(familiarity('抽象', 'ちゅうしょう', 5, {})).toBe('unknown');
   expect(familiarity('抽象', 'ちゅうしょう', 1, {})).toBe('known');
   expect(familiarity('NOT_IN_ANY_JLPT_LIST', '', 1, {})).toBe('unlisted');
+  expect(showFurigana('愛想', 'あいそ', 2, {}, true)).toBe(true);
+  expect(showFurigana('抽象', 'ちゅうしょう', 2, {}, true)).toBe(false);
+  expect(showFurigana('食べる', 'たべる', 2, {}, true)).toBe(false);
+  expect(showFurigana('愛想', 'あいそ', 2, {}, false)).toBe(false);
+  expect(showFurigana('愛想', 'あいそ', 2, { '愛想': true }, true)).toBe(false);
+  expect(showFurigana('NOT_IN_ANY_JLPT_LIST', '', 2, {}, true)).toBe(false);
 });
 
 test('viewing preferences persist and navigation stays near the bottom', async ({ page }) => {
@@ -383,6 +390,48 @@ test('navigation uses large labelled icons with an active state and no visible t
   }
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute('aria-pressed', 'true');
+});
+
+test('the dock hugs its icons instead of spanning the screen', async ({ page }) => {
+  await page.goto('/');
+  const dock = (await page.getByTestId('navigation-dock').boundingBox())!;
+  const first = (await page.getByRole('button', { name: 'Browse', exact: true }).boundingBox())!;
+  const last = (await page.getByRole('button', { name: 'Settings', exact: true }).boundingBox())!;
+  expect(dock.width).toBeLessThan(220);
+  expect(first.width).toBeGreaterThanOrEqual(44);
+  expect(last.width).toBeGreaterThanOrEqual(44);
+  expect(Math.abs(dock.x + dock.width / 2 - 195)).toBeLessThan(1);
+  expect(first.x - dock.x).toBeLessThanOrEqual(8);
+  expect(dock.x + dock.width - last.x - last.width).toBeLessThanOrEqual(8);
+});
+
+test('N2 furigana shows N1 readings only and can be turned off without disabling lookup', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 10, text: '愛想、抽象。食べる。' }] }) }));
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('immersed.preferences.v1', JSON.stringify({ schema: 2, level: 2, readings: true })));
+  await page.reload();
+  await page.getByRole('textbox', { name: 'Search Japanese topics or paste a YouTube link' }).fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByTestId('furigana-愛想')).toBeVisible({ timeout: 10000 });
+  await expect(page.getByTestId('furigana-抽象')).toHaveCount(0);
+  await expect(page.getByTestId('furigana-食べる')).toHaveCount(0);
+  await expect(page.getByTestId('subtitle-words')).toHaveCSS('justify-content', 'center');
+  await expect(page.getByText('愛想', { exact: true })).toHaveCSS('color', 'rgb(255, 208, 119)');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('switch', { name: 'Furigana', exact: true }).click();
+  await page.getByRole('button', { name: 'Watch & read', exact: true }).click();
+  await expect(page.getByTestId('furigana-愛想')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Look up 愛想', exact: true }).click();
+  await expect(page.getByText('WORD & GRAMMAR', { exact: true })).toBeVisible();
+});
+
+test('JavaScript-only YouTube watch navigation is reported even before a video exists', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<div>Search results</div>' }));
+  await page.goto('https://m.youtube.com/results?search_query=test');
+  await page.evaluate(() => { const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (raw: string) => void } }; w.messages = []; w.ReactNativeWebView = { postMessage: raw => w.messages.push(JSON.parse(raw)) }; });
+  await page.addScriptTag({ content: CAPTION_BRIDGE });
+  await page.evaluate(() => history.pushState({}, '', '/watch?v=M7lc1UVf-VE'));
+  await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string; url?: string }[] }).messages.some(m => m.type === 'page' && m.url === 'https://m.youtube.com/watch?v=M7lc1UVf-VE'))).toBe(true);
 });
 
 test('Words searches English and Japanese without showing dictionary setup', async ({ page }) => {

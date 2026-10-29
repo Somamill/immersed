@@ -17,3 +17,7 @@ The app's separate Google sign-in button is removed. YouTube's own sign-in link 
 ## Navigation edges
 
 [Expo SDK 58 GlassView documentation](https://docs.expo.dev/versions/v58.0.0/sdk/glass-effect/) provides the supported native glass component and availability checks. The dock now clips a non-interactive glass background inside a rounded outer view, with matching radii. Icon controls sit above that background without separate filled pill backgrounds or an interactive whole-dock glass deformation. This avoids overlapping shapes protruding at either end; the native result still needs physical-device inspection.
+
+## JavaScript-only watch navigation (0.5.5)
+
+A YouTube client-side history change can select a watch URL without an ordinary page request. Relying only on request interception leaves a route where the WebView can retain a full watch page. The bridge now reports page URLs on startup and history changes, independent of video availability. The native adapter selects/remounts the embed from either native navigation or bridge page events, ignores stale discovery URLs once watching, and displays the new WebView only after its embed load completes. Local fixtures verify history-only page reporting; they do not establish physical-iPhone behavior or prove every YouTube client follows the same navigation sequence.

@@ -190,7 +190,7 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     };
   };
   const read = () => {
-    if (location.href !== lastHref) { lastHref = location.href; last = ''; captionText = ''; staleCaptionText = null; lastTrackChoice = 0; send({ type: 'reset' }); }
+    if (location.href !== lastHref) { lastHref = location.href; last = ''; captionText = ''; staleCaptionText = null; lastTrackChoice = 0; send({ type: 'reset' }); send({ type: 'page', url: location.href }); }
     window.__immersedApplyOptions?.();
     const videoId = currentId();
     const player = document.getElementById('movie_player');
@@ -257,5 +257,6 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
   observer.observe(document.documentElement, { subtree: true, childList: true, characterData: true });
   const timer = setInterval(read, 150);
   window.addEventListener('pagehide', () => { observer.disconnect(); clearInterval(timer); stopClock(); }, { once: true });
+  send({ type: 'page', url: location.href });
   read();
 })(); true;`;

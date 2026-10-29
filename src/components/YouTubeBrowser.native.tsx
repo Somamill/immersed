@@ -12,6 +12,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
   // its props to never under TS 6 strict mode. Explicit object preserves props.
   const initial = youtubeUrl(uri);
   const [playerId, setPlayerId] = useState<string | null>(initial ? new URL(initial).searchParams.get('v') : null);
+  const [embedReady, setEmbedReady] = useState(false);
   const web = useRef<WebView<object>>(null);
   const source = useMemo(() => playerId ? embeddedPlayerSource(playerId, Application.applicationId || 'com.somamill.immersed') : { uri }, [playerId, uri]);
   const optionsScript = `window.__immersedOptions = ${JSON.stringify({ dark, hideShorts, fillPortrait: true })}; window.__immersedApplyOptions?.(); true;`;
@@ -22,6 +23,8 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
   const pageChanged = (url: string) => {
     const canonical = youtubeUrl(url);
     const id = canonical ? new URL(canonical).searchParams.get('v') : null;
+    if (!id && playerId) return;
+    if (id && id !== playerId) { setEmbedReady(false); setPlayerId(id); }
     if (currentVideo.current !== id) { pendingTrack.current?.abort(); currentVideo.current = id; }
     onPage?.(url);
   };
@@ -52,7 +55,8 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
       web.current?.injectJavaScript(`window.__immersedCommand?.(${JSON.stringify(command)}, ${Number.isFinite(time) ? time : 'null'}); true;`);
     },
   }));
-  return <WebView<object> key={history[0].version} ref={web} source={source} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo={false} injectedJavaScriptBeforeContentLoaded={optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
+  return <WebView<object> key={`${history[0].version}:${playerId || 'browse'}`} ref={web} source={source} style={{ flex: 1, opacity: playerId && !embedReady ? 0 : 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo={false} injectedJavaScriptBeforeContentLoaded={optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
+    onLoad={event => { try { const url = new URL(event.nativeEvent.url); if (url.pathname === `/embed/${currentVideo.current}`) setEmbedReady(true); } catch {} }}
     onNavigationStateChange={state => { if (state.url !== 'about:blank') pageChanged(state.url); }} onLoadStart={() => { onCaption(null); onError(''); }} onError={event => onError(event.nativeEvent.description)}
     onShouldStartLoadWithRequest={request => {
       if (request.url === 'about:blank' || request.isTopFrame === false) return true;
@@ -75,6 +79,11 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     onMessage={event => {
       try {
         const v = JSON.parse(event.nativeEvent.data);
+        if (v.type === 'page' && typeof v.url === 'string') {
+          const url = new URL(v.url);
+          if (url.protocol === 'https:' && ['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)) pageChanged(url.toString());
+          return;
+        }
         if (v.type === 'playerError' && v.videoId === currentVideo.current) { onError('This video cannot play in the embedded player.'); return; }
         if (v.type === 'captionData' && v.language === 'ja' && typeof v.videoId === 'string' && v.videoId === currentVideo.current) {
           const cues = parseCaptionTrack(v.data);

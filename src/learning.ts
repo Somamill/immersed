@@ -7,3 +7,6 @@ export function familiarity(lemma: string, reading: string, completedLevel: Jlpt
   const level = vocabulary[lemma] || vocabulary[reading];
   return !level ? 'unlisted' : level >= completedLevel ? 'known' : 'unknown';
 }
+export function showFurigana(lemma: string, reading: string, completedLevel: JlptLevel, overrides: Record<string, boolean>, enabled: boolean): boolean {
+  return enabled && familiarity(lemma, reading, completedLevel, overrides) === 'unknown';
+}

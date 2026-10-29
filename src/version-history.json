@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.5.5",
+    "date": "2026-10-29",
+    "title": "Compact navigation, centered subtitles and level-aware furigana",
+    "notes": [
+      "Fit the navigation pill closely around three icons instead of spanning the screen; preserve comfortable touch targets.",
+      "Center subtitle lines, improve word/line spacing, keep closing punctuation attached, and use amber difficulty and mint grammar colors.",
+      "Restore a furigana on/off switch with level-aware readings: N2 shows N1 readings, while N2–N5 remain plain. Personal knowledge overrides apply; unlisted words remain unclassified.",
+      "Handle JavaScript-only YouTube watch navigation, open each selected video in a fresh embed, and hide the previous page until the embed loads so watch-page comments/channel sections do not remain in the viewing area.",
+      "Word and grammar lookup remain always on. Physical-iPhone routing/glass behavior remains unverified; fresh captionless-video speech transcription retains the existing audio-access limitation."
+    ]
+  },
+  {
     "version": "0.5.4",
     "date": "2026-10-29",
     "title": "Always-on learning, two-way dictionary and tighter subtitle timing",
