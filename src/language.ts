@@ -2,7 +2,7 @@ import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 export type AnalyzedToken = { text: string; word: boolean; lemma: string; reading: string; pos: string; grammar: string[]; start: number; end: number };
 export type GeneratedCue = { start: number; end: number; text: string };
-export type Transcription = { status: 'processing' | 'ready' | 'busy' | 'unavailable'; message?: string; cues?: GeneratedCue[] };
+export type Transcription = { status: 'processing' | 'ready' | 'busy' | 'unavailable'; message?: string; cues?: GeneratedCue[]; reason?: string; canRetry?: boolean };
 export function serviceUrl(route: string, params: Record<string, string>) {
   let origin = '';
   if (Platform.OS !== 'web') {

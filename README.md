@@ -5,15 +5,19 @@ iPhone-first Japanese immersion: choose a natural Japanese video, watch in a foc
 ## Current implementation
 
 - Browse Japanese topics in YouTube; selecting a watch/Shorts URL switches the app to focused viewing. An injected player adapter isolates the player from surrounding comments, likes, and recommendations while retaining the player and its controls. Discovery is still search-based, not a strictly language-filtered feed.
+- Closing any dictionary lookup resumes playback if it was playing before the lookup; a manually paused video remains paused. Smart groups are on by default, including a one-time migration from the earlier experimental preset.
+- The subtitle pane is hidden during browsing and appears only for a selected video.
 - Automatically enable Japanese native text tracks or YouTube's exposed captions button where available. Read actual player captions; text fragments are concatenated without adding spaces between characters.
+- When exposed by the page, load a signed Japanese timed caption track directly on the phone; existing caption capture remains the fallback. This is not new speech recognition.
+- Capture batching is reduced from 100 ms to 16 ms. Completed partial analyses are retained, cached results display immediately, and word definitions are prefetched with analysis. On-phone latency is not yet benchmarked.
 - Real Kuromoji/IPADIC morphological analysis runs on the preview server. Smart grouping joins inflection chains, suru verbs, dictionary-recognized noun compounds, and a small set of common grammar constructions. Readings, dictionary forms, parts of speech, and heuristic grammar labels accompany each group.
 - The full pinned JMdict English dataset (218,963 entries) is installed and indexed on the preview server. Lookups use dictionary forms rather than the displayed conjugated word. No Jisho request or dictionary subscription is needed. This is server-local, not an offline-on-phone dictionary.
 - Settings persist: smart groups vs. morphemes, furigana, automatic transcription attempts. Save a dictionary entry with the caption and video context.
-- If no source caption has appeared after eight seconds on a selected video, start a self-hosted ASR job and poll its status. The worker attempts audio acquisition using yt-dlp, then Whisper base via faster-whisper on CPU; completed cues are cached and synchronized against the observed video clock.
+- If no source caption has appeared after four seconds on a selected video, start a self-hosted ASR job and poll its status. The worker attempts audio acquisition using yt-dlp, then Whisper base via faster-whisper on CPU; completed cues are cached and synchronized against the observed video clock.
 
 ## Important current limitation
 
-**This cloud network denies YouTube access.** That blocks the server's source-audio acquisition, so subtitle generation for captionless YouTube videos is wired but cannot currently succeed here. This is not a working universal automatic-caption service. The UI reports failure instead of showing invented text. Source captions can still work on the phone's own network. Live iPhone compatibility with the current YouTube DOM and automatic caption controls remains to be confirmed.
+**This cloud network denies YouTube access.** That blocks the server's source-audio acquisition, so subtitle generation for captionless YouTube videos is wired but cannot currently succeed here. This is not a working universal automatic-caption service. The UI reports failure instead of showing invented text, distinguishes source restrictions from network-policy failures, and allows retry. Failed jobs expire instead of remaining stuck forever. Source captions can still work on the phone's own network. Live iPhone compatibility with the current YouTube DOM and automatic caption controls remains to be confirmed.
 
 The ASR packages are installed; Python syntax/import checks pass, but the Whisper model and an end-to-end audio recognition job have not been validated in this environment. Model download begins only after source audio is acquired. CPU preparation may be slow and recognition can be wrong. Preview limits are 30 minutes/150 MB per source, one recognition job at a time, and a 15-minute worker timeout. Some login/region-restricted videos will remain unsupported even with suitable networking.
 
@@ -53,3 +57,17 @@ The language tests use real Kuromoji and the installed full JMdict dataset. Brow
 Subtitle text, words, and selected video IDs are processed on this preview server. Saved vocabulary stays in device-local storage. Earlier sample vocabulary is preserved under its old key. Downloaded dictionaries, model/runtime files, and generated transcripts are ignored by Git.
 
 See [THIRD_PARTY.md](THIRD_PARTY.md) for JMdict's CC BY-SA 4.0 attribution, parser/IPADIC notices, and Migaku research. No proprietary Migaku code or paid dictionary content is included. [TESTFLIGHT.md](TESTFLIGHT.md) is an optional paused distribution route; its workflow is manual-only. No paid API or subscription is configured.
+
+## Versions and GitHub
+
+Repository: https://github.com/Somamill/immersed. [CHANGELOG.md](CHANGELOG.md) and Settings → Version history record released updates. Current release: 0.2.0.
+
+For each user-facing update:
+
+```sh
+npm run version:update -- patch --title "Update title" --note "What changed"
+npm run version:check
+# Run checks, commit, tag v<version>, then push main plus the tag.
+```
+
+The version script synchronizes app/package/lockfile versions, in-app release notes, and the changelog. The GitHub release workflow publishes the corresponding notes whenever a version tag is pushed. Existing remote commits are preserved; no force-push is used.

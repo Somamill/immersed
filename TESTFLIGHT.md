@@ -4,7 +4,7 @@
 
 **Paused in favor of free Expo Go previews.** The TestFlight workflow is manual-only and does not run on code pushes. Apple Developer enrollment is not needed to use the current prototype through Expo Go.
 
-The repository has a store-signed EAS build profile, automatic build-number increments, a build/upload command, and a GitHub workflow. **No EAS project, Apple signing credentials, App Store Connect record, TestFlight invitation, or successful signed build has been created in this session.** Expo CLI reports `Not logged in`; the GitHub connection previously rejected creation of `Somamill/immersed`. These account steps must be completed before this configuration can produce an installable app.
+The repository has a store-signed EAS build profile, automatic build-number increments, a build/upload command, and a GitHub workflow. **No EAS project, Apple signing credentials, App Store Connect record, TestFlight invitation, or successful signed build has been created in this session.** Expo CLI reports `Not logged in`; the user has created https://github.com/Somamill/immersed for project source and version history. These account steps must be completed before this configuration can produce an installable app.
 
 ## One-time setup
 
@@ -73,7 +73,7 @@ With Expo authentication and managed Apple credentials available, run `npm run t
 
 ### Manually from GitHub Actions (optional paid-membership route)
 
-1. Create an empty private repository and push this project. The earlier connection could not create repositories; do not assume it has been published.
+1. Use https://github.com/Somamill/immersed for project source. Account/signing setup below is still required before enabling TestFlight.
 2. Commit the linked `app.json` from `eas init` and ensure the first interactive build/upload worked.
 3. In the repository's Actions secrets, add `EXPO_TOKEN` from your [Expo personal access tokens](https://expo.dev/settings/access-tokens). Use a token with access to the owning Expo project.
 4. Add an Actions **variable** `ASC_APP_ID` with the numeric App Store Connect Apple ID. API keys and signing credentials stay managed by EAS.

@@ -1,6 +1,6 @@
 {
   "name": "immersed",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "main": "index.ts",
   "dependencies": {
     "@expo/metro-runtime": "~58.0.15",
@@ -36,7 +36,10 @@
     "lint": "expo lint",
     "testflight": "npx eas-cli@latest build --platform ios --profile production --auto-submit",
     "language:setup": "node scripts/setup-dictionary.cjs",
-    "test:language": "node --test tests/language.test.cjs"
+    "test:language": "node --test tests/language.test.cjs",
+    "version:update": "node scripts/version-update.cjs",
+    "version:check": "node scripts/check-version.cjs",
+    "test:server": "node --test tests/transcription.test.cjs"
   },
   "private": true
 }

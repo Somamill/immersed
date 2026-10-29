@@ -1,0 +1,23 @@
+name: Publish version history
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Generate notes for this tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: node scripts/check-version.cjs --notes > /tmp/immersed-release-notes.md
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" --verify-tag --title "Immersed $RELEASE_TAG" --notes-file /tmp/immersed-release-notes.md

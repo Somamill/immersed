@@ -39,3 +39,7 @@ Docs: https://docs.expo.dev/eas/index.md
 - If `ios/` and `android/` directories do not exist, they are generated (Continuous Native Generation). Never create or edit them by hand — configure native behavior in `app.json` and config plugins.
 - Expo Go only includes its bundled native modules. After adding a library with native code, the app needs a development build: `npx expo run:ios|android` locally, or `eas build --profile development`.
 - Prefer recommended Expo modules over third-party libraries, and check your available skills before adding dependencies. Docs: https://docs.expo.dev/versions/latest/index.md
+
+## Version history required by the user
+
+For every user-facing update, run `npm run version:update -- patch --title "..." --note "..."` (or minor/major as appropriate). It updates package/app/lockfile versions, the in-app history, and CHANGELOG.md together. Include important unresolved limitations in the notes. Run `npm run version:check` with the normal checks, commit the update, tag it `v<version>`, and push main plus the new tag to the user's authorized `origin`. The release workflow publishes matching GitHub Release notes. Preserve remote edits and never force-push. Do not create a new version for documentation-only fixes unless they constitute a user-facing update.

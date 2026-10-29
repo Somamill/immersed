@@ -1,10 +1,13 @@
 import { test, expect } from '@playwright/test';
 import { CAPTION_BRIDGE, youtubeUrl } from '../src/youtube';
+import { parseCaptionTrack } from '../src/captions';
 
 test('home offers real YouTube discovery and retains the saved-word library', async ({ page }) => {
   await page.goto('/');
   for (const name of ['Daily life', 'Food', 'Travel', 'Conversation']) await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
   await expect(page.getByText('Device-generated Japanese speech', { exact: false })).toHaveCount(0);
+  await expect(page.getByText('Choose something you want to watch.', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('JAPANESE SUBTITLES', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Words · 0', exact: true }).click();
   await expect(page.getByText('Your saved words and their original video context will appear here.')).toBeVisible();
 });
@@ -22,14 +25,21 @@ test('caption adapter reads player text, pauses, ignores comments, and clears on
   await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>日本の日常</title><div class="html5-video-player"><video></video><button class="ytp-subtitles-button" aria-pressed="false" onclick="this.setAttribute(&quot;aria-pressed&quot;,&quot;true&quot;)">CC</button><div class="ytp-caption-segment">今日</div><div class="ytp-caption-segment">は公園に行きます。</div></div><div class="comment">NOT A CAPTION</div>' }));
   await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
   await page.evaluate(() => {
-    const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (message: string) => void }; pausedByApp: boolean };
+    const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (message: string) => void }; pausedByApp: boolean; ytInitialPlayerResponse?: unknown };
     w.messages = [];
+    w.ytInitialPlayerResponse = { videoDetails: { videoId: 'M7lc1UVf-VE' }, captions: { playerCaptionsTracklistRenderer: { captionTracks: [
+      { languageCode: 'ja', kind: 'asr', baseUrl: 'https://www.youtube.com/api/timedtext?v=M7lc1UVf-VE&name=auto' },
+      { languageCode: 'ja', baseUrl: 'https://www.youtube.com/api/timedtext?v=M7lc1UVf-VE&name=manual' },
+    ] } } };
     w.ReactNativeWebView = { postMessage: message => w.messages.push(JSON.parse(message)) };
     document.querySelector('video')!.pause = () => { w.pausedByApp = true; };
   });
   await page.addScriptTag({ content: CAPTION_BRIDGE });
   const caption = await page.evaluate(() => (window as unknown as { messages: { type: string; text: string; tokens: { text: string }[] }[] }).messages.find(m => m.type === 'caption'));
   expect(caption?.text).toBe('今日は公園に行きます。');
+  const tracks = await page.evaluate(() => (window as unknown as { messages: { type: string; url?: string }[] }).messages.filter(m => m.type === 'captionTrack'));
+  expect(tracks).toHaveLength(1);
+  expect(tracks[0].url).toContain('name=manual');
   await expect(page.locator('.comment')).toBeHidden();
   await expect(page.locator('.ytp-subtitles-button')).toHaveAttribute('aria-pressed', 'true');
   const bounds = await page.locator('[data-immersed-player]').boundingBox();
@@ -44,6 +54,7 @@ test('caption adapter reads player text, pauses, ignores comments, and clears on
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByText('JMdict · Japanese → English', { exact: true })).toBeVisible();
+  await expect(page.getByRole('switch', { name: 'Smart word groups' })).toBeChecked();
   await page.getByRole('switch', { name: 'Smart word groups' }).click();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -51,13 +62,31 @@ test('caption adapter reads player text, pauses, ignores comments, and clears on
 });
 
 test('language API uses actual morphology and dictionary data', async ({ request }) => {
-  const parsed = await request.get('/api/immersion/analyze?text=' + encodeURIComponent('食べていました。'));
+  const parsed = await request.get('/api/immersion/analyze?text=' + encodeURIComponent('食べていました。') + '&dictionary=true');
   expect(parsed.ok()).toBeTruthy();
-  const { tokens } = await parsed.json();
+  const { tokens, dictionary } = await parsed.json();
+  expect(dictionary['食べる'][0].senses[0].english_definitions).toContain('to eat');
   expect(tokens[0].text).toBe('食べていました');
   expect(tokens[0].lemma).toBe('食べる');
   const dict = await request.get('/api/immersion/dictionary?word=' + encodeURIComponent(tokens[0].lemma));
   expect((await dict.json()).data[0].senses[0].english_definitions).toContain('to eat');
   const invalid = await request.get('/api/immersion/transcribe?videoId=invalid!');
   expect(invalid.status()).toBe(400);
+});
+
+test('older saved morpheme settings migrate to smart groups once', async ({ page }) => {
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('immersed.preferences.v1', JSON.stringify({ grouped: false, readings: true, automatic: true })));
+  await page.reload();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('switch', { name: 'Smart word groups' })).toBeChecked();
+});
+
+test('timed captions join fragments, normalize line breaks and resolve overlap', () => {
+  const cues = parseCaptionTrack({ events: [
+    { tStartMs: 0, dDurationMs: 4000, segs: [{ utf8: '日' }, { utf8: '本語\nです。' }] },
+    { tStartMs: 2000, dDurationMs: 1000, segs: [{ utf8: '食べました。' }] },
+    { tStartMs: 3000, segs: [{ utf8: '\n' }] },
+  ] });
+  expect(cues).toEqual([{ start: 0, end: 2, text: '日本語 です。' }, { start: 2, end: 3, text: '食べました。' }]);
 });
