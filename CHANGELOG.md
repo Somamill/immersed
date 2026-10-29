@@ -2,6 +2,16 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.10 — 2026-10-30
+
+Keep watching with inline panels and vocabulary estimates
+
+- Keep the selected video visible and playing above Dictionary, word lookup and Settings. These panels replace the lower reading area, and remain full screen without a selected video.
+- Remove automatic pause/resume on navigation or word taps. Keep explicit play/pause controls available and preserve a deliberate pause.
+- Add caption-sample vocabulary coverage estimates using JLPT level and personal knowledge; show a range for unrated words and avoid claiming measured comprehension.
+- Adapt dictionary search to the lower panel and add iOS keyboard avoidance so the video can remain visible while typing.
+- Native continuous playback and keyboard behavior need physical-iPhone validation. Estimates require enough Japanese captions; fresh captionless YouTube transcription and in-app YouTube account sign-in remain unsupported.
+
 ## 0.5.9 — 2026-10-30
 
 Compact captions, simpler lookup and joined word fragments

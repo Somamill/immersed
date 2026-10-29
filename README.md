@@ -11,7 +11,7 @@
 
 ![Illustration of listening to Japanese in a lantern-lit neighborhood](docs/images/immersion-illustration.png)
 
-**Learn from content you would watch anyway.** Immersed puts a focused video above a quiet Japanese reading area. Tap a word or grammar group for its meaning, save it with context, and return to the video.
+**Learn from content you would watch anyway.** Immersed puts a focused video above a quiet Japanese reading area. Tap a word or grammar group for its meaning, save it with context, and keep watching.
 
 > **Prototype status:** source-caption study, dictionary search and saved vocabulary are implemented. Creating fresh subtitles for captionless YouTube videos is **not working in the current cloud preview** because it cannot acquire the audio. Recognition can also choose incorrect words or kanji. This is not yet a reliable universal transcription service or an App Store release.
 
@@ -30,19 +30,23 @@
   </tr>
 </table>
 
-<p align="center"><img src="docs/images/lookup.png" width="250" alt="Simplified word lookup with central playback, Save and a known-word switch at bottom right" /><br /><strong>Meanings and controls within reach.</strong></p>
+<p align="center"><img src="docs/images/lookup.png" width="250" alt="Inline word lookup below the visible video, with playback, Save and a known-word switch at bottom right" /><br /><strong>Meanings and controls within reach.</strong></p>
 
-*Screenshots show the actual app UI rendered in a browser at phone dimensions. The study and lookup images use clearly labelled illustrative media and sample captions; it is not a live YouTube/iPhone transcription demonstration. The banner is original generated artwork.*
+<p align="center"><img src="docs/images/watch-dictionary.png" width="250" alt="Dictionary search below the selected video" /> <img src="docs/images/watch-settings.png" width="250" alt="Settings below the selected video" /></p>
+
+*Screenshots show the actual app UI rendered in a browser at phone dimensions. The study and inline-panel images use clearly labelled illustrative media and sample captions; vocabulary estimates in them are computed from that sample; it is not a live YouTube/iPhone transcription demonstration. The banner is original generated artwork.*
 
 ## Built around immersion
 
 - **Natural content:** browse ordinary Japanese daily life, food, travel, science, gaming and conversation. Discovery is language-biased search, not a verified Japanese-only feed.
-- **Tap to understand:** automatic word/grammar grouping, dictionary forms and readings. Lookup pauses playback and resumes it when dismissed if it was playing. A compact sheet keeps meanings, Save and a bottom-right known/unknown switch in reach.
+- **Tap to understand:** automatic word/grammar grouping, dictionary forms and readings. Lookup keeps the video visible and playing while meanings, Save and a bottom-right known/unknown switch replace the reading area. Pause/play stays in reach.
 - **Your level, less clutter:** choose a completed JLPT level. Text stays white in dark mode; unfamiliar words have a soft highlight. Light mode uses dark text for readability. Optional furigana appears on harder kanji words. Known/unknown choices override estimates.
 - **One place for words:** search English or Japanese and keep vocabulary with its original caption/video context. Uses the full JMdict English dataset plus JMnedict name readings and name categories; no paid dictionary subscription or manual import.
 - **A focused view:** a complete video frame with black bars, pinch-out to fill/pinch-in to fit, a fixed subtitle area, a compact glass navigation pill, light/dark themes and optional Shorts hiding. Selected videos use the dedicated embed instead of a watch page with comments.
 - **Move naturally:** swipe the glass dock left/right between content, Words and Settings. Use previous/play-pause/next controls to revisit caption boundaries, or swipe the reading area to seek 10 seconds; swipe down on the dictionary header to close it. Swipe from the left edge to return to the previous panel or leave the selected video. These are app gestures; a full native interactive stack transition is not implemented.
 - **Choose your session length:** Settings → Minimum video length offers Any, 15+, 30+ or 60+ minutes. Recognized loaded YouTube cards are filtered by their visible duration; live/unknown-duration cards are hidden with a minimum enabled. This does not search or verify the entire catalog.
+- **Stay with the video:** Dictionary and Settings use the lower reading area while a video is selected, with playback left running. Without a selected video they open full screen.
+- **Gauge the vocabulary:** a caption-sample estimate shows the share of familiar content words for your JLPT level and personal overrides. Unrated words produce a range; this is not a listening-comprehension score.
 - **Keep useful captions:** verified Japanese tracks are cached on the device for repeat visits. Creator-provided tracks take priority over automatic tracks. Caption caches do not make videos or the server dictionary available offline.
 
 ## Try it on your iPhone

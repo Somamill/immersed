@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { refineCaptionTrack } from '../src/caption-reflow';
+import { estimateVocabulary, sampleCaptionVocabulary } from '../src/coverage';
+import type { AnalyzedToken } from '../src/language';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
 import { embeddedPlayerSource, swipeAction } from '../src/player';
 import { familiarity, showFurigana } from '../src/learning';
@@ -755,6 +757,9 @@ test('center playback and a reachable knowledge toggle keep lookup quiet and fun
   await sheet.getByRole('button', { name: 'Save word', exact: true }).click();
   await expect(sheet.getByRole('button', { name: 'Word saved', exact: true })).toBeDisabled();
   await sheet.getByRole('button', { name: 'Play video', exact: true }).click();
+  await expect(sheet).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Pause video', exact: true })).toBeVisible();
+  await sheet.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(sheet).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Pause video', exact: true })).toBeVisible();
   await expect(page.getByTestId('unknown-食べる')).toBeVisible();
@@ -800,4 +805,84 @@ test('a reflow response that changes Japanese text is rejected before it reaches
   let displayed = false;
   await expect(refineCaptionTrack([{ start: 0, end: 1, text: '日' }, { start: 1, end: 2, text: '本語' }], 'https://fixture.invalid', new AbortController().signal, () => { displayed = true; }, response)).rejects.toThrow('Invalid caption reflow');
   expect(displayed).toBe(false);
+});
+
+test('dictionary, lookup and settings occupy the reading area while the selected player stays mounted', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 10, text: '食べる。' }] }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 食べる', exact: true })).toBeVisible({ timeout: 12000 });
+  await page.getByRole('button', { name: 'Play video', exact: true }).click();
+  const player = page.getByTestId('video-surface');
+  const before = (await player.boundingBox())!;
+  await player.evaluate(node => { node.firstElementChild!.setAttribute('data-mounted-marker', 'same-player'); });
+  const expectBelowPlayer = async (testId: string) => {
+    const bounds = (await page.getByTestId(testId).boundingBox())!;
+    expect(bounds.y).toBeGreaterThanOrEqual(before.y + before.height);
+    expect(bounds.height).toBeLessThan(360);
+    expect(await player.boundingBox()).toEqual(before);
+    await expect(player.locator('[data-mounted-marker="same-player"]')).toHaveCount(1);
+  };
+  await page.getByRole('button', { name: 'Look up 食べる', exact: true }).click();
+  await expectBelowPlayer('dictionary-sheet');
+  await expect(page.getByTestId('dictionary-sheet').getByRole('button', { name: 'Pause video', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Words · 0', exact: true }).click();
+  await expectBelowPlayer('words-panel');
+  await expect(page.getByTestId('dictionary-sheet')).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Search English or Japanese words' }).fill('eat');
+  await expect(page.getByTestId('words-panel').getByText('食べる', { exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expectBelowPlayer('settings-panel');
+  await expect(page.getByRole('switch', { name: 'Dark mode', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Watch & read', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Pause video', exact: true })).toBeVisible();
+  // A deliberate pause also survives navigation; opening a panel must not force play.
+  await page.getByRole('button', { name: 'Pause video', exact: true }).click();
+  await page.getByRole('button', { name: 'Words · 0', exact: true }).click();
+  await page.getByRole('button', { name: 'Watch & read', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Play video', exact: true })).toBeVisible();
+});
+
+test('dictionary and settings stay full screen without a selected video', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Words · 0', exact: true }).click();
+  expect((await page.getByTestId('words-panel').boundingBox())!.height).toBeGreaterThan(650);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  expect((await page.getByTestId('settings-panel').boundingBox())!.height).toBeGreaterThan(650);
+});
+
+test('vocabulary estimates distinguish known, unknown and unrated words and respect personal overrides', () => {
+  const token = (lemma: string, reading: string, pos = 'noun'): AnalyzedToken => ({ text: lemma, lemma, reading, pos, word: true, grammar: [], start: 0, end: lemma.length });
+  const tokens = [token('食べる', 'たべる'), token('愛想', 'あいそう'), token('未収録XYZ', ''), token('を', 'を', 'particle'), token('ます', 'ます', 'auxiliary')];
+  expect(estimateVocabulary(tokens, 2, {})).toEqual({ known: 1, unknown: 1, unrated: 1, total: 3, lower: 33, upper: 67 });
+  expect(estimateVocabulary(tokens, 2, { '愛想': true })?.lower).toBe(67);
+  expect(estimateVocabulary(tokens, 2, { '未収録XYZ': false })?.upper).toBe(33);
+  expect(estimateVocabulary(tokens, 1, {})?.lower).toBe(67);
+  expect(estimateVocabulary([], 2, {})).toBeNull();
+});
+
+test('caption vocabulary sampling includes beginning and end without cutting or duplicating source cues', () => {
+  const cues = Array.from({ length: 100 }, (_, i) => ({ start: i, end: i + 1, text: `単語${i}。` }));
+  const sample = sampleCaptionVocabulary(cues);
+  expect(sample).toContain('単語0。');
+  expect(sample).toContain('単語99。');
+  const picked = sample.match(/単語\d+。/g)!;
+  expect(new Set(picked).size).toBe(picked.length);
+  expect(sample.length).toBeLessThanOrEqual(609);
+  cues[0].text = '超'.repeat(100);
+  expect(sampleCaptionVocabulary(cues)).not.toContain('超');
+});
+
+test('video vocabulary indicator changes with known-word choices without inventing comprehension percentages', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: Array.from({ length: 40 }, (_, i) => ({ start: i, end: i + 1, text: '食べる。' })) }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByTestId('video-coverage')).toContainText('100% familiar words', { timeout: 15000 });
+  await page.getByRole('button', { name: 'Look up 食べる', exact: true }).click();
+  await page.getByRole('switch', { name: 'Known word', exact: true }).uncheck();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await expect(page.getByTestId('video-coverage')).toContainText('0% familiar words');
+  await expect(page.getByTestId('video-coverage')).toHaveAttribute('aria-label', /listening comprehension can differ/);
 });

@@ -21,7 +21,7 @@ Videos that are removed, private, region restricted, unavailable for embedding o
 
 ## Release gate for a reliable iPhone version
 
-Test on a physical iPhone with native Japanese captions, YouTube Japanese ASR, no source captions, long recordings, fast seeks and speech gaps. Verify Japanese-only output, synchronization, word/grammar grouping, dictionary lookup and automatic playback resume. Repeat with network loss/reconnection, app background/foreground, worker restart and two simultaneous requests. Confirm that comments never appear and the reading area remains visible.
+Test on a physical iPhone with native Japanese captions, YouTube Japanese ASR, no source captions, long recordings, fast seeks and speech gaps. Verify Japanese-only output, synchronization, word/grammar grouping, dictionary lookup and uninterrupted playback during Dictionary/Settings navigation. Repeat with network loss/reconnection, app background/foreground, worker restart and two simultaneous requests. Confirm that comments never appear and the reading area remains visible.
 
 Measure tap-to-play, first-caption latency, caption timing error and lookup latency against explicit targets on device. A reasonable initial target is cached captions under 1 second and cached lookup under 200 ms; these are **targets**, not measured results. Speech recognition cannot promise perfect accuracy. Public-release readiness requires end-to-end captionless-video success and stable hosting, in addition to the automated fixture tests.
 

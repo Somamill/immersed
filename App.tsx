@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Keyboard, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Switch, Text as NativeText, TextInput, useWindowDimensions, View } from 'react-native';
+import { Image, Keyboard, KeyboardAvoidingView, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Switch, Text as NativeText, TextInput, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import FloatingGlass from './src/components/FloatingGlass';
@@ -14,8 +14,9 @@ import { automaticRetryDelay } from './src/subtitle-policy';
 import { swipeAction } from './src/player';
 import { familiarity, type JlptLevel } from './src/learning';
 import StudySubtitles from './src/components/StudySubtitles';
-import SentenceControls from './src/components/SentenceControls';
+import SentenceControls, { PlaybackButton } from './src/components/SentenceControls';
 import LookupSheet from './src/components/LookupSheet';
+import VideoCoverage from './src/components/VideoCoverage';
 import { PREFERENCES_SCHEMA, restorePreferences } from './src/preferences';
 import history from './src/version-history.json';
 import YouTubeBrowser, { type BrowserHandle } from './src/components/YouTubeBrowser';
@@ -66,6 +67,8 @@ export default function App() {
   const openPanel = useCallback((next?: string) => {
     if (currentPanel.current !== (next || '')) panelHistory.current.push(currentPanel.current);
     currentPanel.current = next || '';
+    Keyboard.dismiss();
+    setLookup(null);
     router.setParams({ panel: next });
   }, [router]);
   const settings = panel === 'settings';
@@ -73,8 +76,10 @@ export default function App() {
   const setSettings = (open: boolean) => openPanel(open ? 'settings' : undefined);
   const setLibrary = (open: boolean) => openPanel(open ? 'words' : undefined);
   const { width, height } = useWindowDimensions();
+  const [viewportHeight, setViewportHeight] = useState(height);
   const dockClearance = Math.max(insets.bottom, 12) + 76;
-  const readingHeight = Math.max(154, Math.min(246, height * 0.25)) + dockClearance;
+  const normalReadingHeight = Math.max(224, Math.min(310, height * 0.32)) + dockClearance;
+  const readingHeight = Math.min(normalReadingHeight, Math.max(dockClearance + 120, Math.min(height, viewportHeight) - 128));
   const [dark, setDark] = useState(true);
   const [hideShorts, setHideShorts] = useState(true);
   const [minimumMinutes, setMinimumMinutes] = useState(0);
@@ -112,7 +117,6 @@ export default function App() {
   const [storageError, setStorageError] = useState('');
   const seenSourceCaption = useRef(false);
   const transcriptRank = useRef(0);
-  const lookupPlayback = useRef<{ resume: boolean; videoId: string | null }>({ resume: false, videoId: null });
   const [sourceTranscript, setSourceTranscript] = useState<{ videoId: string; cues: GeneratedCue[] } | null>(null);
   const canonical = youtubeUrl(pageUrl);
   const videoId = canonical ? new URL(canonical).searchParams.get('v') : null;
@@ -246,7 +250,7 @@ export default function App() {
   const handlePage = (url: string) => {
     const canonical = youtubeUrl(url);
     const id = canonical ? new URL(canonical).searchParams.get('v') : null;
-    if (id !== pageVideo.current) { pageVideo.current = id; seenSourceCaption.current = false; transcriptRank.current = 0; pendingSeek.current = null; latestTime.current = 0; setSubtitleStatus(''); setGenerated([]); setNativeCaption(null); setClock({ time: 0, paused: true }); setLookup(null); lookupPlayback.current = { resume: false, videoId: null }; }
+    if (id !== pageVideo.current) { pageVideo.current = id; seenSourceCaption.current = false; transcriptRank.current = 0; pendingSeek.current = null; latestTime.current = 0; setSubtitleStatus(''); setGenerated([]); setNativeCaption(null); setClock({ time: 0, paused: true }); setLookup(null); }
     if (!id && /^https:\/\/(?:m\.|www\.)?youtube\.com\//.test(url)) lastBrowse.current = url;
     setPageUrl(url);
   };
@@ -266,29 +270,16 @@ export default function App() {
     if (/^https?:/i.test(text) && !video) { setError('Use a YouTube video link, or type a topic to search.'); return; }
     setTopic('Search'); browse(video || topicUrl(`${text} -日本語学習 -JLPT`));
   };
-  const tapWord = (token: AnalyzedToken) => { if (caption) { lookupPlayback.current = { resume: !caption.paused, videoId }; browser.current?.command('pause'); setLookup({ token, caption }); } };
-  const closeLookup = useCallback(() => {
-    const { resume, videoId: openedVideo } = lookupPlayback.current;
-    lookupPlayback.current = { resume: false, videoId: null };
-    setLookup(null);
-    if (resume && openedVideo === videoId) browser.current?.command('play');
-  }, [videoId]);
+  const tapWord = (token: AnalyzedToken) => { if (caption) setLookup({ token, caption }); };
+  const closeLookup = useCallback(() => setLookup(null), []);
   const togglePlayback = () => {
-    if (lookup) {
-      lookupPlayback.current = { resume: false, videoId: null };
-      setLookup(null);
-      browser.current?.command('play');
-      setClock(old => ({ ...old, paused: false }));
-    } else {
-      browser.current?.command(clock.paused ? 'play' : 'pause');
-      setClock(old => ({ ...old, paused: !old.paused }));
-    }
+    browser.current?.command(clock.paused ? 'play' : 'pause');
+    setClock(old => ({ ...old, paused: !old.paused }));
   };
   const previousSentence = sentenceTarget(timeline, clock.time, -1);
   const nextSentence = sentenceTarget(timeline, clock.time, 1);
   const jumpSentence = (time: number) => {
-    // Also works while the word sheet is open; closing it keeps the original
-    // playing/paused intent. The seek itself does not force playback.
+    // Seeking closes the inline definition and keeps the current playback state.
     pendingSeek.current = { target: time, requestedAt: Date.now() };
     latestTime.current = time;
     browser.current?.command('seekTo', time);
@@ -316,7 +307,6 @@ export default function App() {
     const index = Math.max(0, sections.indexOf(navigationState.current.panel));
     const next = sections[Math.max(0, Math.min(2, index + (dx < 0 ? 1 : -1)))];
     Keyboard.dismiss();
-    if (next) browser.current?.command('pause');
     openPanel(next || undefined);
   }, [openPanel]);
   sectionAction.current = navigateBySwipe;
@@ -354,6 +344,7 @@ export default function App() {
   }), []);
   const goBack = useCallback(() => {
     Keyboard.dismiss();
+    if (lookup) { closeLookup(); return; }
     if (currentPanel.current) {
       currentPanel.current = panelHistory.current.pop() || '';
       router.setParams({ panel: currentPanel.current || undefined });
@@ -362,7 +353,7 @@ export default function App() {
     else browser.current?.back();
   // browse reads the current browsing destination, not a new video selection.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [panel, watching, router]);
+  }, [panel, watching, router, lookup, closeLookup]);
   backAction.current = goBack;
   const save = (entry: DictionaryEntry) => {
     if (!lookup || !storageReady) return;
@@ -370,31 +361,8 @@ export default function App() {
     if (saved.some(w => w.key === key)) return;
     setSaved(old => [{ key, word: japanese.word || lookup.token.lemma, reading: japanese.reading || '', meaning: entry.senses[0].english_definitions.join('; '), sentence: lookup.caption.text, title: lookup.caption.title, url: lookup.caption.url, time: lookup.caption.time }, ...old]);
   };
-  return <DarkContext.Provider value={dark}><SafeAreaView edges={watching ? [] : ['top', 'left', 'right']} style={s.safe} {...appGestures.panHandlers}><StatusBar hidden={watching && !panel} style={dark ? "light" : "dark"} />
-    {!watching && <View style={s.header}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Image source={require('./assets/icon.png')} accessibilityLabel="Immersed app icon" style={{ width: 36, height: 36, borderRadius: 9 }} /><Text style={s.brand}>immersed.</Text></View><Text style={s.hint}>日本語 · N{level}</Text></View>}
-    {!watching && <><View style={s.search}><TextInput accessibilityLabel="Search Japanese topics or paste a YouTube link" placeholder="Search a topic or paste a YouTube link" placeholderTextColor={dark ? "#999" : "#70776E"} value={input} onChangeText={setInput} onSubmitEditing={openInput} returnKeyType="search" autoCapitalize="none" style={s.input} /><Button onPress={openInput}>Go</Button></View><View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.topics}>{topics.map(item => <Pressable accessibilityRole="button" key={item.label} onPress={() => { setTopic(item.label); browse(topicUrl(item.query)); }} style={[s.topic, topic === item.label && s.activeTopic]}><Text style={s.topicText}>{item.label}</Text></Pressable>)}</ScrollView></View></>}
-    {!!error && <View style={[s.error, watching && { position: 'absolute', top: insets.top + 12, left: 12, right: 12, zIndex: 15, borderRadius: 18 }]}><Text style={s.hint}>{error}</Text></View>}
-    <View testID="content-surface" style={s.contentSurface}>
-      <View testID="video-surface" style={watching ? s.watchVideo : s.browser}><YouTubeBrowser key={browserVersion} ref={browser} uri={uri} dark={dark} hideShorts={hideShorts} minimumMinutes={minimumMinutes} onCaption={receiveCaption} onPage={handlePage} onTranscript={(cues, id, source = 'unknown') => { if (id !== pageVideo.current || captionSourceRank(source) < transcriptRank.current) return; transcriptRank.current = captionSourceRank(source); seenSourceCaption.current = true; setSourceTranscript({ videoId: id, cues }); setSubtitleStatus(''); void saveCaptionCache(id, cues); }} onClock={receiveClock} onError={setError} /></View>
-      {watching && <View testID="subtitle-panel" style={[s.study, { height: readingHeight, paddingBottom: dockClearance }]} {...gestures.panHandlers}>
-        <ScrollView style={s.captionScroll} contentContainerStyle={{ paddingVertical: 14, flexGrow: 1, justifyContent: 'center' }}>
-          {sentence ? <><StudySubtitles tokens={tokens} tail={unparsedTail} dark={dark} level={level} knowledge={knowledge} readings={readings} onWord={tapWord} />{!!analysisError && <Text style={s.hint}>{analysisError}</Text>}</> : <Text style={s.captionEmpty}>{subtitleStatus ? 'Japanese subtitles unavailable' : '—'}</Text>}
-        </ScrollView>
-        <SentenceControls dark={dark} paused={!!lookup || clock.paused} onTogglePlayback={togglePlayback} previous={previousSentence === undefined ? undefined : () => skipSentence(-1)} next={nextSentence === undefined ? undefined : () => skipSentence(1)} />
-      </View>}
-    </View>
-    <FloatingGlass dark={dark} style={[s.dock, { bottom: Math.max(insets.bottom, 12), left: (width - 182) / 2 }]}><View style={s.dockRow} {...dockGestures.panHandlers}>
-      <NavigationButton icon={panel && watching ? 'watch' : 'browse'} label={panel && watching ? 'Watch & read' : 'Browse'} active={!panel} dark={dark} onPress={() => { if (panel) openPanel(undefined); else browse(topicUrl(topics.find(t => t.label === topic)?.query || topics[0].query)); }} />
-      <NavigationButton icon="words" label={`Words · ${saved.length}`} active={library} dark={dark} onPress={() => { browser.current?.command('pause'); setLibrary(true); }} />
-      <NavigationButton icon="settings" label="Settings" active={settings} dark={dark} onPress={() => { browser.current?.command('pause'); setSettings(true); }} />
-    </View></FloatingGlass>
-    <LookupSheet lookup={lookup} dark={dark} entries={entries} loading={loading} error={dictionaryError} onClose={closeLookup}
-      known={!!lookup && familiarity(lookup.token.lemma, lookup.token.reading, level, knowledge) === 'known'}
-      onKnown={known => { if (lookup) setKnowledge(old => ({ ...old, [lookup.token.lemma]: known })); }}
-      canSave={storageReady} saved={!!entries[0] && saved.some(word => word.key === `${entries[0].slug}:${entries[0].japanese[0]?.reading ?? ''}`)} onSave={save}
-      controls={<SentenceControls dark={dark} paused={true} onTogglePlayback={togglePlayback} previous={previousSentence === undefined ? undefined : () => skipSentence(-1)} next={nextSentence === undefined ? undefined : () => skipSentence(1)} />} />
-    {settings && <SafeAreaView edges={['top', 'left', 'right']} style={[s.safe, s.panelScreen]}><View style={s.header}><Text style={s.brand}>Settings.</Text></View>
-      <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 150 }}>
+  const settingsPanel = <View testID="settings-panel" style={{ flex: 1, minHeight: 0 }}><View style={[s.header, watching && { paddingVertical: 0, minHeight: 44 }]}><Text style={[s.brand, watching && { fontSize: 18, letterSpacing: -0.3 }]}>Settings.</Text>{watching && <PlaybackButton dark={dark} paused={clock.paused} onTogglePlayback={togglePlayback} compact />}</View>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: watching ? 16 : 24, paddingTop: watching ? 4 : 24, paddingBottom: 16 }}>
         <View style={s.setting}><Text style={[s.emptyTitle, { flex: 1 }]}>Dark mode</Text><Switch accessibilityLabel="Dark mode" value={dark} onValueChange={setDark} trackColor={{ true: '#344C3F' }} /></View>
         <Text style={[s.emptyTitle, { marginTop: 24 }]}>Completed Japanese level</Text><View style={s.levels}>{([5,4,3,2,1] as JlptLevel[]).map(n => <Pressable key={n} accessibilityRole="radio" aria-checked={level === n} accessibilityState={{ checked: level === n }} accessibilityLabel={`Completed N${n}`} onPress={() => setLevel(n)} style={[s.topic, level === n && s.activeTopic]}><Text style={s.topicText}>N{n}</Text></Pressable>)}</View>
         <Text style={s.hint}>Only words above your level or marked unknown are softly highlighted.</Text>
@@ -403,11 +371,39 @@ export default function App() {
         <View style={{ paddingTop: 24 }}><Text style={s.emptyTitle}>Minimum video length</Text><View accessibilityRole="radiogroup" accessibilityLabel="Minimum video length" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>{[0, 15, 30, 60].map(minutes => <Pressable key={minutes} accessibilityRole="radio" accessibilityLabel={minutes ? `At least ${minutes} minutes` : 'Any video length'} aria-checked={minimumMinutes === minutes} accessibilityState={{ checked: minimumMinutes === minutes }} onPress={() => setMinimumMinutes(minutes)} style={[s.topic, minimumMinutes === minutes && s.activeTopic]}><Text style={s.topicText}>{minutes ? `${minutes}+ min` : 'Any'}</Text></Pressable>)}</View></View>
         <View style={{ marginTop: 24, paddingTop: 8 }}><Button onPress={() => setAboutExpanded(value => !value)}>About</Button></View>
         {aboutExpanded && <View style={{ marginTop: 24 }}><Text style={s.meaning}>Immersed {history[0].version}</Text><Text style={s.emptyTitle}>Dictionary & credits</Text><Text style={s.hint}>JMdict + JMnedict / EDRDG · Japanese ↔ English, including names. Kuromoji/IPADIC provides word and grammar grouping. Grammar labels and JLPT levels are estimates. Lookup and grouping are always enabled. Furigana follows the selected level and your known/unknown overrides; unlisted words have no assumed JLPT level.</Text><Text style={s.hint}>YouTube account sign-in is unavailable in this preview. Google prohibits embedded sign-in; browser sessions cannot be imported into this player. Locked-screen playback is not supported in Expo Go.</Text>{!!subtitleStatus && <Text style={s.hint}>{subtitleStatus}</Text>}<Text style={s.attribution}>JMdict © EDRDG, CC BY-SA 4.0. Kuromoji © Atilika, Apache-2.0, with IPADIC/NAIST notices. JLPT estimates: OpenJLPT / Jonathan Waller / EDRDG, CC BY-SA 4.0. Speech recognition: faster-whisper. Caption text is processed on the preview server; saved words and caption cache stay on the device. https://www.edrdg.org/edrdg/licence.html</Text>
-        <Text style={s.emptyTitle}>Version history</Text>{history.map(release => <View key={release.version} style={s.entry}><Text style={s.meaning}>{release.version} · {release.date}</Text><Text style={s.reading}>{release.title}</Text>{release.notes.map(note => <Text key={note} style={s.hint}>• {note}</Text>)}</View>)}</View>}
-      </ScrollView></SafeAreaView>}
-    {library && <SafeAreaView edges={['top', 'left', 'right']} style={[s.safe, s.panelScreen]}><View style={s.header}><Text style={s.brand}>Words.</Text></View><ScrollView contentContainerStyle={{ padding: 22, paddingBottom: 150 }}><DictionarySearch dark={dark} /><Text style={s.emptyTitle}>Saved words</Text>{!saved.length && <Text style={s.hint}>Your saved words and their original video context will appear here.</Text>}{!!storageError && <Text style={s.hint}>{storageError}</Text>}{saved.map(word => <View key={word.key} style={s.entry}><Text style={s.lookupWord}>{word.word}</Text><Text style={s.reading}>{word.reading}</Text><Text style={s.meaning}>{word.meaning}</Text><Text style={s.sentence}>{word.sentence}</Text><Text style={s.hint}>{word.title}</Text><View style={s.row}><Button onPress={() => { const link = youtubeUrl(word.url); if (link) { setLibrary(false); browse(`${link}&t=${Math.floor(word.time)}s`); } }}>Watch context ↗</Button><Button onPress={() => setSaved(old => old.filter(w => w.key !== word.key))}>Remove</Button></View></View>)}</ScrollView></SafeAreaView>}
+        <Text style={s.hint}>Video difficulty estimates use a sample of caption vocabulary and your level/word overrides. The range includes unrated words; grammar, speed and listening comprehension are not measured.</Text><Text style={s.emptyTitle}>Version history</Text>{history.map(release => <View key={release.version} style={s.entry}><Text style={s.meaning}>{release.version} · {release.date}</Text><Text style={s.reading}>{release.title}</Text>{release.notes.map(note => <Text key={note} style={s.hint}>• {note}</Text>)}</View>)}</View>}
+      </ScrollView></View>;
+  const libraryPanel = <View testID="words-panel" style={{ flex: 1, minHeight: 0 }}><View style={[s.header, watching && { paddingVertical: 0, minHeight: 44 }]}><Text style={[s.brand, watching && { fontSize: 18, letterSpacing: -0.3 }]}>Words.</Text>{watching && <PlaybackButton dark={dark} paused={clock.paused} onTogglePlayback={togglePlayback} compact />}</View><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: watching ? 16 : 22, paddingTop: watching ? 4 : 22, paddingBottom: 16 }}><DictionarySearch dark={dark} compact={watching} /><Text style={s.emptyTitle}>Saved words</Text>{!saved.length && <Text style={s.hint}>Your saved words and their original video context will appear here.</Text>}{!!storageError && <Text style={s.hint}>{storageError}</Text>}{saved.map(word => <View key={word.key} style={s.entry}><Text style={s.lookupWord}>{word.word}</Text><Text style={s.reading}>{word.reading}</Text><Text style={s.meaning}>{word.meaning}</Text><Text style={s.sentence}>{word.sentence}</Text><Text style={s.hint}>{word.title}</Text><View style={s.row}><Button onPress={() => { const link = youtubeUrl(word.url); if (link) { setLibrary(false); browse(`${link}&t=${Math.floor(word.time)}s`); } }}>Watch context ↗</Button><Button onPress={() => setSaved(old => old.filter(w => w.key !== word.key))}>Remove</Button></View></View>)}</ScrollView></View>;
+  const lookupContent = <LookupSheet inline lookup={lookup} dark={dark} entries={entries} loading={loading} error={dictionaryError} onClose={closeLookup}
+      known={!!lookup && familiarity(lookup.token.lemma, lookup.token.reading, level, knowledge) === 'known'}
+      onKnown={known => { if (lookup) setKnowledge(old => ({ ...old, [lookup.token.lemma]: known })); }}
+      canSave={storageReady} saved={!!entries[0] && saved.some(word => word.key === `${entries[0].slug}:${entries[0].japanese[0]?.reading ?? ''}`)} onSave={save}
+      controls={<SentenceControls dark={dark} compact paused={clock.paused} onTogglePlayback={togglePlayback} previous={previousSentence === undefined ? undefined : () => skipSentence(-1)} next={nextSentence === undefined ? undefined : () => skipSentence(1)} />} />;
+  return <DarkContext.Provider value={dark}><KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}><SafeAreaView edges={watching ? [] : ['top', 'left', 'right']} style={s.safe} onLayout={event => { const next = event.nativeEvent.layout.height; setViewportHeight(old => Math.abs(old - next) < 1 ? old : next); }} {...appGestures.panHandlers}><StatusBar hidden={watching} style={dark ? "light" : "dark"} />
+    {!watching && <View style={s.header}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Image source={require('./assets/icon.png')} accessibilityLabel="Immersed app icon" style={{ width: 36, height: 36, borderRadius: 9 }} /><Text style={s.brand}>immersed.</Text></View><Text style={s.hint}>日本語 · N{level}</Text></View>}
+    {!watching && <><View style={s.search}><TextInput accessibilityLabel="Search Japanese topics or paste a YouTube link" placeholder="Search a topic or paste a YouTube link" placeholderTextColor={dark ? "#999" : "#70776E"} value={input} onChangeText={setInput} onSubmitEditing={openInput} returnKeyType="search" autoCapitalize="none" style={s.input} /><Button onPress={openInput}>Go</Button></View><View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.topics}>{topics.map(item => <Pressable accessibilityRole="button" key={item.label} onPress={() => { setTopic(item.label); browse(topicUrl(item.query)); }} style={[s.topic, topic === item.label && s.activeTopic]}><Text style={s.topicText}>{item.label}</Text></Pressable>)}</ScrollView></View></>}
+    {!!error && <View style={[s.error, watching && { position: 'absolute', top: insets.top + 12, left: 12, right: 12, zIndex: 15, borderRadius: 18 }]}><Text style={s.hint}>{error}</Text></View>}
+    <View testID="content-surface" style={s.contentSurface}>
+      <View testID="video-surface" style={watching ? s.watchVideo : s.browser}><YouTubeBrowser key={browserVersion} ref={browser} uri={uri} dark={dark} hideShorts={hideShorts} minimumMinutes={minimumMinutes} onCaption={receiveCaption} onPage={handlePage} onTranscript={(cues, id, source = 'unknown') => { if (id !== pageVideo.current || captionSourceRank(source) < transcriptRank.current) return; transcriptRank.current = captionSourceRank(source); seenSourceCaption.current = true; setSourceTranscript({ videoId: id, cues }); setSubtitleStatus(''); void saveCaptionCache(id, cues); }} onClock={receiveClock} onError={setError} /></View>
+      {watching && <View testID="subtitle-panel" style={[s.study, { height: readingHeight, paddingBottom: dockClearance, paddingHorizontal: panel || lookup ? 0 : 18, paddingTop: panel || lookup ? 0 : 8 }]} {...(!panel && !lookup ? gestures.panHandlers : {})}>
+        {settings ? settingsPanel : library ? libraryPanel : lookup ? lookupContent : <>
+          <VideoCoverage cues={rawTimeline} level={level} knowledge={knowledge} dark={dark} />
+          <ScrollView style={s.captionScroll} contentContainerStyle={{ paddingVertical: 8, flexGrow: 1, justifyContent: 'center' }}>
+            {sentence ? <><StudySubtitles tokens={tokens} tail={unparsedTail} dark={dark} level={level} knowledge={knowledge} readings={readings} onWord={tapWord} />{!!analysisError && <Text style={s.hint}>{analysisError}</Text>}</> : <Text style={s.captionEmpty}>{subtitleStatus ? 'Japanese subtitles unavailable' : '—'}</Text>}
+          </ScrollView>
+          <SentenceControls dark={dark} paused={clock.paused} onTogglePlayback={togglePlayback} previous={previousSentence === undefined ? undefined : () => skipSentence(-1)} next={nextSentence === undefined ? undefined : () => skipSentence(1)} />
+        </>}
+      </View>}
+    </View>
+    <FloatingGlass dark={dark} style={[s.dock, { bottom: Math.max(insets.bottom, 12), left: (width - 182) / 2 }]}><View style={s.dockRow} {...dockGestures.panHandlers}>
+      <NavigationButton icon={(panel || lookup) && watching ? 'watch' : 'browse'} label={(panel || lookup) && watching ? 'Watch & read' : 'Browse'} active={!panel && !lookup} dark={dark} onPress={() => { if (lookup) closeLookup(); else if (panel) openPanel(undefined); else browse(topicUrl(topics.find(t => t.label === topic)?.query || topics[0].query)); }} />
+      <NavigationButton icon="words" label={`Words · ${saved.length}`} active={library || !!lookup} dark={dark} onPress={() => setLibrary(true)} />
+      <NavigationButton icon="settings" label="Settings" active={settings} dark={dark} onPress={() => setSettings(true)} />
+    </View></FloatingGlass>
+    {!watching && settings && <SafeAreaView edges={['top', 'left', 'right']} style={[s.safe, s.panelScreen, { paddingBottom: dockClearance }]}>{settingsPanel}</SafeAreaView>}
+    {!watching && library && <SafeAreaView edges={['top', 'left', 'right']} style={[s.safe, s.panelScreen, { paddingBottom: dockClearance }]}>{libraryPanel}</SafeAreaView>}
     <View testID="back-gesture-edge" style={{ position: 'absolute', left: 0, top: 0, bottom: dockClearance, width: 22, zIndex: 70 }} />
-  </SafeAreaView></DarkContext.Provider>;
+  </SafeAreaView></KeyboardAvoidingView></DarkContext.Provider>;
 }
 function createStyles(dark: boolean) {
   const bg = dark ? '#000000' : '#F7F5EF', ink = dark ? '#F3F3F3' : '#242D28', muted = dark ? '#AAAAAA' : '#70776E', panel = dark ? '#171717' : '#E8EBE1', accent = dark ? '#B4DEC4' : '#344C3F';
