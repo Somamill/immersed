@@ -2,6 +2,16 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.0 — 2026-10-29
+
+Full-viewport portrait, native floating glass and app-wide swipes
+
+- Full-screen portrait now fills the app viewport and defaults on; source video aspect ratio is preserved.
+- Content extends under an absolute floating navigation dock, with native Apple Liquid Glass where supported and blur elsewhere.
+- Add route-backed edge swipes between Content, Words and Settings, panel-wide horizontal gestures, and dictionary-header swipe dismissal.
+- Fix an incompatible audio decoder by pinning PyAV 16.1.0; credential-free Whisper successfully transcribed a public test recording.
+- YouTube source audio is still blocked by this environment’s proxy (403); automatic captionless YouTube generation remains unresolved, despite a working local recognizer.
+
 ## 0.4.0 — 2026-10-29
 
 Dedicated YouTube player and mandatory subtitle fallback

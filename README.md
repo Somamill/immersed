@@ -19,7 +19,7 @@ iPhone-first Japanese immersion: choose a natural Japanese video, watch in a foc
 
 **This cloud network denies YouTube access.** That blocks the server's source-audio acquisition, so subtitle generation for captionless YouTube videos is wired but cannot currently succeed here. This is not a working universal automatic-caption service. The UI reports failure instead of showing invented text, distinguishes source restrictions from network-policy failures, and allows retry. Failed jobs expire instead of remaining stuck forever. Source captions can still work on the phone's own network. Live iPhone compatibility with the current YouTube DOM and automatic caption controls remains to be confirmed.
 
-The ASR packages are installed; Python syntax/import checks pass, but the Whisper model and an end-to-end audio recognition job have not been validated in this environment. Model download begins only after source audio is acquired. CPU preparation may be slow and recognition can be wrong. Preview limits are 30 minutes/150 MB per source, one recognition job at a time, and a 15-minute worker timeout. Some login/region-restricted videos will remain unsupported even with suitable networking.
+The credential-free Whisper base model successfully transcribed the public OpenAI Whisper JFK test recording in this environment. This verifies decoding and CPU recognition on an English test file, not YouTube access or Japanese caption accuracy. An incompatible PyAV 19 decoder was found and fixed by pinning PyAV 16.1.0. Model download begins only after source audio is acquired. CPU preparation may be slow and recognition can be wrong. Preview limits are 30 minutes/150 MB per source, one recognition job at a time, and a 15-minute worker timeout. Some login/region-restricted videos will remain unsupported even with suitable networking.
 
 Player focus, caption capture, and controls rely on YouTube's DOM and can break when its layout changes. The local browser fixture is not a live YouTube playback test. Grammar labels are limited rules, not full contextual explanations. Fullscreen YouTube can cover the app's study pane. Replay timestamps for observed captions are approximate; generated cues use the recognizer's timestamps.
 
@@ -60,7 +60,7 @@ See [THIRD_PARTY.md](THIRD_PARTY.md) for JMdict's CC BY-SA 4.0 attribution, pars
 
 ## Versions and GitHub
 
-Repository: https://github.com/Somamill/immersed. [CHANGELOG.md](CHANGELOG.md) and Settings → Version history record released updates. Current release: 0.2.0.
+Repository: https://github.com/Somamill/immersed. [CHANGELOG.md](CHANGELOG.md) and Settings → Version history record released updates. Current release: 0.5.0.
 
 For each user-facing update:
 
@@ -93,3 +93,11 @@ YouTube can refuse embedding for particular videos. Settings → Open original Y
 The bottom Portrait / Compact control and Settings → Portrait player choose the player height. In the swipe handle **below** the video, swipe left/right to seek forward/backward 10 seconds, up for Portrait, down for Compact. The handle does not cover YouTube controls and the subtitle list can still scroll independently.
 
 Automatic subtitle generation is now mandatory whenever no Japanese source captions are detected. There is no toggle, and older `automatic: false` preferences are ignored. This does **not** solve the audio-access failure: a direct worker reproduction returned `NETWORK_BLOCKED` in this environment. The current server cannot generate captions for a captionless YouTube video until its audio is accessible from an authorized transcription environment. No end-to-end YouTube ASR success is claimed.
+
+## Full-viewport layout and app gestures (0.5.0)
+
+Full-screen portrait is now the default and fills the application viewport; it is not the earlier 56%-height player. Source video aspect ratio is preserved. Captions appear in a floating panel, and navigation is an absolute floating dock while content continues to the bottom. On supported iOS 26 builds the dock uses native Apple Liquid Glass (`expo-glass-effect`); older platforms use blur. Full-screen controls are app-owned so the embedded player's landscape fullscreen button is disabled.
+
+Navigation uses Expo Router. Swipe horizontally from either content edge to move among Content → Words → Settings; in Words and Settings, horizontal swipes work across the panel. Vertical scrolling and video controls remain separate. Swipe down from the dictionary header to dismiss and resume according to the prior playback state. The subtitle handle retains seek/layout gestures.
+
+Transcription needs no API credentials. A compatible recognizer was tested successfully on a public test recording, but YouTube fetching still returns `Tunnel connection failed: 403 Forbidden` from this environment's proxy. The recognizer cannot generate subtitles without the audio. Repeated extraction attempts are now limited; no successful captionless YouTube transcription is claimed. No hosting account or API key is required for the installed recognizer.

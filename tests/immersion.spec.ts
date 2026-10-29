@@ -113,12 +113,12 @@ test('viewing preferences persist and navigation stays near the bottom', async (
   await expect(page.getByRole('switch', { name: 'Hide Shorts' })).toBeChecked();
   await page.getByRole('radio', { name: 'Completed N3', exact: true }).click();
   await expect(page.getByRole('radio', { name: 'Completed N3', exact: true })).toBeChecked();
-  await page.getByRole('switch', { name: 'Portrait player' }).click();
+  await page.getByRole('switch', { name: 'Full-screen portrait' }).click();
   await page.getByRole('switch', { name: 'Hide Shorts' }).click();
   await page.reload();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('radio', { name: 'Completed N3', exact: true })).toBeChecked();
-  await expect(page.getByRole('switch', { name: 'Portrait player' })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Full-screen portrait' })).not.toBeChecked();
   await expect(page.getByRole('switch', { name: 'Hide Shorts' })).not.toBeChecked();
 });
 
@@ -164,11 +164,26 @@ test('portrait playback controls appear for a selected video and automatic subti
   await page.reload();
   await page.getByRole('textbox', { name: 'Search Japanese topics or paste a YouTube link' }).fill('https://www.youtube.com/watch?v=M7lc1UVf-VE');
   await page.getByRole('button', { name: 'Go', exact: true }).click();
-  await page.getByRole('button', { name: 'Portrait', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Compact', exact: true })).toBeVisible();
-  await expect(page.getByText('↔ Seek 10s · ↑ Portrait · ↓ Compact')).toBeVisible();
+  const full = await page.getByTestId('video-surface').boundingBox();
+  expect(full!.height).toBeGreaterThan(800);
+  await page.getByRole('button', { name: 'Reading', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Full screen', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Full screen', exact: true }).click();
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
   await expect(page.getByRole('switch', { name: 'Automatic subtitles' })).toHaveCount(0);
   await expect.poll(() => attempts.length, { timeout: 7000 }).toBeGreaterThan(0);
-  await expect(page.getByRole('switch', { name: 'Portrait player' })).toBeChecked();
+  await expect(page.getByRole('switch', { name: 'Full-screen portrait' })).toBeChecked();
+});
+
+test('horizontal gestures navigate settings and words using the floating dock routes', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.mouse.move(60, 430); await page.mouse.down();
+  await page.mouse.move(310, 435, { steps: 12 }); await page.mouse.up();
+  await expect(page.getByText('Your words.', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/panel=words/);
+  await page.mouse.move(310, 430); await page.mouse.down();
+  await page.mouse.move(60, 435, { steps: 12 }); await page.mouse.up();
+  await expect(page.getByText('Settings.', { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/panel=settings/);
 });

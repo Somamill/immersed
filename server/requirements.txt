@@ -1,2 +1,5 @@
 faster-whisper==1.2.1
 yt-dlp==2026.10.26
+
+# PyAV 19 removed metadata_errors, which faster-whisper 1.2.1 still passes.
+av==16.1.0

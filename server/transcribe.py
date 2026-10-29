@@ -24,7 +24,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='immersed-asr-') as directory:
         result = subprocess.run([
             sys.executable, '-m', 'yt_dlp', '--no-playlist', '--no-progress',
-            '--socket-timeout', '15', '--retries', '1', '--max-filesize', '150M',
+            '--socket-timeout', '15', '--retries', '1', '--extractor-retries', '0', '--max-filesize', '150M',
             '--match-filter', 'duration <= 1800', '-f', 'bestaudio/best',
             '-o', str(pathlib.Path(directory) / 'audio.%(ext)s'),
             'https://www.youtube.com/watch?v=' + video_id,
