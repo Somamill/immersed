@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.16 — 2026-10-30
+
+Improve grammar lookups and caption homophone suggestions
+
+- Group conjectural grammar such as だろうなって; distinguish auxiliary う from dictionary animal nouns with POS-specific caches.
+- Add context-ranked same-reading spelling suggestions for supplied captions, including 自称/事象 and 累計/類型. Explicit selection preserves the original caption spelling.
+- Stabilize the video split and word popup height, collapse extra dictionary entries and request minimal YouTube controls. Source captions can still be wrong; no OCR or verified audio correction is added.
+
 ## 0.5.15 — 2026-10-30
 
 Keep subtitle words visible and improve reading timing

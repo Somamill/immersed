@@ -2,7 +2,7 @@ export function embeddedPlayerSource(videoId: string, applicationId: string) {
   if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) throw new Error('Invalid video ID');
   if (!/^[A-Za-z0-9._-]+$/.test(applicationId)) throw new Error('Invalid application identifier');
   const referer = `https://${applicationId.toLowerCase()}`;
-  const params = new URLSearchParams({ playsinline: '1', fs: '0', cc_load_policy: '1', cc_lang_pref: 'ja', hl: 'ja', autoplay: '1', enablejsapi: '1', origin: referer });
+  const params = new URLSearchParams({ playsinline: '1', controls: '0', fs: '0', cc_load_policy: '1', cc_lang_pref: 'ja', hl: 'ja', autoplay: '1', enablejsapi: '1', origin: referer });
   return { uri: `https://www.youtube.com/embed/${videoId}?${params}`, headers: { Referer: referer } };
 }
 export function swipeAction(dx: number, dy: number): 'forward' | 'backward' | null {

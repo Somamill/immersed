@@ -1,4 +1,6 @@
 const language = require('./language.cjs');
+const { lookupContext } = require('./lookup-context.cjs');
+const { key: dictionaryKey } = require('./grammar.cjs');
 const transcription = require('./transcription.cjs');
 const { reflowCaptions, validBatch } = require('./caption-reflow.cjs');
 // Development-preview API, shared through the existing Expo tunnel. Production
@@ -27,7 +29,7 @@ module.exports = function middleware(next) {
         const dictionary = {};
         if (url.searchParams.get('dictionary') === 'true') {
           for (const token of tokens.filter(t => t.word).slice(0, 24)) {
-            const key = token.proper ? `${token.lemma}:name:${token.reading}` : token.lemma;
+            const key = dictionaryKey(token);
             if (!dictionary[key]) dictionary[key] = await language.lookup(token.lemma, token);
           }
         }
@@ -36,7 +38,15 @@ module.exports = function middleware(next) {
       if (url.pathname.endsWith('/dictionary')) {
         const word = url.searchParams.get('word') || '';
         if (!word || word.length > 120) return json(400, { error: 'Invalid word' });
-        return json(200, { data: await language.lookup(word, { proper: url.searchParams.get('proper') === 'true', reading: (url.searchParams.get('reading') || '').slice(0, 120) }), source: 'JMdict + JMnedict / EDRDG; Kanjium pitch accents / Uros O.', license: 'CC BY-SA 4.0' });
+        const data = await language.lookup(word, { proper: url.searchParams.get('proper') === 'true', pos: (url.searchParams.get('pos') || '').slice(0, 30), reading: (url.searchParams.get('reading') || '').slice(0, 120) });
+        return json(200, data[0]?.source === 'Grammar' ? { data, source: 'Immersed grammar notes' } : { data, source: 'JMdict + JMnedict / EDRDG; Kanjium pitch accents / Uros O.', license: 'CC BY-SA 4.0' });
+      }
+      if (url.pathname.endsWith('/lookup-context')) {
+        const get = key => url.searchParams.get(key) || '';
+        if (!get('word') || get('word').length > 120 || !get('sentence') || get('sentence').length > 1000 || get('before').length > 120 || get('after').length > 120) return json(400, { error: 'Invalid caption context' });
+        const data = { word: get('word'), reading: get('reading').slice(0,120), pos: get('pos'),
+          sentence: get('sentence'), start: Number(get('start')), end: Number(get('end')), before: get('before'), after: get('after') };
+        return json(200, { alternatives: await lookupContext(data) });
       }
       if (url.pathname.endsWith('/search')) {
         const query = (url.searchParams.get('query') || '').trim();

@@ -25,7 +25,8 @@ import { topics, topicUrl, youtubeUrl, type Caption, type DictionaryEntry } from
 import { dictionaryKey, languageRequest, serviceUrl, type AnalyzedToken, type GeneratedCue, type Transcription } from './src/language';
 
 type Saved = { key: string; word: string; reading: string; meaning: string; sentence: string; title: string; url: string; time: number };
-type Lookup = { token: AnalyzedToken; caption: Caption };
+type Lookup = { token: AnalyzedToken; caption: Caption; before?: string; after?: string; originalToken?: AnalyzedToken };
+type SpellingAlternative = { entry: DictionaryEntry; form: string; likely: boolean };
 const STORAGE = 'immersed.youtube.words.v1';
 const dictionaryCache = new Map<string, DictionaryEntry[]>();
 const analysisCache = new Map<string, AnalyzedToken[]>();
@@ -78,7 +79,6 @@ export default function App() {
   const setSettings = (open: boolean) => openPanel(open ? 'settings' : undefined);
   const setLibrary = (open: boolean) => openPanel(open ? 'words' : undefined);
   const { width, height, fontScale } = useWindowDimensions();
-  const [captionHeight, setCaptionHeight] = useState(0);
   const captionScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [viewportHeight, setViewportHeight] = useState(height);
   const dockClearance = Math.max(insets.bottom, 12) + 76;
@@ -105,6 +105,7 @@ export default function App() {
   const [subtitleStatus, setSubtitleStatus] = useState('');
   const [error, setError] = useState('');
   const [lookup, setLookup] = useState<Lookup | null>(null);
+  const [spellingResult, setSpellingResult] = useState<{ lookup: Lookup; alternatives: SpellingAlternative[] } | null>(null);
   const [dictionaryResult, setDictionaryResult] = useState<{ key: string; entries: DictionaryEntry[]; error: string } | null>(null);
   const lookupKey = lookup ? dictionaryKey(lookup.token) : '';
   const cachedEntries = lookup ? dictionaryCache.get(lookupKey) : undefined;
@@ -118,8 +119,9 @@ export default function App() {
   const [readings, setReadings] = useState(true);
   const [pitchAccent, setPitchAccent] = useState(false);
   const lookupResume = useRef(false);
-  const threeRows = Math.max(180, 3 * (34 + (readings ? 16 : 0)) * fontScale + 6);
-  const normalReadingHeight = Math.min(Math.max(threeRows, captionHeight) + 108 + dockClearance, height * .68);
+  const threeRows = Math.max(180, (width < 350 ? 4 : 3) * (34 + (readings ? 16 : 0)) * fontScale + 6);
+  const coverageHeight = Math.max(36, 30 * fontScale);
+  const normalReadingHeight = Math.min(threeRows + 80 + coverageHeight + dockClearance, height * .68);
   const readingHeight = Math.min(panel ? Math.max(normalReadingHeight, height * .57) : normalReadingHeight, Math.max(dockClearance + 120, Math.min(height, viewportHeight) - 128));
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [preferencesReady, setPreferencesReady] = useState(false);
@@ -261,12 +263,34 @@ export default function App() {
     const cached = dictionaryCache.get(key);
     if (cached) return;
     const timer = setTimeout(() => controller.abort(), 12000);
-    void languageRequest<{ data: DictionaryEntry[] }>('dictionary', { word: lookup.token.lemma, reading: lookup.token.reading, proper: String(!!lookup.token.proper) }, controller.signal).then(result => {
+    void languageRequest<{ data: DictionaryEntry[] }>('dictionary', { word: lookup.token.lemma, reading: lookup.token.reading, proper: String(!!lookup.token.proper), pos: lookup.token.pos }, controller.signal).then(result => {
       dictionaryCache.set(key, result.data);
       if (active) setDictionaryResult({ key, entries: result.data, error: '' });
     }).catch(() => { if (active) setDictionaryResult({ key, entries: [], error: 'Dictionary unavailable. Check your connection and tap the word again.' }); }).finally(() => { clearTimeout(timer); });
     return () => { active = false; clearTimeout(timer); controller.abort(); };
   }, [lookup]);
+  useEffect(() => {
+    if (!lookup || lookup.originalToken || lookup.token.pos !== 'noun' || lookup.token.proper || lookup.token.text !== lookup.token.lemma) return;
+    const controller = new AbortController();
+    const current = lookup;
+    const timer = setTimeout(() => controller.abort(), 22000);
+    void languageRequest<{ alternatives: SpellingAlternative[] }>('lookup-context', {
+      word: lookup.token.lemma, reading: lookup.token.reading, pos: lookup.token.pos,
+      sentence: lookup.caption.text, start: String(lookup.token.start), end: String(lookup.token.end),
+      before: lookup.before || '', after: lookup.after || '',
+    }, controller.signal).then(result => {
+      if (!controller.signal.aborted) setSpellingResult({ lookup: current, alternatives: result.alternatives });
+    }).catch(() => {}).finally(() => clearTimeout(timer));
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [lookup]);
+  const chooseSpelling = (alternative: SpellingAlternative) => {
+    const japanese = alternative.entry.japanese[0];
+    if (!lookup || !japanese?.word) return;
+    const token = { ...lookup.token, text: japanese.word, lemma: japanese.word, reading: japanese.reading || lookup.token.reading, pos: 'noun', proper: false, grammar: [] };
+    dictionaryCache.set(dictionaryKey(token), [alternative.entry]);
+    setLookup({ ...lookup, originalToken: lookup.originalToken || lookup.token, token,
+      caption: { ...lookup.caption, text: lookup.caption.text.slice(0, lookup.token.start) + token.text + lookup.caption.text.slice(lookup.token.end) } });
+  };
   const pageVideo = useRef<string | null>(null);
   const handlePage = (url: string) => {
     const canonical = youtubeUrl(url);
@@ -295,7 +319,10 @@ export default function App() {
     if (!caption) return;
     lookupResume.current = !clock.paused;
     if (!clock.paused) { browser.current?.command('pause'); setClock(old => ({ ...old, paused: true })); }
-    setLookup({ token, caption });
+    const index = timeline.findIndex(cue => cue.start === caption.time);
+    setLookup({ token, caption: { ...caption, text: sentence },
+      before: index >= 0 ? timeline.slice(Math.max(0, index - 2), index).map(c => c.text).join('').slice(-120) : '',
+      after: index >= 0 ? timeline.slice(index + 1, index + 3).map(c => c.text).join('').slice(0, 120) : '' });
   };
   const closeLookup = useCallback(() => {
     setLookup(null);
@@ -406,7 +433,7 @@ export default function App() {
         <Text style={s.hint}>Video difficulty estimates use a sample of caption vocabulary and your level/word overrides. The percentage counts familiar words over all sampled vocabulary; unrated words are not assumed known. Grammar, speed and listening comprehension are not measured.</Text>{comparisonReport?.videoId === videoId && <View style={{ marginVertical: 12 }}><Text style={s.emptyTitle}>Caption cross-check</Text>{comparisonReport.data.map(item => <Text key={item.start} style={s.hint}>{Math.floor(item.start)}s · {item.selected || 'no speech'} · {item.reason === 'majority-agreement' ? 'models agree' : item.reason === 'context-alternative' ? 'context suggests alternative' : 'unverified choice'}{item.agreement == null ? '' : ` · text similarity ${Math.round(item.agreement * 100)}%`}</Text>)}</View>}<Text style={s.emptyTitle}>Version history</Text>{history.map(release => <View key={release.version} style={s.entry}><Text style={s.meaning}>{release.version} · {release.date}</Text><Text style={s.reading}>{release.title}</Text>{release.notes.map(note => <Text key={note} style={s.hint}>• {note}</Text>)}</View>)}</View>}
       </ScrollView></View>;
   const libraryPanel = <View testID="words-panel" style={{ flex: 1, minHeight: 0 }}><View style={[s.header, watching && { paddingVertical: 0, minHeight: 44 }]}><Text style={[s.brand, watching && { fontSize: 18, letterSpacing: -0.3 }]}>Words.</Text>{watching && <PlaybackButton dark={dark} paused={clock.paused} onTogglePlayback={togglePlayback} compact />}</View><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: watching ? 16 : 22, paddingTop: watching ? 4 : 22, paddingBottom: 16 }}><DictionarySearch pitchAccent={pitchAccent} dark={dark} compact={watching} /><Text style={s.emptyTitle}>Saved words</Text>{!saved.length && <Text style={s.hint}>Your saved words and their original video context will appear here.</Text>}{!!storageError && <Text style={s.hint}>{storageError}</Text>}{saved.map(word => <View key={word.key} style={s.entry}><Text style={s.lookupWord}>{word.word}</Text><Text style={s.reading}>{word.reading}</Text><Text style={s.meaning}>{word.meaning}</Text><Text style={s.sentence}>{word.sentence}</Text><Text style={s.hint}>{word.title}</Text><View style={s.row}><Button onPress={() => { const link = youtubeUrl(word.url); if (link) { setLibrary(false); browse(`${link}&t=${Math.floor(word.time)}s`); } }}>Watch context ↗</Button><Button onPress={() => setSaved(old => old.filter(w => w.key !== word.key))}>Remove</Button></View></View>)}</ScrollView></View>;
-  const lookupContent = <LookupSheet pitchAccent={pitchAccent} lookup={lookup} dark={dark} entries={entries} loading={loading} error={dictionaryError} onClose={closeLookup}
+  const lookupContent = <LookupSheet alternatives={spellingResult?.lookup === lookup ? spellingResult.alternatives : []} onChooseSpelling={chooseSpelling} captionSpelling={lookup?.originalToken?.text} pitchAccent={pitchAccent} lookup={lookup} dark={dark} entries={entries} loading={loading} error={dictionaryError} onClose={closeLookup}
       known={!!lookup && familiarity(lookup.token.lemma, lookup.token.reading, level, knowledge) === 'known'}
       onKnown={known => { if (lookup) setKnowledge(old => ({ ...old, [lookup.token.lemma]: known })); }}
       canSave={storageReady} saved={!!entries[0] && saved.some(word => word.key === `${entries[0].slug}:${entries[0].japanese[0]?.reading ?? ''}`)} onSave={save}
@@ -419,9 +446,9 @@ export default function App() {
       <View testID="video-surface" style={watching ? s.watchVideo : s.browser}><YouTubeBrowser key={browserVersion} ref={browser} uri={uri} dark={dark} hideShorts={hideShorts} minimumMinutes={minimumMinutes} onCaption={receiveCaption} onPage={handlePage} onTranscript={(cues, id, source = 'unknown') => { if (id !== pageVideo.current || captionSourceRank(source) < transcriptRank.current) return; transcriptRank.current = captionSourceRank(source); seenSourceCaption.current = true; setSourceTranscript({ videoId: id, cues }); setSubtitleStatus(''); void saveCaptionCache(id, cues); }} onClock={receiveClock} onError={setError} /></View>
       {watching && <View testID="subtitle-panel" style={[s.study, { height: readingHeight, paddingBottom: dockClearance, paddingHorizontal: panel ? 0 : 12, paddingTop: panel ? 0 : 6 }]} {...(!panel && !lookup ? gestures.panHandlers : {})}>
         {settings ? settingsPanel : library ? libraryPanel : <>
-          <VideoCoverage cues={rawTimeline} level={level} knowledge={knowledge} dark={dark} />
+          <View style={{ height: coverageHeight, justifyContent: 'center' }}><VideoCoverage cues={rawTimeline} level={level} knowledge={knowledge} dark={dark} /></View>
           <ScrollView ref={captionScroll} testID="caption-scroll" style={s.captionScroll} contentContainerStyle={{ paddingVertical: 8, flexGrow: 1, justifyContent: 'center' }}>
-            {sentence ? <><StudySubtitles tokens={tokens} tail={unparsedTail} dark={dark} level={level} knowledge={knowledge} readings={readings} onHeight={next => setCaptionHeight(old => Math.abs(old - next) < 1 ? old : next)} onWord={tapWord} />{!!analysisError && <Text style={s.hint}>{analysisError}</Text>}</> : <Text style={s.captionEmpty}>{subtitleStatus ? 'Japanese subtitles unavailable' : '—'}</Text>}
+            {sentence ? <><StudySubtitles tokens={tokens} tail={unparsedTail} dark={dark} level={level} knowledge={knowledge} readings={readings} onWord={tapWord} />{!!analysisError && <Text style={s.hint}>{analysisError}</Text>}</> : <Text style={s.captionEmpty}>{subtitleStatus ? 'Japanese subtitles unavailable' : '—'}</Text>}
           </ScrollView>
           <SentenceControls dark={dark} paused={clock.paused} onTogglePlayback={togglePlayback} previous={previousSentence === undefined ? undefined : () => skipSentence(-1)} next={nextSentence === undefined ? undefined : () => skipSentence(1)} />
         </>}

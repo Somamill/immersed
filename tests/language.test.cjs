@@ -115,3 +115,28 @@ test('caption reflow respects explicit clears and carries a terminal clear when 
   assert.deepEqual(await reflowCaptions(clear), clear);
   assert.deepEqual(await reflowCaptions([{ start: 0, end: 1, text: '日' }, { start: 1, end: 2, text: '本語', hardEnd: true }]), [{ start: 0, end: 2, text: '日本語', hardEnd: true }]);
 });
+
+test('conjectural grammar is one lookup unit and auxiliary う never returns animal nouns', async () => {
+  const tokens = await analyze('面白いんだろうなって思いました。');
+  const conjecture = tokens.find(t => t.text === 'だろうなって');
+  assert.ok(conjecture);
+  assert.equal(conjecture.lemma, 'だろう');
+  assert.equal(conjecture.pos, 'auxiliary');
+  assert.ok(conjecture.grammar.includes('spoken quotation'));
+  const entry = await lookup(conjecture.lemma, conjecture);
+  assert.equal(entry[0].source, 'Grammar');
+  assert.ok(entry[0].senses[0].english_definitions.some(d => /probably/.test(d)));
+  const ending = await lookup('う', { pos: 'auxiliary', reading: 'う' });
+  assert.equal(ending[0].source, 'Grammar');
+  assert.ok(!JSON.stringify(ending).includes('cormorant'));
+  assert.ok(JSON.stringify(await lookup('う', { pos: 'noun' })).includes('cormorant'));
+  assert.ok((await analyze('そうでしょうね。')).some(t => t.lemma === 'でしょう' && t.pos === 'auxiliary'));
+});
+test('dictionary offers general same-reading spellings for screenshot examples without changing the source', async () => {
+  const { homophones } = require('../server/language.cjs');
+  assert.ok((await homophones('自称', 'じしょう')).some(c => c.form === '事象'));
+  assert.ok((await homophones('累計', 'るいけい')).some(c => c.form === '類型'));
+  assert.deepEqual(await homophones('自称', 'not-the-reading'), []);
+  const { key } = require('../server/grammar.cjs');
+  assert.notEqual(key({ lemma:'う', pos:'auxiliary' }), key({ lemma:'う', pos:'noun' }));
+});

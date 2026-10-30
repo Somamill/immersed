@@ -63,3 +63,11 @@ Three identified ways of losing visible words have been fixed: overlapping sourc
 Display timing adds bounded reading time for very short cues and bridges brief gaps, without moving their starts or delaying the next cue. Explicit clears and long silence still clear the display. Word end times are carried through generated processing; this is a timing-data/formatting fix, not newly deployed forced alignment. Kotoba's distributed character timing remains approximate.
 
 The reading panel automatically reserves three rows including furigana, grows for longer text, and retains scrolling beyond its screen-space cap. Timing/caption tests use controlled inputs; the cloud still cannot acquire YouTube audio to prove synchronization on a live video here.
+
+## Supplied captions and lookup help (0.5.16)
+
+The supplied screenshots show publisher-written video text 事象 / 類型 while lookup receives 自称 / 累計. Their pronunciations match, so dictionary lookup alone cannot establish which word was spoken. The う bird/rabbit results expose a separate problem: grammatical use was not routed separately from lexical nouns.
+
+Grammar-aware grouping and lookup fix the latter. For uninflected nouns, same-reading dictionary spellings may be ranked with the current sentence and nearby caption text, even when audio is unavailable. A strong suggestion appears as a context suggestion; a unique but weakly supported homophone is labeled only “Same reading.” Selecting it is explicit and does not rewrite the visible source subtitles.
+
+Measured text-only examples: the small Japanese LM scored the 事象 sentence at 2.6191 vs 自称 at 3.0251 loss/character. 類型 scored 2.9280 vs 累計 2.9873: this is too weak for the configured context threshold. These are screenshot-text diagnostics, not recognition error-rate measurements or proof about the audio. No per-word/video hardcoded correction table was added.

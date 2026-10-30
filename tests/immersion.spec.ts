@@ -202,6 +202,7 @@ test('dedicated embedded player requests Japanese captions and identifies the ac
   const source = embeddedPlayerSource('M7lc1UVf-VE', 'host.exp.Exponent');
   const url = new URL(source.uri);
   expect(url.pathname).toBe('/embed/M7lc1UVf-VE');
+  expect(url.searchParams.get('controls')).toBe('0');
   expect(url.searchParams.get('cc_load_policy')).toBe('1');
   expect(url.searchParams.get('cc_lang_pref')).toBe('ja');
   expect(source.headers.Referer).toBe('https://host.exp.exponent');
@@ -1022,4 +1023,58 @@ test('an unfinished ASR pass retains a straddling source sentence and does not f
   expect(combineCaptionTracks(primary, source, 12)).toEqual([
     ...primary, { start: 12, end: 15, text: '途中からも必要な言葉' }, source[1],
   ]);
+});
+
+test('grammar ending lookup explains conjecture instead of showing animal nouns', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({contentType:'application/json',body:JSON.stringify({status:'ready',cues:[{start:0,end:10,text:'だろうなって思いました。'}]})}));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button',{name:'Go',exact:true}).click();
+  await page.getByRole('button',{name:'Look up だろうなって',exact:true}).click({timeout:12000});
+  const sheet = page.getByTestId('dictionary-sheet');
+  await expect(sheet.getByText(/probably; I suppose/)).toBeVisible();
+  await expect(sheet.getByText(/cormorant|rabbit; hare/)).toHaveCount(0);
+});
+
+test('homophone suggestions do not resize the popup or silently change the video captions', async ({ page }) => {
+  const entry = {slug:'example-jisho',source:'JMdict',japanese:[{word:'事象',reading:'じしょう'}],senses:[{english_definitions:['event; phenomenon'],parts_of_speech:['noun']}]};
+  let provide: (() => void) | undefined;
+  const delay = new Promise<void>(resolve => { provide = resolve; });
+  await page.route('**/api/immersion/lookup-context?**', async route => {
+    await delay;
+    await route.fulfill({contentType:'application/json',body:JSON.stringify({alternatives:[{entry,form:'事象',likely:true}]})});
+  });
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({contentType:'application/json',body:JSON.stringify({status:'ready',cues:[{start:0,end:10,text:'個別具体的な自称に興味がある人と'}]})}));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button',{name:'Go',exact:true}).click();
+  await page.getByRole('button',{name:'Look up 自称',exact:true}).click({timeout:12000});
+  const sheet = page.getByTestId('dictionary-sheet');
+  await expect(sheet.getByText(/self-proclaimed/)).toBeVisible();
+  const before = (await sheet.boundingBox())!;
+  provide!();
+  const alternative = sheet.getByRole('button',{name:'Use spelling 事象',exact:true});
+  await expect(alternative).toBeVisible();
+  expect((await alternative.boundingBox())!.y).toBeLessThan((await sheet.getByText(/self-proclaimed/).boundingBox())!.y);
+  expect((await sheet.boundingBox())!.height).toBe(before.height);
+  await alternative.click();
+  await expect(sheet.getByText('Caption spelling: 自称',{exact:true})).toBeVisible();
+  await expect(sheet.getByText('event; phenomenon',{exact:true})).toBeVisible();
+  expect((await sheet.boundingBox())!.height).toBe(before.height);
+  await sheet.getByRole('button',{name:'Close',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Look up 自称',exact:true})).toBeVisible();
+});
+
+test('the video does not resize when changing between short and long subtitle lines', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({contentType:'application/json',body:JSON.stringify({status:'ready',cues:[
+    {start:0,end:2,text:'はい。'}, {start:3,end:7,text:'日本語を勉強しています。友達と公園で話します。今日はとても楽しいです。'},
+  ]})}));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button',{name:'Go',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Look up はい',exact:true})).toBeVisible({timeout:12000});
+  const before = await page.getByTestId('video-surface').boundingBox();
+  await page.getByRole('button',{name:'Next sentence',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Look up 日本語',exact:true})).toBeVisible();
+  expect(await page.getByTestId('video-surface').boundingBox()).toEqual(before);
 });

@@ -2,6 +2,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const kuromoji = require('kuromoji');
 const names = require('./names.cjs');
+const { grammarEntry } = require('./grammar.cjs');
 const pitch = require('./pitch.cjs');
 let ready;
 let englishIndex;
@@ -34,6 +35,8 @@ function dictionaryEntry(entry, tags) {
   };
 }
 async function lookup(word, options = {}) {
+  const grammatical = grammarEntry(word, options);
+  if (grammatical) return [grammatical];
   const { index, tags } = await initialize();
   const general = (index.get(word) || []).slice(0, 5).map(entry => dictionaryEntry(entry, tags));
   const named = options.proper || !general.length ? names.lookup(word, options.reading) : [];
@@ -120,6 +123,17 @@ async function analyze(text, grouped = true) {
       const lemma = index.has(surface) ? surface : index.has(normalized) ? normalized : '';
       if (lemma) expression = { lemma, end: j + 1, pos: last.pos };
     }
+    const conjectural = head.pos === 'auxiliary' && ['だ', 'です'].includes(head.lemma) &&
+      /^(だろう|でしょう)(?:(?:な|ね)?(?:って|と)|な|ね)?/.exec(remaining);
+    if (conjectural) {
+      const boundary = head.start + conjectural[0].length;
+      const last = tokens.findIndex(t => t.end === boundary);
+      if (last >= i) {
+        expression = { lemma: conjectural[1], end: last + 1, pos: 'auxiliary' };
+        grammar.push('conjecture / probably');
+        if (/(って|と)$/.test(conjectural[0])) grammar.push('spoken quotation');
+      }
+    }
     const pattern = !expression && patterns.find(([surface]) => remaining.startsWith(surface) && tokens.some(t => t.end === head.start + surface.length));
     if (expression) { end = expression.end; grammar.push('expression'); } else if (pattern) {
       while (end < tokens.length && tokens[end - 1].end < head.start + pattern[0].length) end++;
@@ -150,4 +164,19 @@ async function analyze(text, grouped = true) {
   }
   return result;
 }
-module.exports = { initialize, lookup, search, analyze };
+async function homophones(word, reading) {
+  const { index, tags } = await initialize();
+  const canonical = index.get(word) || [];
+  const readings = new Set(canonical.flatMap(e => e.kana.filter(k => !k.appliesToKanji || k.appliesToKanji.includes('*') || k.appliesToKanji.includes(word)).map(k => k.text)).filter(r => r === hira(reading)));
+  if (!readings.size || !canonical.some(e => e.kanji.some(k => k.text === word))) return [];
+  const found = [];
+  for (const r of readings) for (const e of index.get(r) || []) {
+    const form = e.kanji.find(k => k.text !== word && /^[㐀-鿿々]+$/.test(k.text) && e.kana.some(kana => kana.text === r && (!kana.appliesToKanji || kana.appliesToKanji.includes('*') || kana.appliesToKanji.includes(k.text))));
+    if (!form || e.kanji.some(k => k.text === word) || !e.sense.some(s => s.partOfSpeech.some(p => ['n', 'vs', 'adj-na'].includes(p)))) continue;
+    const entry = dictionaryEntry(e, tags);
+    entry.japanese = [{ word: form.text, reading: r }];
+    found.push({ entry, form: form.text, common: [...e.kana, ...e.kanji].some(k => k.common) });
+  }
+  return found.sort((a, b) => Number(b.common) - Number(a.common)).filter((c, i, all) => all.findIndex(other => other.form === c.form) === i).slice(0, 8);
+}
+module.exports = { initialize, lookup, search, analyze, homophones };

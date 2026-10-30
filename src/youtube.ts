@@ -25,4 +25,4 @@ export function youtubeUrl(input: string): string | null {
 
 export { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP } from './youtube-page';
 export type Caption = { text: string; tokens: { text: string; word: boolean }[]; time: number; title: string; url: string; language: 'ja' | null; paused: boolean };
-export type DictionaryEntry = { pitch?: import('./pitch').Accent[]; japanese: { word?: string; reading?: string }[]; senses: { english_definitions: string[]; parts_of_speech: string[] }[]; slug: string; source?: 'JMdict' | 'JMnedict' };
+export type DictionaryEntry = { pitch?: import('./pitch').Accent[]; japanese: { word?: string; reading?: string }[]; senses: { english_definitions: string[]; parts_of_speech: string[] }[]; slug: string; source?: 'JMdict' | 'JMnedict' | 'Grammar' };
