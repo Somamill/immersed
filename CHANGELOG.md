@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.14 — 2026-10-30
+
+Use Japanese context to check confusing caption alternatives
+
+- Add a pinned Japanese language model to rank existing close-sounding ASR alternatives using surrounding captions; never synthesize replacement words.
+- Protect proper/unknown words, numbers and negation; require stronger evidence to override a model majority and retain the original if checks fail.
+- A constructed homophone example improved; six recorded diagnostic clips stayed at 22.3% CER. General speech accuracy gains and real YouTube validation remain unproven.
+
 ## 0.5.13 — 2026-10-30
 
 Compare three Japanese speech recognizers progressively

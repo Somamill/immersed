@@ -71,3 +71,9 @@ The second and third recognizers use faster-whisper 1.2.1 (SYSTRAN, MIT), CTrans
 - Kotoba Whisper v2.0 CTranslate2 conversion: https://huggingface.co/kotoba-tech/kotoba-whisper-v2.0-faster · revision f44edd35eaeb2274e85ac7b31fb2c6f59ff1c4bc. Conversion card says MIT; original Kotoba model is Apache-2.0: https://huggingface.co/kotoba-tech/kotoba-whisper-v2.0.
 - Whisper Small CTranslate2 conversion: https://huggingface.co/Systran/faster-whisper-small · revision 536b0662742c02347bc0e980a01041f333bce120. OpenAI Whisper weights/code are MIT: https://github.com/openai/whisper/blob/main/LICENSE.
 - Audio comparison diagnostics use temporary public dataset samples for analysis only. No recordings are redistributed by this release.
+
+## Japanese context scoring (0.5.14)
+
+- rinna Co., Ltd., japanese-gpt2-xsmall (43.7M parameters): https://huggingface.co/rinna/japanese-gpt2-xsmall, model revision 8e91527b3276e0565154935e84a08bf0137ed99f. Model card declares MIT; trained on Japanese CC-100 and Wikipedia. Public weights download only when a safe comparison requires language scoring.
+- The worker uses the model's likelihood objective for ranking existing ASR candidates, never text generation. Likelihood is not a semantic truth detector or calibrated recognition confidence.
+- Transformers 4.55.4 (Apache-2.0), SentencePiece 0.2.1 (Apache-2.0), and CPU-only PyTorch 2.6.0 (BSD-style) are server dependencies. Model/software notices remain available at their original project links. Tokenization guards use the existing licensed Kuromoji/IPADIC data.

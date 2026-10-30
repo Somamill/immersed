@@ -8,3 +8,9 @@ faster-whisper==1.2.1
 av==16.1.0
 ctranslate2==4.8.4
 sherpa-onnx==2.0.1
+
+# CPU-only context scorer; use public wheels without an account/GPU.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.6.0+cpu
+transformers==4.55.4
+sentencepiece==0.2.1

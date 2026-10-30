@@ -43,3 +43,15 @@ The references were supplied by the dataset and not manually verified. These are
 A separate real worker smoke check on a short recording produced three progressive updates. All three models returned the same complete phrase, with a final matching timed cue. This establishes that the multi-model plumbing runs on audio; it is not evidence of broad accuracy.
 
 The current best measured default remains Reazon. Further accuracy claims need human-checked recordings with slang, overlapping speakers, music and proper names. GPU execution can reduce comparison latency; it does not itself resolve disagreements. Network permission/source-audio access is still required before real YouTube comparison can be tested here.
+
+## Context-aware candidate selection (0.5.14)
+
+A compact Japanese causal language model, [rinna/japanese-gpt2-xsmall](https://huggingface.co/rinna/japanese-gpt2-xsmall), can now score the same speech-model candidates with adjacent caption context. It is a 43.7M-parameter model trained on CC-100/Wikipedia, not a semantic verifier. It does not generate new caption text or search the dictionary for plausible replacement kanji.
+
+Selection keeps the whole original ASR candidate, including its timing. An alternative must be similar in length (80–120%), differ by at most 15% of characters (1–3 character cap), and have a close morphological reading (at most 15% of mora-like reading characters, capped at 2). Kuromoji guards preserve the sequence of proper/unknown tokens, numeric tokens, negative auxiliaries, and auxiliary forms for tense/modality. These protect some names/slang/polarity, not every linguistic nuance.
+
+A change requires at least 1.5 nats per changed character of contextual likelihood improvement and 0.03 per character overall; overriding a speech-model majority requires 3.0 and 0.06 respectively. These are conservative fixed heuristics, not calibrated confidence. Scores normalize punctuation/spacing, condition on up to 64 preceding characters and include up to 40 following characters. Adjacent context comes only from ASR hypotheses, never a gold reference. If all candidates are identical, all alternatives fail the guards, or the model is unavailable, text is retained.
+
+A constructed homophone check selected 公園 over 公演 in a sentence about taking a walk. This is a text-selection smoke check, not a speech-accuracy benchmark. Re-running the frozen six-clip diagnostic caused zero changes: 31/139 errors remained (22.3%). No broad accuracy gain is demonstrated. References are not manually verified. Unrelated diagnostic clips are scored independently, without inventing neighboring conversation context.
+
+Candidate scores, guard decisions and selected alternatives are retained in the comparison report. Settings → About says “context suggests alternative” when the language model changes selection; this is never shown as verified speech. Fluent unusual statements, jokes and known slang can still be judged incorrectly. If all recognizers make the same mistake, this stage cannot repair it. Real YouTube audio access remains blocked here.

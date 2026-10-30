@@ -1,0 +1,19 @@
+{
+  "source": "asr-comparison.json; frozen dataset rows 6–11",
+  "reference": "supplied text, not manually verified; independent clips have no neighbor context",
+  "model": "rinna/japanese-gpt2-xsmall",
+  "revision": "8e91527b3276e0565154935e84a08bf0137ed99f",
+  "characters": 139,
+  "originalEdits": 31,
+  "contextEdits": 31,
+  "changes": 0,
+  "constructedExample": {
+    "speechRecognitionTest": false,
+    "candidates": [
+      "今日は天気がいいので公演を散歩しました",
+      "今日は天気がいいので公園を散歩しました"
+    ],
+    "selected": "今日は天気がいいので公園を散歩しました"
+  },
+  "limitation": "No general speech accuracy gain established. Language likelihood does not verify audio."
+}

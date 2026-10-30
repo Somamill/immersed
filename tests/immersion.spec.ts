@@ -941,3 +941,19 @@ test('partial generated captions update through model comparison instead of stop
   await expect(page.getByRole('button', { name: 'Look up 橋', exact: true })).toBeVisible({ timeout: 12000 });
   expect(polls).toBeGreaterThanOrEqual(3);
 });
+
+test('a contextual caption suggestion stays visibly unverified in the buried comparison report', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+    status: 'ready', cues: [{ start: 0, end: 10, text: '公園を散歩しました。' }],
+    comparisons: [{ start: 0, end: 10, selected: 'kotoba', reason: 'context-alternative', agreement: .9, candidates: [] }],
+  }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 公園', exact: true })).toBeVisible({ timeout: 12000 });
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByRole('button', { name: 'About', exact: true }).click();
+  const report = page.getByText(/context suggests alternative/);
+  await report.scrollIntoViewIfNeeded();
+  await expect(report).toContainText('text similarity 90%');
+});

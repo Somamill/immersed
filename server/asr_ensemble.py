@@ -6,14 +6,16 @@ import tempfile
 from pathlib import Path
 from asr_compare import ENGINE_ORDER, compare
 from asr_reazon import group_subwords
+from caption_context import ContextScorer
 
-PIPELINE = 'ensemble-v1'
+PIPELINE = 'ensemble-context-v1'
 
 def recognize(media, publish=lambda data: None, preferred='reazon'):
     duration = float(subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
                                              '-of', 'default=noprint_wrappers=1:nokey=1', str(media)], text=True))
     root = Path(__file__).parent
     slots = []
+    context_scorer = ContextScorer()
     with tempfile.TemporaryDirectory(prefix='immersed-ensemble-') as folder:
         for start in range(0, int(duration + .999), 12):
             end = min(duration, start + 12)
@@ -38,10 +40,16 @@ def recognize(media, publish=lambda data: None, preferred='reazon'):
                 except Exception as error:
                     slot['candidates'].append({'model': engine, 'text': '', 'error': type(error).__name__})
                 cues, comparisons = [], []
-                for item in slots:
+                for index, item in enumerate(slots):
                     if not item['candidates']:
                         continue
-                    result = compare(item['candidates'], preferred)
+                    result = item.get('context_result') or compare(item['candidates'], preferred)
+                    if len(item['candidates']) == len(ENGINE_ORDER) and 'context_result' not in item:
+                        left_context = ''.join(c['text'] for c in cues)[-64:]
+                        next_slot = slots[index + 1] if index + 1 < len(slots) else None
+                        right_context = next_slot['candidates'][0].get('text', '') if next_slot and next_slot['candidates'] else ''
+                        result = context_scorer.apply(result, left_context, right_context)
+                        item['context_result'] = result
                     chosen = next((c for c in item['candidates'] if c['model'] == result['selected']), None)
                     if chosen:
                         cues.extend(group_subwords(chosen['tokens'], item['end']))
