@@ -1,3 +1,4 @@
+import { preserveCaptionTokens } from '../src/subtitle-tokens';
 import { test, expect } from '@playwright/test';
 import { refineCaptionTrack } from '../src/caption-reflow';
 import { accentHeights, accentMorae } from '../src/pitch';
@@ -7,7 +8,7 @@ import type { AnalyzedToken } from '../src/language';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
 import { embeddedPlayerSource, swipeAction } from '../src/player';
 import { familiarity, showFurigana } from '../src/learning';
-import { japaneseCaptionUrl, parseCaptionTrack, readingCue, normalizeJapaneseCaption, captionSourceRank, sentenceTarget } from '../src/captions';
+import { combineCaptionTracks, readingTimeline, japaneseCaptionUrl, parseCaptionTrack, readingCue, normalizeJapaneseCaption, captionSourceRank, sentenceTarget } from '../src/captions';
 import { automaticRetryDelay } from '../src/subtitle-policy';
 
 test('home offers real YouTube discovery and retains the saved-word library', async ({ page }) => {
@@ -121,7 +122,7 @@ test('timed captions join fragments, normalize line breaks and resolve overlap',
     { tStartMs: 2000, dDurationMs: 1000, segs: [{ utf8: '食べました。' }] },
     { tStartMs: 3000, segs: [{ utf8: '\n' }] },
   ] });
-  expect(cues).toEqual([{ start: 0, end: 2, text: '日本語です。' }, { start: 2, end: 3, text: '食べました。' }]);
+  expect(cues).toEqual([{ start: 0, end: 2, text: '日本語です。' }, { start: 2, end: 3, text: '食べました。', hardEnd: true }]);
   expect(readingCue(cues, 1)?.text).toBe('日本語です。');
   expect(readingCue(cues, 8)).toBeUndefined();
   expect(readingCue(cues, 2)?.text).toBe('食べました。');
@@ -820,11 +821,12 @@ test('dictionary and settings occupy the reading area while the selected player 
   const player = page.getByTestId('video-surface');
   await player.evaluate(node => { node.firstElementChild!.setAttribute('data-mounted-marker', 'same-player'); });
   const expectBelowPlayer = async (testId: string) => {
-    const video = (await player.boundingBox())!;
-    const bounds = (await page.getByTestId(testId).boundingBox())!;
-    expect(bounds.y).toBeGreaterThanOrEqual(video.y + video.height);
-    expect(video.height).toBeGreaterThan(128);
-    expect(bounds.height).toBeGreaterThan(350);
+    await expect(page.getByTestId(testId)).toBeVisible();
+    await expect.poll(async () => {
+      const video = (await player.boundingBox())!;
+      const bounds = (await page.getByTestId(testId).boundingBox())!;
+      return bounds.y >= video.y + video.height - 1 && video.height > 128 && bounds.height > 350;
+    }).toBe(true);
     await expect(player.locator('[data-mounted-marker="same-player"]')).toHaveCount(1);
   };
   await page.getByRole('button', { name: 'Look up 食べる', exact: true }).click();
@@ -956,4 +958,68 @@ test('a contextual caption suggestion stays visibly unverified in the buried com
   const report = page.getByText(/context suggests alternative/);
   await report.scrollIntoViewIfNeeded();
   await expect(report).toContainText('text similarity 90%');
+});
+
+test('caption windows, exact-boundary appends and explicit clears preserve all source words', () => {
+  const track = parseCaptionTrack({ events: [
+    { tStartMs: 0, dDurationMs: 500, wWinId: 1, segs: [{ utf8: '日本' }] },
+    { tStartMs: 500, dDurationMs: 1500, wWinId: 1, aAppend: 1, segs: [{ utf8: '語です' }] },
+    { tStartMs: 600, dDurationMs: 1200, wWinId: 2, segs: [{ utf8: '友達と' }] },
+    { tStartMs: 700, dDurationMs: 1000, wWinId: 3, segs: [{ utf8: '散歩する' }] },
+    { tStartMs: 2000, wWinId: 1, segs: [{ utf8: '' }] },
+  ] });
+  expect(readingCue(track, .8)?.text).toBe('日本語です 友達と 散歩する');
+  expect(readingCue(readingTimeline(track), 2.1)).toBeUndefined();
+  expect(readingCue(track, .5)?.text).toBe('日本語です');
+  const repeated = parseCaptionTrack({ events: [
+    { tStartMs: 0, dDurationMs: 1000, wWinId: 1, segs: [{ utf8: 'はい' }] },
+    { tStartMs: 0, dDurationMs: 1000, wWinId: 2, segs: [{ utf8: 'はい' }] },
+  ] });
+  expect(readingCue(repeated, .5)?.text).toBe('はい はい');
+});
+test('reading grace fills short gaps without masking the next line, long silence or hard clears', () => {
+  const track = readingTimeline([{ start: 0, end: .2, text: '短い字幕' }, { start: .6, end: 1, text: '次です', hardEnd: true }]);
+  expect(readingCue(track, .4)?.text).toBe('短い字幕');
+  expect(readingCue(track, .6)?.text).toBe('次です');
+  expect(readingCue(track, 1.01)).toBeUndefined();
+  expect(readingCue(readingTimeline([{ start: 0, end: 3, text: '通常の長さの字幕です' }, { start: 3.12, end: 5, text: '次の文です' }]), 3.08)?.text).toBe('通常の長さの字幕です');
+  expect(readingCue(readingTimeline([{ start: 0, end: .1, text: '長い字幕でも長い無音には残さない' }]), 2)).toBeUndefined();
+});
+test('incomplete or invalid morphology cannot omit subtitle characters', () => {
+  const text = '日本語を話す';
+  const token: AnalyzedToken = { text: '日本語', start: 0, end: 3, lemma: '日本語', reading: 'にほんご', pos: 'noun', word: true, grammar: [] };
+  const complete = preserveCaptionTokens(text, [token, { ...token, text: '話す', start: 4, end: 6 }]);
+  expect(complete.map(t => t.text).join('')).toBe(text);
+  expect(complete[1].text).toBe('を');
+  expect(preserveCaptionTokens(text, [{ ...token, text: '誤った解析' }]).map(t => t.text).join('')).toBe(text);
+});
+test('three wrapped subtitle rows and furigana fit above playback controls on a small iPhone viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 667 });
+  const text = '日本語を勉強しています。友達と公園で話します。今日はとても楽しいです。';
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 10, text }] }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  const words = page.getByTestId('subtitle-words');
+  await expect(words.getByRole('button').first()).toBeVisible({ timeout: 12000 });
+  await expect.poll(async () => {
+    const bounds = (await words.boundingBox())!;
+    const scroll = (await page.getByTestId('caption-scroll').boundingBox())!;
+    const play = (await page.getByRole('button', { name: 'Play video', exact: true }).boundingBox())!;
+    return bounds.y >= scroll.y - 1 && bounds.y + bounds.height <= scroll.y + scroll.height + 1 && bounds.y + bounds.height <= play.y;
+  }).toBe(true);
+  const glyphs = await words.evaluate(node => {
+    const clone = node.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll('[data-testid^="furigana-"]').forEach(n => n.remove());
+    return clone.textContent || '';
+  });
+  expect(glyphs.replace(/\s/g, '')).toContain(text);
+});
+
+test('an unfinished ASR pass retains a straddling source sentence and does not fill verified silence', () => {
+  const primary = [{ start: 0, end: 10, text: '生成した部分' }];
+  const source = [{ start: 9, end: 15, text: '途中からも必要な言葉' }, { start: 15, end: 18, text: '次の文' }];
+  expect(combineCaptionTracks(primary, source, 12)).toEqual([
+    ...primary, { start: 12, end: 15, text: '途中からも必要な言葉' }, source[1],
+  ]);
 });

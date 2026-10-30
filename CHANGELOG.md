@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.15 — 2026-10-30
+
+Keep subtitle words visible and improve reading timing
+
+- Preserve overlapping captions, exact-boundary appends, unparsed words and source sentences crossing partial ASR coverage.
+- Add bounded reading grace, retain word end times, merge equal-timestamp cues, and avoid ending captions at arbitrary chunk boundaries.
+- Reserve three furigana rows, grow the reading area with content, and reset caption scroll on sentence changes. Real iPhone timing/layout still need device testing; source-audio access remains blocked.
+
 ## 0.5.14 — 2026-10-30
 
 Use Japanese context to check confusing caption alternatives

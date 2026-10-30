@@ -8,13 +8,13 @@ async function reflowCaptions(cues) {
     const next = cues[i];
     const previous = result.at(-1);
     let merge = false;
-    if (previous && joined < 2 && next.start >= previous.end - 0.02 && next.start - previous.end <= 0.12 && next.end - previous.start <= 6 && previous.text.length + next.text.length <= 48 && /[ぁ-ヿ㐀-鿿々]$/.test(previous.text) && /^[ぁ-ヿ㐀-鿿々]/.test(next.text)) {
+    if (previous && !previous.hardEnd && joined < 2 && next.start >= previous.end - 0.02 && next.start - previous.end <= 0.12 && next.end - previous.start <= 6 && previous.text.length + next.text.length <= 48 && /[ぁ-ヿ㐀-鿿々]$/.test(previous.text) && /^[ぁ-ヿ㐀-鿿々]/.test(next.text)) {
       const boundary = previous.text.length;
       const tokens = await analyze(previous.text + next.text, true);
       const crossing = tokens.find(t => t.word && t.start < boundary && t.end > boundary);
       if (crossing) merge = (await lookup(crossing.lemma, crossing)).length > 0;
     }
-    if (merge) { result[result.length - 1] = { start: previous.start, end: next.end, text: previous.text + next.text }; joined++; }
+    if (merge) { result[result.length - 1] = { start: previous.start, end: next.end, text: previous.text + next.text, ...(next.hardEnd ? { hardEnd: true } : {}) }; joined++; }
     else { result.push({ ...next }); joined = 0; }
     // Yield between small groups so word lookup can run ahead of background work.
     if (i % 8 === 7) await new Promise(resolve => setImmediate(resolve));

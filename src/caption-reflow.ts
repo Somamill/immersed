@@ -23,6 +23,7 @@ export async function refineCaptionTrack(raw: TimedCue[], endpoint: string, sign
       while (offset < batch.length && text.length < cue.text?.length) text += batch[offset++].text;
       const last = batch[offset - 1];
       if (!first || !last || text !== cue.text || cue.start !== first.start || cue.end !== last.end) throw new Error('Invalid caption reflow');
+      if (last.hardEnd) cue.hardEnd = true;
     }
     if (offset !== batch.length) throw new Error('Invalid caption reflow');
     if (signal.aborted) return;

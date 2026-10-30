@@ -25,28 +25,42 @@ def load_model():
         decoding_method='greedy_search', provider='cpu')
 
 def group_subwords(subwords, duration):
-    cues, text, start, previous = [], '', None, None
+    # Preserve recognized glyphs; tokens at a shared timestamp must not become
+    # mutually exclusive captions. End times are evidence, not display duration.
+    cues, text, start, previous, spoken_end = [], '', None, None, 0.0
     for item in subwords:
-        token = item.get('token', '') if isinstance(item, dict) else getattr(item, 'token', '')
-        time = item.get('seconds', 0) if isinstance(item, dict) else getattr(item, 'seconds', 0)
-        token = token.replace(' ', '')
-        if not token or not re.search(r'[ぁ-ヿ㐀-鿿A-Za-z0-9、。，．！？!?….,]', token):
+        get = item.get if isinstance(item, dict) else lambda key, default=None: getattr(item, key, default)
+        token = get('token', '')
+        if not token or re.fullmatch(r'<\|.*?\|>|<blk>|<s>|</s>', token):
             continue
-        time = max(0.0, min(max(0.0, float(duration) - .15), float(time)))
+        if token.isspace() and not text:
+            continue
+        time = max(previous or 0.0, min(max(0.0, float(duration) - .01), float(get('seconds', 0))))
         gap = time - previous if previous is not None else 0
-        if text and (gap > 0.55 or time - start >= MAX_CUE_SECONDS or len(text) + len(token) > MAX_CUE_CHARS):
-            cues.append({'start': start, 'end': max(start + .15, time), 'text': text})
+        if text and time > start + .02 and (gap > .55 or time - start >= MAX_CUE_SECONDS or len(text) + len(token) > MAX_CUE_CHARS):
+            cues.append({'start': start, 'end': min(duration, max(start + .4, spoken_end)), 'text': text})
             text, start = '', None
-        text += token
         if start is None:
             start = time
+        text += token
         previous = time
-        if re.search(r'[。！？!?、，,\n]$', text):
-            cues.append({'start': start, 'end': min(float(duration), max(start + .15, time + .35)), 'text': text})
+        spoken_end = min(duration, max(time + .15, float(get('end', time + .45))))
+        if re.search(r'[。！？!?]$', text):
+            cues.append({'start': start, 'end': min(duration, max(start + .4, spoken_end)), 'text': text})
             text, start = '', None
     if text and start is not None:
-        cues.append({'start': start, 'end': min(float(duration), max(start + .15, float(duration))), 'text': text})
-    return [cue for cue in cues if cue['end'] > cue['start'] and cue['text']]
+        cues.append({'start': start, 'end': min(duration, max(start + .4, spoken_end)), 'text': text})
+    result = []
+    for cue in cues:
+        if result and cue['start'] <= result[-1]['start'] + .02:
+            result[-1]['text'] += cue['text']
+            result[-1]['end'] = max(result[-1]['end'], cue['end'])
+        else:
+            if result:
+                result[-1]['end'] = min(result[-1]['end'], cue['start'])
+            result.append(cue)
+    return [cue for cue in result if cue['end'] > cue['start'] and cue['text']]
+
 
 def recognize(media_path, model, transcribe, audio_from_path, ffmpeg='ffmpeg'):
     duration = float(subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', str(media_path)], text=True).strip())

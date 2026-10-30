@@ -17,7 +17,7 @@ def recognize(name, audio):
         import soundfile
         duration = soundfile.info(audio).duration
         result = transcribe(load_model(), audio_from_path(audio))
-        tokens = [{'seconds': max(0, min(duration - .01, t.seconds - PAD_SECONDS)), 'token': t.token} for t in result.subwords]
+        tokens = [{'seconds': max(0, min(duration - .01, t.seconds - PAD_SECONDS)), 'token': t.token, 'end': max(0, min(duration, (result.subwords[i + 1].seconds - PAD_SECONDS) if i + 1 < len(result.subwords) else t.seconds - PAD_SECONDS + .45))} for i, t in enumerate(result.subwords)]
     else:
         from huggingface_hub import snapshot_download
         from faster_whisper import WhisperModel
@@ -32,10 +32,10 @@ def recognize(name, audio):
                 # Upstream distilled checkpoint ships teacher alignment heads
                 # outside its two decoder layers. Do not invoke its broken aligner.
                 chars = list(s.text)
-                tokens.extend({'seconds': s.start + i * (s.end - s.start) / max(1, len(chars)), 'token': c}
+                tokens.extend({'seconds': s.start + i * (s.end - s.start) / max(1, len(chars)), 'end': s.start + (i + 1) * (s.end - s.start) / max(1, len(chars)), 'token': c}
                               for i, c in enumerate(chars))
             else:
-                tokens.extend({'seconds': w.start, 'token': w.word} for w in (s.words or []))
+                tokens.extend({'seconds': w.start, 'end': w.end, 'token': w.word} for w in (s.words or []))
     return {'model': name, 'tokens': tokens, 'seconds': round(time.monotonic() - started, 3)}
 
 if __name__ == '__main__':

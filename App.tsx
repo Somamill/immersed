@@ -1,3 +1,4 @@
+import { preserveCaptionTokens } from './src/subtitle-tokens';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Keyboard, KeyboardAvoidingView, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Switch, Text as NativeText, TextInput, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,7 +10,7 @@ import { loadCaptionCache, saveCaptionCache } from './src/caption-cache';
 import { refineCaptionTrack } from './src/caption-reflow';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { readingCue, normalizeJapaneseCaption, captionSourceRank, sentenceTarget } from './src/captions';
+import { readingCue, readingTimeline, combineCaptionTracks, normalizeJapaneseCaption, captionSourceRank, sentenceTarget } from './src/captions';
 import { automaticRetryDelay } from './src/subtitle-policy';
 import { swipeAction } from './src/player';
 import { familiarity, type JlptLevel } from './src/learning';
@@ -39,6 +40,7 @@ function loadAnalysis(sentence: string): Promise<AnalyzedToken[]> {
   const timer = setTimeout(() => controller.abort(), 6000);
   const request = languageRequest<{ tokens: AnalyzedToken[]; dictionary?: Record<string, DictionaryEntry[]> }>('analyze', { text: sentence, dictionary: 'true' }, controller.signal).then(result => {
     if (analysisCache.size >= 300) analysisCache.delete(analysisCache.keys().next().value!);
+    result.tokens = preserveCaptionTokens(sentence, result.tokens);
     analysisCache.set(key, result.tokens);
     for (const [lemma, entries] of Object.entries(result.dictionary || {})) dictionaryCache.set(lemma, entries);
     return result.tokens;
@@ -75,11 +77,12 @@ export default function App() {
   const library = panel === 'words';
   const setSettings = (open: boolean) => openPanel(open ? 'settings' : undefined);
   const setLibrary = (open: boolean) => openPanel(open ? 'words' : undefined);
-  const { width, height } = useWindowDimensions();
+  const { width, height, fontScale } = useWindowDimensions();
+  const [captionHeight, setCaptionHeight] = useState(0);
+  const captionScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [viewportHeight, setViewportHeight] = useState(height);
   const dockClearance = Math.max(insets.bottom, 12) + 76;
-  const normalReadingHeight = Math.max(200, Math.min(280, height * 0.28)) + dockClearance;
-  const readingHeight = Math.min((panel ? Math.max(normalReadingHeight, height * 0.57) : normalReadingHeight), Math.max(dockClearance + 120, Math.min(height, viewportHeight) - 128));
+
   const [dark, setDark] = useState(true);
   const [hideShorts, setHideShorts] = useState(true);
   const [minimumMinutes, setMinimumMinutes] = useState(0);
@@ -97,6 +100,7 @@ export default function App() {
   const latestTime = useRef(0);
   const pendingSeek = useRef<{ target: number; requestedAt: number } | null>(null);
   const [generated, setGenerated] = useState<GeneratedCue[]>([]);
+  const [generatedThrough, setGeneratedThrough] = useState(0);
   const [comparisonReport, setComparisonReport] = useState<{ videoId: string; data: NonNullable<Transcription['comparisons']> } | null>(null);
   const [subtitleStatus, setSubtitleStatus] = useState('');
   const [error, setError] = useState('');
@@ -114,6 +118,9 @@ export default function App() {
   const [readings, setReadings] = useState(true);
   const [pitchAccent, setPitchAccent] = useState(false);
   const lookupResume = useRef(false);
+  const threeRows = Math.max(180, 3 * (34 + (readings ? 16 : 0)) * fontScale + 6);
+  const normalReadingHeight = Math.min(Math.max(threeRows, captionHeight) + 108 + dockClearance, height * .68);
+  const readingHeight = Math.min(panel ? Math.max(normalReadingHeight, height * .57) : normalReadingHeight, Math.max(dockClearance + 120, Math.min(height, viewportHeight) - 128));
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -127,11 +134,11 @@ export default function App() {
   const rawTimeline = useMemo(() => {
     const source = sourceTranscript?.videoId === videoId ? sourceTranscript.cues : [];
     if (!generated.length || transcriptRank.current >= 3) return source.length ? source : generated;
-    const end = generated[generated.length - 1].end;
-    return [...generated, ...source.filter(cue => cue.start >= end)];
-  }, [sourceTranscript, videoId, generated]);
+    return combineCaptionTracks(generated, source, generatedThrough);
+  }, [sourceTranscript, videoId, generated, generatedThrough]);
   const [refinedTrack, setRefinedTrack] = useState<{ raw: GeneratedCue[]; cues: GeneratedCue[] } | null>(null);
-  const timeline = refinedTrack?.raw === rawTimeline ? refinedTrack.cues : rawTimeline;
+  const sourceTimeline = refinedTrack?.raw === rawTimeline ? refinedTrack.cues : rawTimeline;
+  const timeline = useMemo(() => readingTimeline(sourceTimeline), [sourceTimeline]);
   useEffect(() => {
     if (rawTimeline.length < 2) return;
     const controller = new AbortController();
@@ -163,6 +170,7 @@ export default function App() {
   const observedCaption = !hasTimeline && hasSourceCaption ? nativeCaption : null;
   const caption: Caption | null = timelineCue ? { text: timelineCue.text, tokens: [], time: timelineCue.start, title: nativeCaption?.title || 'YouTube video', url: pageUrl, language: 'ja', paused: clock.paused } : observedCaption ? { ...observedCaption, paused: clock.paused } : null;
   const sentence = normalizeJapaneseCaption(caption?.text || '');
+  useEffect(() => { captionScroll.current?.scrollTo({ y: 0, animated: false }); }, [sentence]);
   const analysisError = analysisFailure?.text === sentence ? analysisFailure.message : '';
   const cachedTokens = analysisCache.get(`${grouped}:${sentence}`);
   const currentAnalysis = cachedTokens ? { text: sentence, tokens: cachedTokens } : analysis.grouped === grouped && sentence.startsWith(analysis.text) ? analysis : null;
@@ -212,6 +220,7 @@ export default function App() {
       try {
         const result = await languageRequest<Transcription>('transcribe', { videoId, retry: String(attempts > 0) }, controller.signal);
         if (!active || transcriptRank.current >= 3) return;
+        if (Number.isFinite(result.processedSeconds)) setGeneratedThrough(result.processedSeconds!);
         if (result.comparisons) setComparisonReport({ videoId, data: result.comparisons });
         if (result.status === 'ready' && result.cues?.length) { setGenerated(old => old.length === result.cues!.length && old.every((cue, i) => cue.text === result.cues![i].text && cue.start === result.cues![i].start && cue.end === result.cues![i].end) ? old : result.cues!); setSubtitleStatus(''); void saveCaptionCache(videoId, result.cues); }
         else if (result.status === 'processing' || result.status === 'busy') {
@@ -262,7 +271,7 @@ export default function App() {
   const handlePage = (url: string) => {
     const canonical = youtubeUrl(url);
     const id = canonical ? new URL(canonical).searchParams.get('v') : null;
-    if (id !== pageVideo.current) { pageVideo.current = id; seenSourceCaption.current = false; transcriptRank.current = 0; pendingSeek.current = null; latestTime.current = 0; setSubtitleStatus(''); setGenerated([]); setNativeCaption(null); setClock({ time: 0, paused: true }); setLookup(null); }
+    if (id !== pageVideo.current) { pageVideo.current = id; seenSourceCaption.current = false; transcriptRank.current = 0; pendingSeek.current = null; latestTime.current = 0; setSubtitleStatus(''); setGenerated([]); setGeneratedThrough(0); setNativeCaption(null); setClock({ time: 0, paused: true }); setLookup(null); }
     if (!id && /^https:\/\/(?:m\.|www\.)?youtube\.com\//.test(url)) lastBrowse.current = url;
     setPageUrl(url);
   };
@@ -411,8 +420,8 @@ export default function App() {
       {watching && <View testID="subtitle-panel" style={[s.study, { height: readingHeight, paddingBottom: dockClearance, paddingHorizontal: panel ? 0 : 12, paddingTop: panel ? 0 : 6 }]} {...(!panel && !lookup ? gestures.panHandlers : {})}>
         {settings ? settingsPanel : library ? libraryPanel : <>
           <VideoCoverage cues={rawTimeline} level={level} knowledge={knowledge} dark={dark} />
-          <ScrollView style={s.captionScroll} contentContainerStyle={{ paddingVertical: 8, flexGrow: 1, justifyContent: 'center' }}>
-            {sentence ? <><StudySubtitles tokens={tokens} tail={unparsedTail} dark={dark} level={level} knowledge={knowledge} readings={readings} onWord={tapWord} />{!!analysisError && <Text style={s.hint}>{analysisError}</Text>}</> : <Text style={s.captionEmpty}>{subtitleStatus ? 'Japanese subtitles unavailable' : '—'}</Text>}
+          <ScrollView ref={captionScroll} testID="caption-scroll" style={s.captionScroll} contentContainerStyle={{ paddingVertical: 8, flexGrow: 1, justifyContent: 'center' }}>
+            {sentence ? <><StudySubtitles tokens={tokens} tail={unparsedTail} dark={dark} level={level} knowledge={knowledge} readings={readings} onHeight={next => setCaptionHeight(old => Math.abs(old - next) < 1 ? old : next)} onWord={tapWord} />{!!analysisError && <Text style={s.hint}>{analysisError}</Text>}</> : <Text style={s.captionEmpty}>{subtitleStatus ? 'Japanese subtitles unavailable' : '—'}</Text>}
           </ScrollView>
           <SentenceControls dark={dark} paused={clock.paused} onTogglePlayback={togglePlayback} previous={previousSentence === undefined ? undefined : () => skipSentence(-1)} next={nextSentence === undefined ? undefined : () => skipSentence(1)} />
         </>}

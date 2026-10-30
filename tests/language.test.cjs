@@ -108,3 +108,10 @@ test('pitch patterns come from pinned Kanjium and retain multiple recorded accen
   assert.ok(accents('箸', 'はし').some(p => p.downstep === 1));
   assert.deepEqual(accents('NOT_A_WORD'), []);
 });
+
+test('caption reflow respects explicit clears and carries a terminal clear when joining a word', async () => {
+  const { reflowCaptions } = require('../server/caption-reflow.cjs');
+  const clear = [{ start: 0, end: 1, text: '日', hardEnd: true }, { start: 1, end: 2, text: '本語' }];
+  assert.deepEqual(await reflowCaptions(clear), clear);
+  assert.deepEqual(await reflowCaptions([{ start: 0, end: 1, text: '日' }, { start: 1, end: 2, text: '本語', hardEnd: true }]), [{ start: 0, end: 2, text: '日本語', hardEnd: true }]);
+});

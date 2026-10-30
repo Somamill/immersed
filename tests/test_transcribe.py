@@ -45,4 +45,23 @@ class ReazonCueTests(unittest.TestCase):
             {'seconds': .6, 'token': 'り'}, {'seconds': .7, 'token': '！'}], 2)
         self.assertEqual(cues[0]['text'], 'やっぱり！')
         self.assertAlmostEqual(cues[0]['start'], .3)
-        self.assertAlmostEqual(cues[0]['end'], 1.05)
+        self.assertAlmostEqual(cues[0]['end'], 1.15)
+
+class TimingPreservationTests(unittest.TestCase):
+    def test_shared_timestamps_cannot_hide_words_behind_another_cue(self):
+        import sys
+        sys.path.insert(0, str(Path(__file__).parents[1] / 'server'))
+        from asr_reazon import group_subwords
+        text = '「日本語の字幕です！」' * 5
+        cues = group_subwords([{'seconds': 1, 'token': char} for char in text], 2)
+        self.assertEqual(''.join(c['text'] for c in cues), text)
+        self.assertEqual(len(cues), 1)
+    def test_word_end_times_keep_speech_visible_but_not_until_chunk_end(self):
+        from asr_reazon import group_subwords
+        cues = group_subwords([{'seconds': 1, 'end': 2.3, 'token': '日本語'}], 12)
+        self.assertEqual(cues[0]['end'], 2.3)
+        self.assertEqual(cues[0]['text'], '日本語')
+    def test_short_foreign_words_spaces_and_quotes_are_retained(self):
+        from asr_reazon import group_subwords
+        cues = group_subwords([{'seconds': .1, 'token': '「I'}, {'seconds': .2, 'token': ' think」'}], 2)
+        self.assertEqual(''.join(c['text'] for c in cues), '「I think」')

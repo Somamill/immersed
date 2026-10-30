@@ -55,3 +55,11 @@ A change requires at least 1.5 nats per changed character of contextual likeliho
 A constructed homophone check selected 公園 over 公演 in a sentence about taking a walk. This is a text-selection smoke check, not a speech-accuracy benchmark. Re-running the frozen six-clip diagnostic caused zero changes: 31/139 errors remained (22.3%). No broad accuracy gain is demonstrated. References are not manually verified. Unrelated diagnostic clips are scored independently, without inventing neighboring conversation context.
 
 Candidate scores, guard decisions and selected alternatives are retained in the comparison report. Settings → About says “context suggests alternative” when the language model changes selection; this is never shown as verified speech. Fluent unusual statements, jokes and known slang can still be judged incorrectly. If all recognizers make the same mistake, this stage cannot repair it. Real YouTube audio access remains blocked here.
+
+## Timing and visible text fixes (0.5.15)
+
+Three identified ways of losing visible words have been fixed: overlapping source windows replacing each other, equal-time generated captions hiding earlier text, and a source sentence crossing the edge of partial generation being discarded. Exact-boundary rolling appends retain their prefix. Quotes, foreign-language fragments and unparsed source spans remain visible.
+
+Display timing adds bounded reading time for very short cues and bridges brief gaps, without moving their starts or delaying the next cue. Explicit clears and long silence still clear the display. Word end times are carried through generated processing; this is a timing-data/formatting fix, not newly deployed forced alignment. Kotoba's distributed character timing remains approximate.
+
+The reading panel automatically reserves three rows including furigana, grows for longer text, and retains scrolling beyond its screen-space cap. Timing/caption tests use controlled inputs; the cloud still cannot acquire YouTube audio to prove synchronization on a live video here.

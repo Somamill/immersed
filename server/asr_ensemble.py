@@ -8,7 +8,7 @@ from asr_compare import ENGINE_ORDER, compare
 from asr_reazon import group_subwords
 from caption_context import ContextScorer
 
-PIPELINE = 'ensemble-context-v1'
+PIPELINE = 'ensemble-context-timing-v2'
 
 def recognize(media, publish=lambda data: None, preferred='reazon'):
     duration = float(subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',
@@ -32,30 +32,38 @@ def recognize(media, publish=lambda data: None, preferred='reazon'):
                     run = subprocess.run([sys.executable, str(root / 'asr_model.py'), engine, str(slot['chunk'])],
                                          capture_output=True, text=True, timeout=180, check=True)
                     data = json.loads(run.stdout)
-                    tokens = [{'seconds': max(start, min(end - .01, left + t['seconds'])), 'token': t['token']}
-                              for t in data['tokens'] if (start == 0 or left + t['seconds'] >= start) and
-                              (end == duration or left + t['seconds'] < end)]
+                    tokens = []
+                    for token in data['tokens']:
+                        absolute = left + token['seconds']
+                        finish = left + token.get('end', token['seconds'] + .45)
+                        # Assign a complete word to a core using its midpoint,
+                        # instead of cutting it because its start is in context.
+                        owner = (absolute + finish) / 2 if engine == 'whisper-small' else absolute
+                        if (start and owner < start) or (end != duration and owner >= end):
+                            continue
+                        tokens.append({'seconds': max(0, min(duration - .01, absolute)),
+                                       'end': max(0, min(duration, finish)), 'token': token['token']})
                     slot['candidates'].append({'model': engine, 'text': ''.join(t['token'] for t in tokens),
                                                'tokens': tokens, 'seconds': data['seconds']})
                 except Exception as error:
                     slot['candidates'].append({'model': engine, 'text': '', 'error': type(error).__name__})
-                cues, comparisons = [], []
+                selected_tokens, comparisons = [], []
                 for index, item in enumerate(slots):
                     if not item['candidates']:
                         continue
                     result = item.get('context_result') or compare(item['candidates'], preferred)
                     if len(item['candidates']) == len(ENGINE_ORDER) and 'context_result' not in item:
-                        left_context = ''.join(c['text'] for c in cues)[-64:]
+                        left_context = ''.join(t['token'] for t in selected_tokens)[-64:]
                         next_slot = slots[index + 1] if index + 1 < len(slots) else None
                         right_context = next_slot['candidates'][0].get('text', '') if next_slot and next_slot['candidates'] else ''
                         result = context_scorer.apply(result, left_context, right_context)
                         item['context_result'] = result
                     chosen = next((c for c in item['candidates'] if c['model'] == result['selected']), None)
                     if chosen:
-                        cues.extend(group_subwords(chosen['tokens'], item['end']))
+                        selected_tokens.extend(chosen['tokens'])
                     comparisons.append({**result, 'start': item['start'], 'end': item['end'],
                                         'candidates': [{k: v for k, v in c.items() if k != 'tokens'} for c in item['candidates']]})
-                snapshot = {'cues': cues, 'comparisons': comparisons,
+                snapshot = {'cues': group_subwords(selected_tokens, duration), 'comparisons': comparisons,
                             'processedSeconds': max((s['end'] for s in slots if s['candidates']), default=0),
                             'duration': duration, 'pipeline': PIPELINE}
                 publish(snapshot)

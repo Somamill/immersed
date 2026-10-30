@@ -109,11 +109,11 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
       if (raw.trim().startsWith('<')) {
         const xml = new DOMParser().parseFromString(raw, 'application/xml');
         if (xml.querySelector('parsererror')) return false;
-        data = { events: [...xml.querySelectorAll('text[start], body > p[t]')].map(node => {
+        data = { events: [...xml.querySelectorAll('text[start], body > p[t]')].map((node, index) => {
           const multiplier = node.hasAttribute('start') ? 1000 : 1;
           const start = Number(node.getAttribute(multiplier === 1000 ? 'start' : 't'));
           const duration = Number(node.getAttribute(multiplier === 1000 ? 'dur' : 'd') || '0');
-          return { tStartMs: start * multiplier, dDurationMs: duration * multiplier || 3000, segs: [{ utf8: node.textContent || '' }] };
+          return { wWinId: Number(node.getAttribute('w') ?? index), tStartMs: start * multiplier, dDurationMs: duration * multiplier || 3000, segs: [{ utf8: node.textContent || '' }] };
         }) };
       } else data = JSON.parse(raw);
       if (!Array.isArray(data?.events) || !data.events.some(e => e.segs?.some(s => typeof s.utf8 === 'string' && s.utf8.trim()))) return false;

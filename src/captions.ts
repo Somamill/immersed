@@ -1,4 +1,4 @@
-export type TimedCue = { start: number; end: number; text: string };
+export type TimedCue = { start: number; end: number; text: string; hardEnd?: boolean };
 // Caption boundaries are the best available sentence units; creator tracks can
 // divide a grammatical sentence across several cues. Never invent timestamps.
 export function sentenceTarget(cues: TimedCue[], time: number, direction: -1 | 1): number | undefined {
@@ -48,15 +48,54 @@ export function parseCaptionTrack(value: unknown): TimedCue[] {
     const previous = windows.get(window);
     const raw = event.segs.map(s => typeof s.utf8 === 'string' ? s.utf8 : '').join('');
     if (!raw.trim()) {
-      if (event.aAppend !== 1 && previous) { previous.end = Math.min(previous.end, start); windows.delete(window); }
+      if (event.aAppend !== 1 && previous) { previous.end = Math.min(previous.end, start); previous.hardEnd = true; windows.delete(window); }
       continue;
     }
-    const text = normalizeJapaneseCaption(event.aAppend === 1 && previous && previous.end > start ? previous.text + raw : raw);
+    const text = normalizeJapaneseCaption(event.aAppend === 1 && previous ? previous.text + raw : raw);
     const duration = event.dDurationMs === undefined ? 3000 : event.dDurationMs;
     if (!text || text.length > 2000 || !Number.isFinite(duration) || duration <= 0) continue;
+    if (previous && previous.end > start) previous.end = start;
     const cue = { start, end: start + duration / 1000, text };
     cues.push(cue); windows.set(window, cue);
     if (cues.length >= 20000) break;
   }
-  return cues.map((cue, i) => ({ ...cue, end: cues[i + 1]?.start > cue.start ? Math.min(cue.end, cues[i + 1].start) : cue.end })).filter(cue => cue.end > cue.start).slice(0, 20000);
+  const events = new Map<number, { add: TimedCue[]; remove: TimedCue[] }>();
+  for (const cue of cues.filter(c => c.end > c.start)) {
+    for (const time of [cue.start, cue.end]) if (!events.has(time)) events.set(time, { add: [], remove: [] });
+    events.get(cue.start)!.add.push(cue); events.get(cue.end)!.remove.push(cue);
+  }
+  const times = [...events.keys()].sort((a, b) => a - b);
+  const active = new Set<TimedCue>();
+  const result: TimedCue[] = [];
+  for (let i = 0; i < times.length - 1; i++) {
+    const time = times[i], event = events.get(time)!;
+    event.remove.forEach(c => active.delete(c)); event.add.forEach(c => active.add(c));
+    const lines = [...active].map(c => c.text);
+    if (!lines.length) continue;
+    const hardEnd = [...active].some(c => c.hardEnd && c.end === times[i + 1]);
+    const text = lines.join(' ');
+    const previous = result[result.length - 1];
+    if (previous?.text === text && previous.end === time && !previous.hardEnd) { previous.end = times[i + 1]; if (hardEnd) previous.hardEnd = true; }
+    else result.push({ start: time, end: times[i + 1], text, ...(hardEnd ? { hardEnd: true } : {}) });
+  }
+  return result.slice(0, 20000);
+}
+
+// Reading grace never overlaps the next line or defeats an explicit clear.
+export function readingTimeline(cues: TimedCue[]): TimedCue[] {
+  return cues.map((cue, i) => {
+    if (cue.hardEnd) return cue;
+    const next = cues[i + 1];
+    const bridge = next && next.start > cue.end && next.start - cue.end <= .25 ? next.start : cue.end;
+    const target = Math.max(bridge, cue.start + Math.min(2.5, Math.max(.8, cue.text.length * .075)));
+    const end = Math.min(target, cue.end + .5, next?.start ?? Infinity);
+    return end > cue.end ? { ...cue, end } : cue;
+  });
+}
+
+/** Keep a source cue that straddles the boundary of an unfinished ASR pass. */
+export function combineCaptionTracks(primary: TimedCue[], fallback: TimedCue[], coveredUntil?: number): TimedCue[] {
+  if (!primary.length) return fallback;
+  const end = Math.max(primary[primary.length - 1].end, Number.isFinite(coveredUntil) ? coveredUntil! : 0);
+  return [...primary, ...fallback.filter(cue => cue.end > end).map(cue => cue.start < end ? { ...cue, start: end } : cue)];
 }

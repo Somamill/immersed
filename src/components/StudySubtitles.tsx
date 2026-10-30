@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-na
 import { familiarity, showFurigana, type JlptLevel } from '../learning';
 import type { AnalyzedToken } from '../language';
 
-export default function StudySubtitles({ tokens, tail, dark, level, knowledge, readings, onWord }: { tokens: AnalyzedToken[]; tail: string; dark: boolean; level: JlptLevel; knowledge: Record<string, boolean>; readings: boolean; onWord: (token: AnalyzedToken) => void }) {
+export default function StudySubtitles({ tokens, tail, dark, level, knowledge, readings, onHeight, onWord }: { tokens: AnalyzedToken[]; tail: string; dark: boolean; level: JlptLevel; knowledge: Record<string, boolean>; readings: boolean; onHeight?: (height: number) => void; onWord: (token: AnalyzedToken) => void }) {
   const { fontScale } = useWindowDimensions();
   const groups: { token: AnalyzedToken; punctuation: string; prefix: string }[] = [];
   let prefix = '';
@@ -13,7 +13,7 @@ export default function StudySubtitles({ tokens, tail, dark, level, knowledge, r
     else { groups.push({ token, punctuation: '', prefix }); prefix = ''; }
   }
   const ink = dark ? '#F3F3F3' : '#242D28';
-  return <View testID="subtitle-words" style={styles.words}>
+  return <View testID="subtitle-words" onLayout={event => onHeight?.(event.nativeEvent.layout.height)} style={styles.words}>
     {groups.map(({ token, punctuation, prefix }, index) => {
       const unknown = token.word && familiarity(token.lemma, token.reading, level, knowledge) === 'unknown';
       const color = ink;
