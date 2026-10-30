@@ -1,0 +1,4 @@
+{
+  "description": "Free, open-source Japanese immersion for iPhone: YouTube subtitles, tap-to-lookup dictionaries, furigana, JLPT levels and vocabulary in context. An independent Migaku / Language Reactor alternative in development. Expo Go prototype.",
+  "topics": ["japanese", "language-learning", "immersion-learning", "ios", "iphone", "expo", "react-native", "youtube", "subtitles", "dictionary", "jmdict", "jmnedict", "furigana", "jlpt", "pitch-accent", "speech-recognition", "open-source", "migaku-alternative", "language-reactor-alternative"]
+}

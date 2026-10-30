@@ -77,3 +77,12 @@ The second and third recognizers use faster-whisper 1.2.1 (SYSTRAN, MIT), CTrans
 - rinna Co., Ltd., japanese-gpt2-xsmall (43.7M parameters): https://huggingface.co/rinna/japanese-gpt2-xsmall, model revision 8e91527b3276e0565154935e84a08bf0137ed99f. Model card declares MIT; trained on Japanese CC-100 and Wikipedia. Public weights download only when a safe comparison requires language scoring.
 - The worker uses the model's likelihood objective for ranking existing ASR candidates, never text generation. Likelihood is not a semantic truth detector or calibrated recognition confidence.
 - Transformers 4.55.4 (Apache-2.0), SentencePiece 0.2.1 (Apache-2.0), and CPU-only PyTorch 2.6.0 (BSD-style) are server dependencies. Model/software notices remain available at their original project links. Tokenization guards use the existing licensed Kuromoji/IPADIC data.
+
+## Statistical word-sequence checks (0.5.17)
+
+Tatoeba Japanese sentences © their contributors, CC BY 2.0 France: https://tatoeba.org/ and https://creativecommons.org/licenses/by/2.0/fr/. See the [contributor names](licenses/Tatoeba-CONTRIBUTORS.txt) and Tatoeba's [reuse guidance](https://en.wiki.tatoeba.org/articles/show/using-the-tatoeba-corpus).
+
+- The unmodified detailed Japanese export from 2026-10-24 is pinned by SHA-256 in `src/data/context-source.json`. The matching release asset retains sentence IDs, text, author usernames and timestamps. Each sentence's original page is `https://tatoeba.org/en/sentences/show/<id>`.
+- `npm run context:setup` verifies the archive and derives a SQLite table of unigram, bigram and trigram counts/document frequencies using Kuromoji dictionary forms. The index retains sentence ID/author attribution. No sentence examples are shown to app users, and no audio is downloaded from Tatoeba.
+- 235,085 deduplicated sentences are used for counts; 12,486 are held out by sentence ID before training. This is a small community-contributed text corpus, with uneven domain/word coverage and possible source errors. It is not a verified conversational speech corpus.
+- Corpus/index licenses are separate from the MIT app code. Redistribute the source/derived index with this notice, contributor list and preserved attribution. Counts use an original additive/interpolated backoff implementation, not KenLM code or its modified Kneser–Ney estimator.

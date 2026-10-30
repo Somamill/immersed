@@ -44,3 +44,14 @@ class ContextTests(unittest.TestCase):
             result = scorer.apply(compare(self.candidates))
         self.assertEqual(result['selected'], 'reazon')
         self.assertEqual(result['context']['status'], 'guarded')
+
+    def test_automatic_changes_need_sequence_counts_and_neural_agreement(self):
+        features = copy.deepcopy(self.features)
+        features[0]['statistics'] = {'ready': True, 'supported': True, 'score': -20}
+        for stats in [{'ready': False}, {'ready': True, 'supported': False, 'score': -10},
+                      {'ready': True, 'supported': True, 'score': -21}]:
+            features[1]['statistics'] = stats
+            self.assertEqual(rerank(compare(self.candidates), features, [2.3, 1.4])['selected'], 'reazon')
+        features[1]['statistics'] = {'ready': True, 'supported': True, 'score': -10}
+        self.assertEqual(rerank(compare(self.candidates), features, [2.3, 1.4])['selected'], 'kotoba')
+        self.assertEqual(rerank(compare(self.candidates), features, [2.3, 2.31])['selected'], 'reazon')

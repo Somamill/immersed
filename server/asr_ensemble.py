@@ -8,7 +8,7 @@ from asr_compare import ENGINE_ORDER, compare
 from asr_reazon import group_subwords
 from caption_context import ContextScorer
 
-PIPELINE = 'ensemble-context-timing-v2'
+PIPELINE = 'ensemble-statistical-v3'
 
 def recognize(media, publish=lambda data: None, preferred='reazon'):
     duration = float(subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries', 'format=duration',

@@ -23,6 +23,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run language:setup
+      - run: npm run context:setup
       - run: npm run test:language
       - run: npm run export:web
       - run: npx playwright install --with-deps chromium

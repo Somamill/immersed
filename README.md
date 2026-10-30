@@ -1,7 +1,13 @@
 <p align="center"><img src="assets/icon.png" width="88" alt="Immersed mint play-and-book icon" /></p>
-<h1 align="center">Immersed</h1>
+<h1 align="center">Immersed · Japanese immersion for iPhone</h1>
 <p align="center"><strong>Japanese worth watching.</strong><br />Watch a video. Tap a word. Keep your flow.</p>
-<p align="center">iPhone-first · Japanese immersion · Early Expo Go prototype</p>
+<p align="center">Free, open-source language learning with YouTube subtitles, tap-to-lookup dictionaries and vocabulary in context.</p>
+<p align="center">
+  <a href="https://github.com/Somamill/immersed/actions/workflows/check.yml"><img alt="Build and tests" src="https://github.com/Somamill/immersed/actions/workflows/check.yml/badge.svg" /></a>
+  <a href="https://github.com/Somamill/immersed/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Somamill/immersed?color=b4dec4&amp;label=release" /></a>
+  <a href="LICENSE"><img alt="Code license MIT" src="https://img.shields.io/badge/code-MIT-b4dec4" /></a>
+  <img alt="iPhone preview with Expo Go" src="https://img.shields.io/badge/iPhone-Expo%20Go-171717" />
+</p>
 <p align="center">
   <a href="https://github.com/Somamill/immersed/releases/latest">Download source</a> ·
   <a href="#try-it-on-your-iphone">Try on iPhone</a> ·
@@ -11,7 +17,9 @@
 
 ![Illustration of listening to Japanese in a lantern-lit neighborhood](docs/images/immersion-illustration.png)
 
-**Learn from content you would watch anyway.** Immersed puts a focused video above a quiet Japanese reading area. Tap a word or grammar group for its meaning, save it with context, and keep watching.
+**Turn the Japanese you already enjoy into daily practice.** Watch real conversations, gaming, travel or science on YouTube. Tap a subtitle word, understand the grammar, save it with its sentence, and keep your flow.
+
+Built for learners looking for a **free, open-source Migaku alternative for iPhone**, with a simple portrait interface and inspectable dictionary and subtitle tools. This is an independent early project; it does not claim feature parity with Migaku or Language Reactor.
 
 > **Prototype status:** source-caption study, dictionary search and saved vocabulary are implemented. Creating fresh subtitles for captionless YouTube videos is **not working in the current cloud preview** because it cannot acquire the audio. Recognition can also choose incorrect words or kanji. This is not yet a reliable universal transcription service or an App Store release.
 
@@ -36,7 +44,19 @@
 
 *Screenshots show the actual app UI rendered in a browser at phone dimensions. The study and inline-panel images use clearly labelled illustrative media and sample captions; vocabulary estimates in them are computed from that sample; it is not a live YouTube/iPhone transcription demonstration. The banner is original generated artwork.*
 
-## Built around immersion
+## Watch → tap → understand
+
+| While you watch | While you learn |
+| --- | --- |
+| Portrait video with a steady reading area | Tap Japanese words and grammar groups |
+| Previous sentence, play/pause, next sentence | Japanese ↔ English search with JMdict and JMnedict |
+| Pinch to fit/fill; optional Shorts and length filters | Save vocabulary with its original sentence and video |
+| Dictionary and Settings below the same video | JLPT N5–N1 highlights, furigana and optional pitch accent |
+
+**General context checks, without a paid AI API.** A local SQLite database counts Japanese word pairs and triples from 235,085 Tatoeba sentences. Pronunciation, grammar, evidence on both sides and ranking margins help filter alternatives. Sparse cases can receive a second check from a small local model. Generated audio candidates also face recognizer agreement and context checks. Frequency and agreement are evidence, not proof of what was said.
+
+<details>
+<summary><strong>Explore all features and current boundaries</strong></summary>
 
 - **Natural content:** browse ordinary Japanese daily life, food, travel, science, gaming and conversation. Discovery is language-biased search, not a verified Japanese-only feed.
 - **Check confusing phrases:** a compact Japanese context model can choose a close-sounding alternative already proposed by a recognizer. Morphology guards protect proper/unknown words, numbers and negation; this is language plausibility, not verified speech.
@@ -53,6 +73,8 @@
 - **Gauge the vocabulary:** a caption-sample estimate shows the share of familiar content words for your JLPT level and personal overrides. One percentage counts familiar words over all sampled content vocabulary, with unrated words not assumed known; this is not a listening-comprehension score.
 - **Keep useful captions:** verified Japanese tracks are cached on the device for repeat visits. Creator-provided tracks take priority over automatic tracks. Caption caches do not make videos or the server dictionary available offline.
 
+</details>
+
 ## Try it on your iPhone
 
 Install **Expo Go** on your iPhone. Using Node.js 24, from a clone of this repository:
@@ -60,6 +82,7 @@ Install **Expo Go** on your iPhone. Using Node.js 24, from a clone of this repos
 ```sh
 npm ci
 npm run language:setup
+npm run context:setup
 npx expo start --tunnel --go
 ```
 
@@ -67,21 +90,47 @@ Open the printed link/QR code in Expo Go. The development server supplies dictio
 
 For the optional self-hosted recognition worker, setup details and platform limits, see the [development guide](docs/DEVELOPMENT.md). A static web export or signed app does not include a running backend. Videos that prohibit embedding or require inaccessible account/region permissions may not play. YouTube account sign-in is unavailable in this preview; unsupported sign-in links show an explanation instead of redirecting to Safari. Native OAuth would require a registered client and would not itself establish an authenticated embedded-player session. Locked-screen audio is not supported in this preview.
 
+## Coming from Migaku, Language Reactor or Yomitan?
+
+These projects share an immersion-learning idea; their platforms and scope differ.
+
+| Project | Explore it for |
+| --- | --- |
+| **Immersed** | An open-source, iPhone-first experiment combining video, Japanese dictionary lookup and saved vocabulary. Expo Go preview today. |
+| [Migaku](https://migaku.com/) | An established commercial immersion ecosystem and browser workflow. |
+| [Language Reactor](https://www.languagereactor.com/) | A browser-based language-learning companion. |
+| [asbplayer](https://docs.asbplayer.dev/) | Free, open-source browser video study and subtitle sentence mining. |
+| [Yomitan](https://yomitan.wiki/) | Free browser dictionary lookups, frequency information and Anki integration. |
+
+Immersed is not affiliated with these projects. Their names explain the learning workflow, and no proprietary code or dictionaries are included. Anki export, podcast playback, universal caption generation and App Store distribution are still roadmap items.
+
 ## Accuracy comes before appearance
 
 Japanese has homophones and multiple valid spellings. A neat subtitle can still be wrong. Immersed preserves the source's kanji/kana choices rather than inventing corrections from dictionary readings.
 
-The current quality work prioritizes better source tracks, correct rolling-caption timing, compact Japanese rows and dictionary-backed joins where words cross adjacent cues. Prefix compounds such as お名前 and 再利用 keep their full lookup form. Dictionary-backed expressions such as 気を抜く also stay together across supported inflections. The next recognition milestone is a stronger Japanese model evaluated against real recordings, followed by audio alignment. That work needs permitted audio access and persistent hosting. Read the [quality findings](docs/SUBTITLE_QUALITY.md) and [reliability release gates](RELIABILITY.md).
+The current quality work prioritizes better source tracks, correct rolling-caption timing, compact Japanese rows and dictionary-backed joins where words cross adjacent cues. Prefix compounds such as お名前 and 再利用 keep their full lookup form. Dictionary-backed expressions such as 気を抜く also stay together across supported inflections. Three open recognizers and local context checks are implemented. The next milestone is representative conversation evaluation and better audio alignment. That work needs permitted audio access and persistent hosting. Read the [quality findings](docs/SUBTITLE_QUALITY.md) and [reliability release gates](RELIABILITY.md).
+
+## Roadmap
+
+- [x] Japanese video study, dictionaries, saved words and learning-level controls.
+- [x] ReazonSpeech / Whisper / Kotoba comparison worker and corpus-based sequence checks.
+- [ ] Reliable permitted audio acquisition and persistent transcription hosting.
+- [ ] Broader natural-conversation benchmarks, speaker overlap and accurate word alignment.
+- [ ] Anki export, podcasts, additional languages and a standalone iOS release.
 
 ## Build with us
 
 The goal is simple: **tap a Japanese video and learn from it**. The prototype is still being built toward that goal. Reproducible bug reports, physical-iPhone testing and careful Japanese transcript review are welcome.
 
 - [Latest release and source downloads](https://github.com/Somamill/immersed/releases/latest)
-- [Report an issue](https://github.com/Somamill/immersed/issues/new)
+- [Report a bug or subtitle error](https://github.com/Somamill/immersed/issues/new/choose)
+- [Contribute code, language review or iPhone testing](CONTRIBUTING.md)
 - [Development, checks and architecture](docs/DEVELOPMENT.md)
 - [Research and implementation notes](RESEARCH.md)
+- [Repository description and topic tags](docs/REPOSITORY.md)
 - [Version history](CHANGELOG.md)
 - [Dictionary/data credits and licenses](THIRD_PARTY.md)
 
 Saved vocabulary and caption caches stay on the device; subtitle analysis and dictionary searches use the preview server. JMdict © EDRDG, CC BY-SA 4.0. JLPT estimates, Kuromoji and IPADIC notices are linked in the credits. JLPT levels and grammar groups are estimates, not official classifications or complete grammatical explanations.
+
+Code is [MIT licensed](LICENSE). Dictionary and corpus data have separate [licenses and contributor credits](THIRD_PARTY.md). Self-hosted speech processing consumes compute even though no paid model API is required.

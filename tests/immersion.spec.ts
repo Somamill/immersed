@@ -229,7 +229,7 @@ test('portrait playback controls appear for a selected video and automatic subti
   const video = (await page.getByTestId('video-surface').boundingBox())!;
   const reading = (await page.getByTestId('subtitle-panel').boundingBox())!;
   expect(full.height).toBe(844);
-  expect(video.height).toBeGreaterThan(450);
+  expect(video.height).toBeGreaterThanOrEqual(video.width * 9 / 16);
   expect(reading.y).toBe(video.y + video.height);
   expect(reading.x).toBe(0); expect(reading.width).toBe(390);
   expect(reading.y + reading.height).toBe(844);
@@ -834,7 +834,8 @@ test('dictionary and settings occupy the reading area while the selected player 
   await expect(page.getByTestId('dictionary-sheet')).toBeVisible();
   await expect(page.getByTestId('dictionary-sheet').getByRole('button', { name: 'Play video', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Pause video', exact: true })).toBeVisible();
+  await expect(page.getByTestId('dictionary-sheet')).toHaveCount(0);
+  await expect(page.getByTestId('subtitle-panel').getByRole('button', { name: 'Pause video', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Words · 0', exact: true }).click();
   await expectBelowPlayer('words-panel');
   await expect(page.getByTestId('dictionary-sheet')).toHaveCount(0);
@@ -1077,4 +1078,20 @@ test('the video does not resize when changing between short and long subtitle li
   await page.getByRole('button',{name:'Next sentence',exact:true}).click();
   await expect(page.getByRole('button',{name:'Look up 日本語',exact:true})).toBeVisible();
   expect(await page.getByTestId('video-surface').boundingBox()).toEqual(before);
+});
+
+test('the discovery icon and video boundary stay fixed across study, dictionary and settings', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 10, text: '日本語を勉強しています。' }] }) }));
+  await page.goto('/');
+  const icon = await page.getByRole('button', { name: 'Browse', exact: true }).locator('svg').innerHTML();
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 日本語', exact: true })).toBeVisible({ timeout: 12000 });
+  const bounds = await page.getByTestId('video-surface').boundingBox();
+  for (const label of ['Words · 0', 'Settings', 'Watch & read']) {
+    await page.getByRole('button', { name: label, exact: true }).click();
+    await expect.poll(() => page.getByTestId('video-surface').boundingBox()).toEqual(bounds);
+    const destination = label === 'Watch & read' ? 'Browse' : 'Watch & read';
+    expect(await page.getByRole('button', { name: destination, exact: true }).locator('svg').innerHTML()).toBe(icon);
+  }
 });

@@ -1,0 +1,11 @@
+{
+  "name": "Tatoeba Japanese sentences",
+  "snapshot": "2026-10-24",
+  "asset": "tatoeba-jpn-2026-10-24.tsv.bz2",
+  "archive": "https://github.com/Somamill/immersed/releases/download/v0.5.17/tatoeba-jpn-2026-10-24.tsv.bz2",
+  "upstream": "https://downloads.tatoeba.org/exports/per_language/jpn/jpn_sentences_detailed.tsv.bz2",
+  "sha256": "e305ecf638ab24cd57b0b5f9fcdc342267ef4a3fdb19c71621f1a49baaf6d84f",
+  "license": "CC BY 2.0 FR",
+  "licenseUrl": "https://creativecommons.org/licenses/by/2.0/fr/",
+  "sourceUrl": "https://tatoeba.org/"
+}

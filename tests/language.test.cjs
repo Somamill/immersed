@@ -140,3 +140,21 @@ test('dictionary offers general same-reading spellings for screenshot examples w
   const { key } = require('../server/grammar.cjs');
   assert.notEqual(key({ lemma:'う', pos:'auxiliary' }), key({ lemma:'う', pos:'noun' }));
 });
+
+test('corpus ranking generalizes to word sequences and preserves a correct or unsupported source', async () => {
+  const { rankSpellings, StatisticalContext } = require('../server/statistical-context.cjs');
+  const { initialize, homophones } = require('../server/language.cjs');
+  const { tokenizer } = await initialize();
+  const scorer = new StatisticalContext();
+  assert.ok(scorer.db, 'Run npm run context:setup before language checks');
+  const sentence = '明日は公演で友達と遊びます', start = sentence.indexOf('公演');
+  const result = rankSpellings({ sentence, start, end: start + 2 }, await homophones('公演', 'こうえん'), tokenizer, scorer);
+  assert.equal(result.alternatives[0]?.form, '公園');
+  assert.ok(result.alternatives[0].statistics.left >= 3 && result.alternatives[0].statistics.right >= 3);
+  const correct = sentence.replace('公演', '公園');
+  assert.equal(rankSpellings({ sentence: correct, start, end: start + 2 }, await homophones('公園', 'こうえん'), tokenizer, scorer).alternatives.length, 0);
+  const missing = new StatisticalContext('/nonexistent/immersed-counts.sqlite');
+  assert.equal(rankSpellings({ sentence, start, end: start + 2 }, await homophones('公演', 'こうえん'), tokenizer, missing).status, 'unavailable');
+  assert.equal(rankSpellings({ sentence: 'これが二なのです', start: 3, end: 4 }, [{ form: '荷' }], tokenizer, scorer).status, 'protected-word');
+  scorer.close();
+});

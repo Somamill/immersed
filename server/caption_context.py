@@ -22,6 +22,21 @@ def guard(primary, alternative, first, second):
         return 'different-sounding'
     return None
 
+def corpus_guard(first, second):
+    # Legacy callers may supply morphology only. The production feature adapter
+    # always supplies statistics and fails closed when its database is missing.
+    if 'statistics' not in first:
+        return None
+    a, b = first['statistics'], second.get('statistics', {})
+    if not a.get('ready') or not b.get('ready'):
+        return 'corpus-unavailable'
+    if not b.get('supported'):
+        return 'sparse-sequence-evidence'
+    gain = b.get('score', float('-inf')) - a.get('score', float('-inf'))
+    if not math.isfinite(gain) or gain < math.log(4):
+        return 'sequence-disagreement'
+    return None
+
 def rerank(result, features, losses):
     """Fixed conservative policy, separate from model loading for audit/testing."""
     candidates = result['candidates']
@@ -33,7 +48,7 @@ def rerank(result, features, losses):
     for i, candidate in enumerate(candidates):
         if i == base or not candidate.get('text') or not math.isfinite(losses[i]):
             continue
-        blocked = guard(candidates[base]['text'], candidate['text'], features[base], features[i])
+        blocked = guard(candidates[base]['text'], candidate['text'], features[base], features[i]) or corpus_guard(features[base], features[i])
         changed = max(1, edits(normalize(candidates[base]['text']), normalize(candidate['text'])))
         gain = (losses[base] - losses[i]) * min(len(normalize(candidates[base]['text'])), len(normalize(candidate['text']))) / changed
         minimum_gain, minimum_average = (3.0, .06) if result['reason'] == 'majority-agreement' else (1.5, .03)
@@ -90,7 +105,7 @@ class ContextScorer:
                                  input=json.dumps(texts), capture_output=True, text=True, timeout=15, check=True)
             features = json.loads(run.stdout)
             base = next(i for i, c in enumerate(result['candidates']) if c['model'] == result['selected'])
-            checks = [{'model': c['model'], 'blocked': guard(texts[base], texts[i], features[base], features[i])}
+            checks = [{'model': c['model'], 'blocked': guard(texts[base], texts[i], features[base], features[i]) or corpus_guard(features[base], features[i])}
                       for i, c in enumerate(result['candidates']) if normalize(texts[i]) != normalize(texts[base])]
             if not any(check['blocked'] is None for check in checks):
                 return {**result, 'context': {'status': 'guarded', 'checks': checks, 'changed': False}}

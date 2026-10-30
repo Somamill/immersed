@@ -1,6 +1,6 @@
 {
   "name": "immersed",
-  "version": "0.5.16",
+  "version": "0.5.17",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/metro-runtime": "~58.0.15",
@@ -46,7 +46,9 @@
     "test:language": "node --test tests/language.test.cjs",
     "version:update": "node scripts/version-update.cjs",
     "version:check": "node scripts/check-version.cjs",
-    "test:server": "node --test tests/transcription.test.cjs tests/caption-features.test.cjs"
+    "test:server": "node --test tests/transcription.test.cjs tests/caption-features.test.cjs",
+    "context:setup": "node scripts/setup-context.cjs",
+    "context:evaluate": "node scripts/evaluate-context.cjs"
   },
   "private": true,
   "engines": {

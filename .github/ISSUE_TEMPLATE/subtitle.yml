@@ -1,0 +1,28 @@
+name: Subtitle or word lookup error
+description: Help reproduce a recognition, timing or dictionary mistake.
+title: "[Japanese] "
+body:
+  - type: textarea
+    id: source
+    attributes:
+      label: Video and timestamp
+      description: Share a public video link and timestamp, or a short recording you have permission to share. Avoid private content.
+    validations:
+      required: true
+  - type: textarea
+    id: comparison
+    attributes:
+      label: What appeared, and what should appear?
+      description: Include the original caption, expected Japanese, surrounding sentence and whether the mistake is in the subtitles or dictionary popup.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version and device
+      placeholder: "Settings → About version; iPhone model and iOS version"
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots or additional context
+      description: A screenshot helps with layout; audio is needed to verify recognition. Please do not include passwords or account details.

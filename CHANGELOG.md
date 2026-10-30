@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.17 — 2026-10-30
+
+Add corpus cross-checks and steady player navigation
+
+- Rank dictionary homophones with general word-pair/triple counts, pronunciation and grammar guards; sparse cases require agreement with a local model. ASR contextual overrides also need sequence evidence. No paid model API is required.
+- Keep the discovery icon and video boundary consistent across study, dictionary and settings. Improve GitHub discovery, previews and contribution guidance.
+- Frequency is not proof: source captions stay unchanged, rare words can lack corpus evidence, and this preview still cannot acquire audio for captionless YouTube videos.
+
 ## 0.5.16 — 2026-10-30
 
 Improve grammar lookups and caption homophone suggestions
