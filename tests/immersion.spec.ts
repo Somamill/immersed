@@ -8,7 +8,7 @@ import type { AnalyzedToken } from '../src/language';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
 import { embeddedPlayerSource, swipeAction } from '../src/player';
 import { familiarity, showFurigana } from '../src/learning';
-import { combineCaptionTracks, readingTimeline, japaneseCaptionUrl, parseCaptionTrack, readingCue, normalizeJapaneseCaption, captionSourceRank, sentenceTarget } from '../src/captions';
+import { combineCaptionTracks, validCaptionCues, allowLiveCaptionFallback, readingTimeline, japaneseCaptionUrl, parseCaptionTrack, readingCue, normalizeJapaneseCaption, captionSourceRank, sentenceTarget } from '../src/captions';
 import { automaticRetryDelay } from '../src/subtitle-policy';
 
 test('home offers real YouTube discovery and retains the saved-word library', async ({ page }) => {
@@ -1094,4 +1094,86 @@ test('the discovery icon and video boundary stay fixed across study, dictionary 
     const destination = label === 'Watch & read' ? 'Browse' : 'Watch & read';
     expect(await page.getByRole('button', { name: destination, exact: true }).locator('svg').innerHTML()).toBe(icon);
   }
+});
+
+test('JSON3 word offsets reveal text on time and sentence skip ignores rolling updates', () => {
+  const cues = parseCaptionTrack({ events: [
+    { tStartMs: 1000, dDurationMs: 4000, wWinId: 1, segs: [{ utf8: '今日は', tOffsetMs: 0 }, { utf8: '公園', tOffsetMs: 1000 }, { utf8: 'へ行く', tOffsetMs: 2000 }] },
+    { tStartMs: 6000, dDurationMs: 1000, wWinId: 1, aAppend: 1, segs: [{ utf8: '次の字幕' }] },
+  ] });
+  expect(readingCue(cues, .9)).toBeUndefined();
+  expect(readingCue(cues, 1.2)?.text).toBe('今日は');
+  expect(readingCue(cues, 2.2)?.text).toBe('今日は公園');
+  expect(readingCue(cues, 3.2)?.text).toBe('今日は公園へ行く');
+  expect(readingCue(cues, 6.2)?.text).toBe('次の字幕');
+  expect(sentenceTarget(cues, 1.2, 1)).toBe(6);
+  expect(sentenceTarget(cues, 6.2, -1)).toBe(1);
+});
+
+test('JSON3 accepts window-only clears and safely ignores malformed events and segments', () => {
+  const cues = parseCaptionTrack({ events: [null, { tStartMs: 0, dDurationMs: 4000, wWinId: 2, segs: [null, { utf8: '日本語' }] }, { tStartMs: 2000, wWinId: 2 }] });
+  expect(cues).toEqual([{ start: 0, end: 2, text: '日本語', hardEnd: true }]);
+  expect(readingCue(readingTimeline(cues), 2.1)).toBeUndefined();
+});
+
+test('live captions can continue after an exhausted track without reviving old text or filling real gaps', () => {
+  const cues = [{ start: 0, end: 1, text: '最初' }, { start: 2, end: 3, text: '最後' }];
+  expect(allowLiveCaptionFallback([], 1, 1)).toBe(true);
+  expect(allowLiveCaptionFallback(cues, 1.5, 1.5)).toBe(false);
+  expect(allowLiveCaptionFallback(cues, 4, .5)).toBe(false);
+  expect(allowLiveCaptionFallback(cues, 4, 4)).toBe(true);
+  expect(allowLiveCaptionFallback(cues, 4, 4, 6)).toBe(false);
+  expect(validCaptionCues([{ start: -1, end: 2, text: '不正' }])).toBe(false);
+  expect(validCaptionCues([{ start: 2, end: 3, text: '後' }, { start: 0, end: 1, text: '前' }])).toBe(false);
+});
+
+test('cached creator captions keep priority over generated text on a repeat visit', async ({ page }) => {
+  let requests = 0;
+  await page.route('**/api/immersion/transcribe?**', route => { requests++; return route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 10, text: '間違った生成結果' }] }) }); });
+  await page.goto('/');
+  await page.evaluate(() => localStorage.setItem('immersed.captions.ja.v1.M7lc1UVf-VE', JSON.stringify({ formatVersion: 5, language: 'ja', source: 'human', videoId: 'M7lc1UVf-VE', savedAt: Date.now(), cues: [{ start: 0, end: 10, text: '日本語を勉強しています。' }] })));
+  await page.clock.install();
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 日本語', exact: true })).toBeVisible({ timeout: 12000 });
+  await page.clock.fastForward(2500);
+  expect(requests).toBe(0);
+  await expect(page.getByRole('button', { name: 'Look up 日本語', exact: true })).toBeVisible();
+});
+
+test('word analysis recovers automatically after a transient service failure on the same sentence', async ({ page }) => {
+  let failures = 0;
+  await page.route('**/api/immersion/analyze?**', route => {
+    if (new URL(route.request().url()).searchParams.get('dictionary') === 'true' && failures++ === 0) return route.fulfill({ status: 503, body: 'temporarily unavailable' });
+    return route.continue();
+  });
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', cues: [{ start: 0, end: 10, text: '日本語を勉強しています。' }] }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 日本語', exact: true })).toBeVisible({ timeout: 15000 });
+  expect(failures).toBeGreaterThan(1);
+  await expect(page.getByText(/Word analysis is unavailable/)).toHaveCount(0);
+});
+
+test('generated caption cache retains verified coverage as well as its source', async ({ page }) => {
+  await page.route('**/api/immersion/transcribe?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ status: 'ready', processedSeconds: 15, duration: 20, cues: [{ start: 0, end: 10, text: '日本語を勉強しています。' }] }) }));
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 日本語', exact: true })).toBeVisible({ timeout: 12000 });
+  await expect.poll(() => page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('immersed.captions.ja.v1.M7lc1UVf-VE') || '{}');
+    return [data.formatVersion, data.source, data.coveredUntil];
+  })).toEqual([5, 'generated', 15]);
+});
+
+test('sentence seeking stays ordered when a second window interrupts a rolling caption', () => {
+  const cues = parseCaptionTrack({ events: [
+    { tStartMs: 1000, dDurationMs: 4000, wWinId: 1, segs: [{ utf8: '今日', tOffsetMs: 0 }, { utf8: 'です', tOffsetMs: 2000 }] },
+    { tStartMs: 2000, dDurationMs: 500, wWinId: 2, segs: [{ utf8: 'はい' }] },
+    { tStartMs: 6000, dDurationMs: 1000, wWinId: 1, segs: [{ utf8: '次の文' }] },
+  ] });
+  expect(sentenceTarget(cues, 2.6, -1)).toBe(1);
+  expect(sentenceTarget(cues, 2.6, 1)).toBe(6);
 });

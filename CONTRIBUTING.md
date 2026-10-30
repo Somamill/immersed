@@ -10,7 +10,7 @@ Use Node.js 24. Clone this repository, then:
 npm ci
 npm run language:setup
 npm run context:setup
-npx expo start --tunnel --go
+npm run preview
 ```
 
 Open the link in Expo Go. The server must stay running for analysis and dictionary access. Python recognition dependencies and permitted audio acquisition are separate; see [development](docs/DEVELOPMENT.md). No account credentials or paid model API are required for dictionary or count-based context checks.

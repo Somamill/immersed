@@ -8,7 +8,7 @@ async function reflowCaptions(cues) {
     const next = cues[i];
     const previous = result.at(-1);
     let merge = false;
-    if (previous && !previous.hardEnd && joined < 2 && next.start >= previous.end - 0.02 && next.start - previous.end <= 0.12 && next.end - previous.start <= 6 && previous.text.length + next.text.length <= 48 && /[ぁ-ヿ㐀-鿿々]$/.test(previous.text) && /^[ぁ-ヿ㐀-鿿々]/.test(next.text)) {
+    if (previous && previous.sentenceStart === undefined && next.sentenceStart === undefined && !previous.hardEnd && joined < 2 && next.start >= previous.end - 0.02 && next.start - previous.end <= 0.12 && next.end - previous.start <= 6 && previous.text.length + next.text.length <= 48 && /[ぁ-ヿ㐀-鿿々]$/.test(previous.text) && /^[ぁ-ヿ㐀-鿿々]/.test(next.text)) {
       const boundary = previous.text.length;
       const tokens = await analyze(previous.text + next.text, true);
       const crossing = tokens.find(t => t.word && t.start < boundary && t.end > boundary);

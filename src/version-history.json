@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.5.18",
+    "date": "2026-10-31",
+    "title": "Recover the preview and repair subtitle timing and cache priority",
+    "notes": [
+      "Supervise the Expo preview with bounded automatic restarts. Expo addresses can change; the workspace still needs to stay running.",
+      "Respect source word timestamps and clears, retain sentence skipping across rolling updates, reject invalid timelines, and continue fresh live captions beyond exhausted coverage.",
+      "Preserve cached caption provenance and verified silence coverage; retry temporary word-analysis failures automatically. Source audio access is still blocked and ASR/slang accuracy and generated alignment remain imperfect."
+    ]
+  },
+  {
     "version": "0.5.17",
     "date": "2026-10-30",
     "title": "Add corpus cross-checks and steady player navigation",

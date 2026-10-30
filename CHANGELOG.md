@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.18 — 2026-10-31
+
+Recover the preview and repair subtitle timing and cache priority
+
+- Supervise the Expo preview with bounded automatic restarts. Expo addresses can change; the workspace still needs to stay running.
+- Respect source word timestamps and clears, retain sentence skipping across rolling updates, reject invalid timelines, and continue fresh live captions beyond exhausted coverage.
+- Preserve cached caption provenance and verified silence coverage; retry temporary word-analysis failures automatically. Source audio access is still blocked and ASR/slang accuracy and generated alignment remain imperfect.
+
 ## 0.5.17 — 2026-10-30
 
 Add corpus cross-checks and steady player navigation

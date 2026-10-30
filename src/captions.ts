@@ -1,8 +1,16 @@
-export type TimedCue = { start: number; end: number; text: string; hardEnd?: boolean };
+export type TimedCue = { start: number; end: number; text: string; hardEnd?: boolean; sentenceStart?: number };
 // Caption boundaries are the best available sentence units; creator tracks can
 // divide a grammatical sentence across several cues. Never invent timestamps.
 export function sentenceTarget(cues: TimedCue[], time: number, direction: -1 | 1): number | undefined {
   if (!cues.length) return undefined;
+  // Rolling word updates belong to one seekable caption unit.
+  const units: TimedCue[] = [];
+  for (const cue of cues) {
+    const start = Math.max(units.at(-1)?.start ?? 0, cue.sentenceStart ?? cue.start);
+    if (units.at(-1)?.start === start) units[units.length - 1].end = cue.end;
+    else units.push({ ...cue, start });
+  }
+  cues = units;
   if (direction === 1) return cues.find(cue => cue.start > time + 0.05)?.start;
   let current = -1;
   for (let i = 0; i < cues.length && cues[i].start <= time + 0.05; i++) current = i;
@@ -37,26 +45,47 @@ export function readingCue(cues: TimedCue[], time: number): TimedCue | undefined
 // YouTube JSON3 is an optional fast path fetched on the phone. Keep visible
 // captions as a fallback: these public page structures can change independently.
 export function parseCaptionTrack(value: unknown): TimedCue[] {
-  const data = value as { events?: { tStartMs?: number; dDurationMs?: number; aAppend?: number; wWinId?: number; segs?: { utf8?: string }[] }[] };
+  const data = value as { events?: { tStartMs?: number; dDurationMs?: number; aAppend?: number; wWinId?: number; segs?: { utf8?: string; tOffsetMs?: number }[] }[] };
   if (!Array.isArray(data?.events)) return [];
   const cues: TimedCue[] = [];
-  const windows = new Map<number, TimedCue>();
-  for (const event of [...data.events].sort((a, b) => (a.tStartMs || 0) - (b.tStartMs || 0))) {
-    if (!Number.isFinite(event.tStartMs) || event.tStartMs! < 0 || !Array.isArray(event.segs)) continue;
+  const windows = new Map<number, { text: string; end: number; pieces: TimedCue[]; sentenceStart?: number }>();
+  for (const event of data.events.filter(event => event && typeof event === 'object').sort((a, b) => (a.tStartMs || 0) - (b.tStartMs || 0))) {
+    if (!Number.isFinite(event.tStartMs) || event.tStartMs! < 0 || (event.segs !== undefined && !Array.isArray(event.segs))) continue;
     const start = event.tStartMs! / 1000;
     const window = event.wWinId ?? 0;
-    const previous = windows.get(window);
-    const raw = event.segs.map(s => typeof s.utf8 === 'string' ? s.utf8 : '').join('');
+    const stored = windows.get(window);
+    // An append may continue a window at its exact end, but never after a gap.
+    const previous = stored && stored.end >= start ? stored : undefined;
+    const segments = (event.segs || []).filter(segment => segment && typeof segment === 'object');
+    const raw = segments.map(s => typeof s.utf8 === 'string' ? s.utf8 : '').join('');
     if (!raw.trim()) {
-      if (event.aAppend !== 1 && previous) { previous.end = Math.min(previous.end, start); previous.hardEnd = true; windows.delete(window); }
+      if (event.aAppend !== 1 && stored && (event.segs !== undefined || event.wWinId !== undefined)) {
+        for (const piece of stored.pieces) {
+          if (piece.end >= start) { piece.end = Math.min(piece.end, start); piece.hardEnd = true; }
+        }
+        windows.delete(window);
+      }
       continue;
     }
-    const text = normalizeJapaneseCaption(event.aAppend === 1 && previous ? previous.text + raw : raw);
     const duration = event.dDurationMs === undefined ? 3000 : event.dDurationMs;
-    if (!text || text.length > 2000 || !Number.isFinite(duration) || duration <= 0) continue;
-    if (previous && previous.end > start) previous.end = start;
-    const cue = { start, end: start + duration / 1000, text };
-    cues.push(cue); windows.set(window, cue);
+    if (!Number.isFinite(duration) || duration <= 0 || raw.length > 2000) continue;
+    const prefix = event.aAppend === 1 && previous ? previous.text : '';
+    if (previous) for (const piece of previous.pieces) piece.end = Math.min(piece.end, start);
+    const end = start + duration / 1000;
+    const updates = new Map<number, string>();
+    let text = prefix, offset = 0;
+    for (const segment of segments) {
+      if (typeof segment.utf8 !== 'string') continue;
+      if (Number.isFinite(segment.tOffsetMs)) offset = Math.max(offset, Math.min(duration - 1, Math.max(0, segment.tOffsetMs!)));
+      text += segment.utf8;
+      updates.set(start + offset / 1000, normalizeJapaneseCaption(text));
+    }
+    const entries = [...updates].filter(([, text]) => !!text && text.length <= 2000);
+    const sentenceStart = entries.length > 1 || previous?.sentenceStart !== undefined ? previous?.sentenceStart ?? start : undefined;
+    const pieces = entries.map(([time, text], i): TimedCue => ({ start: time, end: entries[i + 1]?.[0] ?? end, text,
+      ...(i < entries.length - 1 ? { hardEnd: true } : {}), ...(sentenceStart !== undefined ? { sentenceStart } : {}) }));
+    cues.push(...pieces);
+    windows.set(window, { text: normalizeJapaneseCaption(text), end, pieces, sentenceStart });
     if (cues.length >= 20000) break;
   }
   const events = new Map<number, { add: TimedCue[]; remove: TimedCue[] }>();
@@ -74,9 +103,10 @@ export function parseCaptionTrack(value: unknown): TimedCue[] {
     if (!lines.length) continue;
     const hardEnd = [...active].some(c => c.hardEnd && c.end === times[i + 1]);
     const text = lines.join(' ');
+    const sentenceStart = active.size === 1 ? [...active][0].sentenceStart : undefined;
     const previous = result[result.length - 1];
     if (previous?.text === text && previous.end === time && !previous.hardEnd) { previous.end = times[i + 1]; if (hardEnd) previous.hardEnd = true; }
-    else result.push({ start: time, end: times[i + 1], text, ...(hardEnd ? { hardEnd: true } : {}) });
+    else result.push({ start: time, end: times[i + 1], text, ...(hardEnd ? { hardEnd: true } : {}), ...(sentenceStart !== undefined ? { sentenceStart } : {}) });
   }
   return result.slice(0, 20000);
 }
@@ -97,5 +127,17 @@ export function readingTimeline(cues: TimedCue[]): TimedCue[] {
 export function combineCaptionTracks(primary: TimedCue[], fallback: TimedCue[], coveredUntil?: number): TimedCue[] {
   if (!primary.length) return fallback;
   const end = Math.max(primary[primary.length - 1].end, Number.isFinite(coveredUntil) ? coveredUntil! : 0);
-  return [...primary, ...fallback.filter(cue => cue.end > end).map(cue => cue.start < end ? { ...cue, start: end } : cue)];
+  return [...primary, ...fallback.filter(cue => cue.end > end).map(cue => ({ ...cue, start: Math.max(cue.start, end), ...(cue.sentenceStart !== undefined ? { sentenceStart: Math.max(cue.sentenceStart, end) } : {}) }))];
+}
+
+/** Reject malformed/out-of-order service data before a binary timeline lookup. */
+export function validCaptionCues(value: unknown): value is TimedCue[] {
+  return Array.isArray(value) && value.length > 0 && value.length <= 20000 && value.every((cue, i) =>
+    cue && typeof cue.text === 'string' && !!cue.text.trim() && cue.text.length <= 2000 &&
+    (cue.sentenceStart === undefined || (Number.isFinite(cue.sentenceStart) && cue.sentenceStart >= 0 && cue.sentenceStart <= cue.start)) && (cue.hardEnd === undefined || typeof cue.hardEnd === 'boolean') && Number.isFinite(cue.start) && Number.isFinite(cue.end) && cue.start >= 0 && cue.end > cue.start &&
+    (!i || cue.start >= value[i - 1].end - .02));
+}
+export function allowLiveCaptionFallback(cues: TimedCue[], time: number, observedAt: number, coveredUntil = 0): boolean {
+  const end = Math.max(cues.at(-1)?.end ?? 0, coveredUntil);
+  return time >= end && observedAt >= end;
 }

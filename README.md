@@ -12,7 +12,8 @@
   <a href="https://github.com/Somamill/immersed/releases/latest">Download source</a> ·
   <a href="#try-it-on-your-iphone">Try on iPhone</a> ·
   <a href="CHANGELOG.md">What's new</a> ·
-  <a href="docs/SUBTITLE_QUALITY.md">Subtitle quality</a>
+  <a href="docs/SUBTITLE_QUALITY.md">Subtitle quality</a> ·
+  <a href="docs/SUBTITLE_AUDIT.md">Latest audit</a>
 </p>
 
 ![Illustration of listening to Japanese in a lantern-lit neighborhood](docs/images/immersion-illustration.png)
@@ -83,10 +84,10 @@ Install **Expo Go** on your iPhone. Using Node.js 24, from a clone of this repos
 npm ci
 npm run language:setup
 npm run context:setup
-npx expo start --tunnel --go
+npm run preview
 ```
 
-Open the printed link/QR code in Expo Go. The development server supplies dictionary/analysis and must stay running. No Apple Developer subscription is needed for this preview; Expo Go keeps its own installed Home Screen icon. Preview links are temporary and can stop when their server/workspace stops.
+Open the printed link/QR code in Expo Go. The development server supplies dictionary/analysis and must stay running. No Apple Developer subscription is needed for this preview; Expo Go keeps its own installed Home Screen icon. The preview supervisor restarts a failed Expo process with bounded backoff. Expo can issue a new address after a restart; the latest is recorded in `.expo/immersed-preview.json`. Links are temporary, and the server/workspace must stay running.
 
 For the optional self-hosted recognition worker, setup details and platform limits, see the [development guide](docs/DEVELOPMENT.md). A static web export or signed app does not include a running backend. Videos that prohibit embedding or require inaccessible account/region permissions may not play. YouTube account sign-in is unavailable in this preview; unsupported sign-in links show an explanation instead of redirecting to Safari. Native OAuth would require a registered client and would not itself establish an authenticated embedded-player session. Locked-screen audio is not supported in this preview.
 

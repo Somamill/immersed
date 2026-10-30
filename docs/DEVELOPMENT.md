@@ -265,3 +265,13 @@ The generated-ASR pipeline still compares three recognizers. A contextual overri
 Study, dictionary and settings reserve the same lower-panel height while watching, so switching among them leaves the player boundary in place. The discovery compass no longer changes into a player icon in subpanels. Its accessible action still describes returning to Watch & read. One CI failure in 0.5.16 came from querying both the dismissing modal and underlying playback button; the test now waits for modal removal and targets the reading panel.
 
 Rebuild/evaluate with `npm run context:setup` and `npm run context:evaluate`. The latter corrupts held-out noun spellings into dictionary homophones, compares suggestions with the original and checks clean-input changes. Its report is `.data/context-evaluation.json`; it does not measure real speech accuracy or the sparse-case neural fallback. All downloaded/generated data remain outside git; credits and the exact source manifest are committed.
+
+## 0.5.18 — preview recovery and subtitle-path audit
+
+Use `npm run preview` to run Expo under the included supervisor. It uses the runtime's existing HTTP(S) proxy for the Expo WebSocket connection, preserves TLS verification, restarts failed/disconnected processes with bounded backoff, and records the latest public address/PID in ignored `.expo/immersed-preview.json`. Expo account tunnels can issue a new URL on restart; this is not permanent hosting and cannot repair an old URL after its tunnel is replaced. Plain `npx expo start --tunnel --go` remains available without supervision.
+
+JSON3 parsing now respects segment offsets, keeps rolling updates in a single seekable unit via `sentenceStart`, rejects expired-window appends, handles explicit window-only clears, and tolerates malformed event/segment records. Reflow preserves rolling-unit metadata and does not concatenate its cumulative text into duplicates. Generated and cached tracks are validated before binary timeline lookup. A fresh native line can resume beyond exhausted coverage, while verified gaps/silence and stale lines remain suppressed.
+
+Caption cache format 5 records source provenance and generated processing coverage. Creator captions keep their priority on repeated visits and over queued lower-priority writes. Format-4 caption caches are invalidated; word-library storage is unchanged. Active word analysis retries two temporary failures without needing a new sentence or manual control.
+
+The full review and unresolved limitations are in [SUBTITLE_AUDIT.md](SUBTITLE_AUDIT.md). No new audio-acquisition method, recognition model or forced aligner is introduced. Live YouTube audio is still blocked by this runtime's proxy.

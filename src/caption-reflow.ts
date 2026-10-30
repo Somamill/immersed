@@ -18,11 +18,14 @@ export async function refineCaptionTrack(raw: TimedCue[], endpoint: string, sign
     let offset = 0;
     if (!Array.isArray(cues) || !cues.length) throw new Error('Invalid caption reflow');
     for (const cue of cues) {
+      const originalOffset = offset;
       const first = batch[offset];
       let text = '';
       while (offset < batch.length && text.length < cue.text?.length) text += batch[offset++].text;
       const last = batch[offset - 1];
       if (!first || !last || text !== cue.text || cue.start !== first.start || cue.end !== last.end) throw new Error('Invalid caption reflow');
+      if (offset - originalOffset > 1 && batch.slice(originalOffset, offset).some(c => c.sentenceStart !== undefined)) throw new Error('Invalid rolling caption join');
+      if (first.sentenceStart !== undefined) cue.sentenceStart = first.sentenceStart;
       if (last.hardEnd) cue.hardEnd = true;
     }
     if (offset !== batch.length) throw new Error('Invalid caption reflow');

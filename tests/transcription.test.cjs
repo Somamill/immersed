@@ -61,3 +61,12 @@ test('processing polls return partial captions and comparisons without leaking p
   assert.equal(partial.progressFile, undefined);
   assert.equal(callbacks.length, 1);
 });
+
+test('invalid cached/progress/final cue timing is rejected instead of hiding source captions', async () => {
+  const { service, callbacks, storage } = fixture();
+  storage.promises.readFile = async () => JSON.stringify({ cues: [{ start: -1, end: 2, text: '不正' }] });
+  assert.equal((await service.start(videoId)).status, 'processing');
+  assert.equal((await service.start(videoId)).cues, undefined);
+  await callbacks[0](null, JSON.stringify({ cues: [{ start: 3, end: 4, text: '後' }, { start: 0, end: 1, text: '前' }] }));
+  assert.equal((await service.start(videoId)).status, 'unavailable');
+});

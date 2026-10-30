@@ -5,7 +5,7 @@ const { randomUUID } = require('node:crypto');
 function createTranscriptionService({ execute = execFile, storage = fs, now = Date.now, root = path.join(__dirname, '../.data/transcripts'), python = path.join(__dirname, '../.venv/bin/python') } = {}) {
   const jobs = new Map();
   let running = false;
-  const valid = cues => Array.isArray(cues) && cues.length > 0 && cues.every(c => typeof c.text === 'string' && Number.isFinite(c.start) && Number.isFinite(c.end) && c.end > c.start);
+  const valid = cues => Array.isArray(cues) && cues.length > 0 && cues.length <= 20000 && cues.every((c, i) => c && typeof c.text === 'string' && Number.isFinite(c.start) && Number.isFinite(c.end) && (c.hardEnd === undefined || typeof c.hardEnd === 'boolean') && c.start >= 0 && c.end > c.start && c.text.trim().length > 0 && c.text.length <= 2000 && (!i || c.start >= cues[i - 1].end - .02));
   async function start(videoId, retry = false) {
     if (!/^[\w-]{11}$/.test(videoId)) throw new Error('Invalid video id');
     const previous = jobs.get(videoId);
