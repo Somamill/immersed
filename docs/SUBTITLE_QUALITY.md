@@ -31,3 +31,15 @@ Timed tracks now receive background boundary analysis in batches of up to 48 cue
 The client validates that every returned cue is an ordered, unchanged partition of the input before displaying it. A failed or invalid batch leaves source captions usable. Processing updates progressively and stops when the video/source changes; source caches retain original cues. Joined intervals show the whole phrase across the source interval; they do not add word-level audio alignment. Live DOM-only captions cannot look ahead and do not get this cross-cue repair. Existing speech-recognition/homophone limitations remain.
 
 The UI uses shorter ruby lanes and tighter row spacing while retaining the 26-point base text and tappable words. Browser tests measure row separation on a wrapped Japanese example. Physical iPhone typography and real-video recognition quality still need evaluation.
+
+## Three-model comparison (0.5.13)
+
+The worker now compares ReazonSpeech K2, Whisper Small and Kotoba Whisper on the same audio chunks and delivers progress after each engine. Whole-phrase majority agreement is preferred when present; disagreements keep the default Reazon candidate and remain explicitly unverified. No novel combined sentence is synthesized. Creator tracks stay in priority; automatic tracks can be progressively replaced by generated results when source audio is accessible.
+
+A new six-clip diagnostic used public test rows 6–11, totaling 43.46 seconds and 139 normalized reference characters. Reazon had **22.3% CER**, Kotoba **31.7%**, Whisper Small **47.5%**. The selection policy retained Reazon on all six and also had **22.3% CER**: adding models did **not** demonstrate an accuracy gain over Reazon. Total engine work was 14.15 / 109.01 / 40.47 seconds respectively, including repeated model loading under concurrent browser-test load. All three combined consumed 163.63 seconds for 43.46 seconds of recordings, so this host is **not real-time**. Source metrics and caveats: [asr-comparison.json](asr-comparison.json).
+
+The references were supplied by the dataset and not manually verified. These are short broadcast snippets, not a representative benchmark of the user's natural conversations. Normalization removes punctuation/whitespace/symbols and preserves kanji distinctions; these rates cannot be directly compared with the earlier punctuation-preserving diagnostic.
+
+A separate real worker smoke check on a short recording produced three progressive updates. All three models returned the same complete phrase, with a final matching timed cue. This establishes that the multi-model plumbing runs on audio; it is not evidence of broad accuracy.
+
+The current best measured default remains Reazon. Further accuracy claims need human-checked recordings with slang, overlapping speakers, music and proper names. GPU execution can reduce comparison latency; it does not itself resolve disagreements. Network permission/source-audio access is still required before real YouTube comparison can be tested here.

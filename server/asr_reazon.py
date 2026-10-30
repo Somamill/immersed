@@ -15,7 +15,7 @@ def load_model():
     import sherpa_onnx
     from huggingface_hub import snapshot_download
     repository = 'reazon-research/reazonspeech-k2-v2'
-    folder = snapshot_download(repository, revision=MODEL_REVISION)
+    folder = snapshot_download(repository, revision=MODEL_REVISION, allow_patterns=['tokens.txt', 'encoder-epoch-99-avg-1.int8.onnx', 'decoder-epoch-99-avg-1.onnx', 'joiner-epoch-99-avg-1.int8.onnx'])
     return sherpa_onnx.OfflineRecognizer.from_transducer(
         tokens=os.path.join(folder, 'tokens.txt'),
         encoder=os.path.join(folder, 'encoder-epoch-99-avg-1.int8.onnx'),

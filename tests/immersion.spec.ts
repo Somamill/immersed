@@ -562,6 +562,7 @@ test('the player’s actual timedtext response is captured when a copied caption
 test('horizontal gestures navigate settings and words using the floating dock routes', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByText('Settings.', { exact: true })).toBeVisible();
   await page.mouse.move(60, 430); await page.mouse.down();
   await page.mouse.move(310, 435, { steps: 12 }); await page.mouse.up();
   await expect(page.getByText('Words.', { exact: true })).toBeVisible();
@@ -921,4 +922,22 @@ test('pitch charts count morae and distinguish flat, initial and final drops', (
   expect(accentHeights({ reading: 'はし', downstep: 3 })).toEqual([]);
   expect(restorePreferences({}).pitchAccent).toBe(false);
   expect(restorePreferences({ pitchAccent: true }).pitchAccent).toBe(true);
+});
+
+test('partial generated captions update through model comparison instead of stopping after the first result', async ({ page }) => {
+  let polls = 0;
+  await page.route('**/api/immersion/transcribe?**', route => {
+    polls++;
+    return route.fulfill({ contentType: 'application/json', body: JSON.stringify({
+      status: polls < 3 ? 'processing' : 'ready',
+      cues: [{ start: 0, end: 5, text: polls < 3 ? '箸です。' : '橋です。' }],
+      comparisons: [{ start: 0, end: 5, selected: polls < 3 ? 'reazon' : 'kotoba', reason: polls < 3 ? 'preferred-unverified' : 'majority-agreement', agreement: polls < 3 ? null : .9, candidates: [] }],
+    }) });
+  });
+  await page.goto('/');
+  await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Look up 箸', exact: true })).toBeVisible({ timeout: 12000 });
+  await expect(page.getByRole('button', { name: 'Look up 橋', exact: true })).toBeVisible({ timeout: 12000 });
+  expect(polls).toBeGreaterThanOrEqual(3);
 });

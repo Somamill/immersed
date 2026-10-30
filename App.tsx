@@ -97,6 +97,7 @@ export default function App() {
   const latestTime = useRef(0);
   const pendingSeek = useRef<{ target: number; requestedAt: number } | null>(null);
   const [generated, setGenerated] = useState<GeneratedCue[]>([]);
+  const [comparisonReport, setComparisonReport] = useState<{ videoId: string; data: NonNullable<Transcription['comparisons']> } | null>(null);
   const [subtitleStatus, setSubtitleStatus] = useState('');
   const [error, setError] = useState('');
   const [lookup, setLookup] = useState<Lookup | null>(null);
@@ -123,7 +124,12 @@ export default function App() {
   const canonical = youtubeUrl(pageUrl);
   const videoId = canonical ? new URL(canonical).searchParams.get('v') : null;
   const watching = !!videoId;
-  const rawTimeline = sourceTranscript?.videoId === videoId ? sourceTranscript.cues : generated;
+  const rawTimeline = useMemo(() => {
+    const source = sourceTranscript?.videoId === videoId ? sourceTranscript.cues : [];
+    if (!generated.length || transcriptRank.current >= 3) return source.length ? source : generated;
+    const end = generated[generated.length - 1].end;
+    return [...generated, ...source.filter(cue => cue.start >= end)];
+  }, [sourceTranscript, videoId, generated]);
   const [refinedTrack, setRefinedTrack] = useState<{ raw: GeneratedCue[]; cues: GeneratedCue[] } | null>(null);
   const timeline = refinedTrack?.raw === rawTimeline ? refinedTrack.cues : rawTimeline;
   useEffect(() => {
@@ -193,21 +199,25 @@ export default function App() {
     let attempts = 0;
     let timer: ReturnType<typeof setTimeout>;
     const recover = (reason: string | undefined, message: string, canRetry = true) => {
-      if (!active || seenSourceCaption.current) return;
+      if (!active || transcriptRank.current >= 3) return;
       const delay = canRetry ? automaticRetryDelay(reason, attempts) : undefined;
       if (delay === undefined) { setSubtitleStatus(message); return; }
       attempts++;
       timer = setTimeout(poll, delay);
     };
     const poll = async () => {
-      if (!active || seenSourceCaption.current) { if (active) setSubtitleStatus(''); return; }
+      if (!active || transcriptRank.current >= 3) { if (active) setSubtitleStatus(''); return; }
       const controller = new AbortController(); pending = controller;
       const timeout = setTimeout(() => controller.abort(), 8000);
       try {
         const result = await languageRequest<Transcription>('transcribe', { videoId, retry: String(attempts > 0) }, controller.signal);
-        if (!active || seenSourceCaption.current) return;
-        if (result.status === 'ready' && result.cues?.length) { seenSourceCaption.current = true; setGenerated(result.cues); setSubtitleStatus(''); void saveCaptionCache(videoId, result.cues); }
-        else if (result.status === 'processing' || result.status === 'busy') timer = setTimeout(poll, 1000);
+        if (!active || transcriptRank.current >= 3) return;
+        if (result.comparisons) setComparisonReport({ videoId, data: result.comparisons });
+        if (result.status === 'ready' && result.cues?.length) { setGenerated(old => old.length === result.cues!.length && old.every((cue, i) => cue.text === result.cues![i].text && cue.start === result.cues![i].start && cue.end === result.cues![i].end) ? old : result.cues!); setSubtitleStatus(''); void saveCaptionCache(videoId, result.cues); }
+        else if (result.status === 'processing' || result.status === 'busy') {
+          if (result.cues?.length) setGenerated(old => old.length === result.cues!.length && old.every((cue, i) => cue.text === result.cues![i].text && cue.start === result.cues![i].start && cue.end === result.cues![i].end) ? old : result.cues!);
+          timer = setTimeout(poll, 1000);
+        }
         else recover(result.reason, result.message || 'Japanese subtitles are unavailable for this video.', result.canRetry !== false);
       } catch { recover(undefined, 'The subtitle service is unavailable. Existing Japanese captions can still be used.'); }
       finally { clearTimeout(timeout); }
@@ -383,8 +393,8 @@ export default function App() {
         <View style={s.setting}><Text style={[s.emptyTitle, { flex: 1 }]}>Hide Shorts</Text><Switch accessibilityLabel="Hide Shorts" value={hideShorts} onValueChange={setHideShorts} trackColor={{ true: '#344C3F' }} /></View>
         <View style={{ paddingTop: 24 }}><Text style={s.emptyTitle}>Minimum video length</Text><View accessibilityRole="radiogroup" accessibilityLabel="Minimum video length" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 }}>{[0, 15, 30, 60].map(minutes => <Pressable key={minutes} accessibilityRole="radio" accessibilityLabel={minutes ? `At least ${minutes} minutes` : 'Any video length'} aria-checked={minimumMinutes === minutes} accessibilityState={{ checked: minimumMinutes === minutes }} onPress={() => setMinimumMinutes(minutes)} style={[s.topic, minimumMinutes === minutes && s.activeTopic]}><Text style={s.topicText}>{minutes ? `${minutes}+ min` : 'Any'}</Text></Pressable>)}</View></View>
         <View style={{ marginTop: 24, paddingTop: 8 }}><Button onPress={() => setAboutExpanded(value => !value)}>About</Button></View>
-        {aboutExpanded && <View style={{ marginTop: 24 }}><Text style={s.meaning}>Immersed {history[0].version}</Text><Text style={s.emptyTitle}>Dictionary & credits</Text><Text style={s.hint}>JMdict + JMnedict / EDRDG · Kanjium pitch accents © Uros O., CC BY-SA 4.0 · Japanese ↔ English, including names. Kuromoji/IPADIC provides word and grammar grouping. Grammar labels and JLPT levels are estimates. Lookup and grouping are always enabled. Furigana follows the selected level and your known/unknown overrides; unlisted words have no assumed JLPT level.</Text><Text style={s.hint}>YouTube account sign-in is unavailable in this preview. Google prohibits embedded sign-in; browser sessions cannot be imported into this player. Locked-screen playback is not supported in Expo Go.</Text>{!!subtitleStatus && <Text style={s.hint}>{subtitleStatus}</Text>}<Text style={s.attribution}>JMdict © EDRDG, CC BY-SA 4.0. Kuromoji © Atilika, Apache-2.0, with IPADIC/NAIST notices. JLPT estimates: OpenJLPT / Jonathan Waller / EDRDG, CC BY-SA 4.0. Generated Japanese speech recognition: ReazonSpeech K2 v2, Apache-2.0. Caption text is processed on the preview server; saved words and caption cache stay on the device. https://www.edrdg.org/edrdg/licence.html</Text>
-        <Text style={s.hint}>Video difficulty estimates use a sample of caption vocabulary and your level/word overrides. The percentage counts familiar words over all sampled vocabulary; unrated words are not assumed known. Grammar, speed and listening comprehension are not measured.</Text><Text style={s.emptyTitle}>Version history</Text>{history.map(release => <View key={release.version} style={s.entry}><Text style={s.meaning}>{release.version} · {release.date}</Text><Text style={s.reading}>{release.title}</Text>{release.notes.map(note => <Text key={note} style={s.hint}>• {note}</Text>)}</View>)}</View>}
+        {aboutExpanded && <View style={{ marginTop: 24 }}><Text style={s.meaning}>Immersed {history[0].version}</Text><Text style={s.emptyTitle}>Dictionary & credits</Text><Text style={s.hint}>JMdict + JMnedict / EDRDG · Kanjium pitch accents © Uros O., CC BY-SA 4.0 · Japanese ↔ English, including names. Kuromoji/IPADIC provides word and grammar grouping. Grammar labels and JLPT levels are estimates. Lookup and grouping are always enabled. Furigana follows the selected level and your known/unknown overrides; unlisted words have no assumed JLPT level.</Text><Text style={s.hint}>YouTube account sign-in is unavailable in this preview. Google prohibits embedded sign-in; browser sessions cannot be imported into this player. Locked-screen playback is not supported in Expo Go.</Text>{!!subtitleStatus && <Text style={s.hint}>{subtitleStatus}</Text>}<Text style={s.attribution}>JMdict © EDRDG, CC BY-SA 4.0. Kuromoji © Atilika, Apache-2.0, with IPADIC/NAIST notices. JLPT estimates: OpenJLPT / Jonathan Waller / EDRDG, CC BY-SA 4.0. Generated speech: ReazonSpeech K2, Kotoba Whisper and Whisper Small. Multiple-model agreement is not proof of correctness. Caption text is processed on the preview server; saved words and caption cache stay on the device. https://www.edrdg.org/edrdg/licence.html</Text>
+        <Text style={s.hint}>Video difficulty estimates use a sample of caption vocabulary and your level/word overrides. The percentage counts familiar words over all sampled vocabulary; unrated words are not assumed known. Grammar, speed and listening comprehension are not measured.</Text>{comparisonReport?.videoId === videoId && <View style={{ marginVertical: 12 }}><Text style={s.emptyTitle}>Caption cross-check</Text>{comparisonReport.data.map(item => <Text key={item.start} style={s.hint}>{Math.floor(item.start)}s · {item.selected || 'no speech'} · {item.reason === 'majority-agreement' ? 'models agree' : 'unverified choice'}{item.agreement == null ? '' : ` · text similarity ${Math.round(item.agreement * 100)}%`}</Text>)}</View>}<Text style={s.emptyTitle}>Version history</Text>{history.map(release => <View key={release.version} style={s.entry}><Text style={s.meaning}>{release.version} · {release.date}</Text><Text style={s.reading}>{release.title}</Text>{release.notes.map(note => <Text key={note} style={s.hint}>• {note}</Text>)}</View>)}</View>}
       </ScrollView></View>;
   const libraryPanel = <View testID="words-panel" style={{ flex: 1, minHeight: 0 }}><View style={[s.header, watching && { paddingVertical: 0, minHeight: 44 }]}><Text style={[s.brand, watching && { fontSize: 18, letterSpacing: -0.3 }]}>Words.</Text>{watching && <PlaybackButton dark={dark} paused={clock.paused} onTogglePlayback={togglePlayback} compact />}</View><ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding: watching ? 16 : 22, paddingTop: watching ? 4 : 22, paddingBottom: 16 }}><DictionarySearch pitchAccent={pitchAccent} dark={dark} compact={watching} /><Text style={s.emptyTitle}>Saved words</Text>{!saved.length && <Text style={s.hint}>Your saved words and their original video context will appear here.</Text>}{!!storageError && <Text style={s.hint}>{storageError}</Text>}{saved.map(word => <View key={word.key} style={s.entry}><Text style={s.lookupWord}>{word.word}</Text><Text style={s.reading}>{word.reading}</Text><Text style={s.meaning}>{word.meaning}</Text><Text style={s.sentence}>{word.sentence}</Text><Text style={s.hint}>{word.title}</Text><View style={s.row}><Button onPress={() => { const link = youtubeUrl(word.url); if (link) { setLibrary(false); browse(`${link}&t=${Math.floor(word.time)}s`); } }}>Watch context ↗</Button><Button onPress={() => setSaved(old => old.filter(w => w.key !== word.key))}>Remove</Button></View></View>)}</ScrollView></View>;
   const lookupContent = <LookupSheet pitchAccent={pitchAccent} lookup={lookup} dark={dark} entries={entries} loading={loading} error={dictionaryError} onClose={closeLookup}

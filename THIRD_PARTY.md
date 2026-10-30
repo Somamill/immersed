@@ -63,3 +63,11 @@ The bundled word/reading-to-level map is derived from OpenJLPT by evanclan and i
 - Pinned model revision `291488c8151be24d7da4bf7af26e533fad96e407`. The worker fetches only the Japanese int8 encoder and int8 joiner plus fp32 decoder/token file using that revision; model weights stay in the ignored Hugging Face cache.
 - The inference package `reazonspeech-k2-asr` and Sherpa-ONNX are Apache-2.0. Source is pinned to ReazonSpeech commit `2d4d4762e7ee294ac8e47a177ac2e9b0e8d0d43f` in `server/requirements.txt`. The source notice is preserved at [licenses/ReazonSpeech-Apache-2.0.txt](licenses/ReazonSpeech-Apache-2.0.txt).
 - Audio chunking, cue building and integration are Immersed code. The model license does not convey rights to video/audio processed by the worker.
+
+## Multi-model cross-check (0.5.13)
+
+The second and third recognizers use faster-whisper 1.2.1 (SYSTRAN, MIT), CTranslate2 (MIT), and pinned public model conversions. Native inference is server-side; no new Expo native module is added.
+
+- Kotoba Whisper v2.0 CTranslate2 conversion: https://huggingface.co/kotoba-tech/kotoba-whisper-v2.0-faster · revision f44edd35eaeb2274e85ac7b31fb2c6f59ff1c4bc. Conversion card says MIT; original Kotoba model is Apache-2.0: https://huggingface.co/kotoba-tech/kotoba-whisper-v2.0.
+- Whisper Small CTranslate2 conversion: https://huggingface.co/Systran/faster-whisper-small · revision 536b0662742c02347bc0e980a01041f333bce120. OpenAI Whisper weights/code are MIT: https://github.com/openai/whisper/blob/main/LICENSE.
+- Audio comparison diagnostics use temporary public dataset samples for analysis only. No recordings are redistributed by this release.

@@ -36,11 +36,17 @@ def main():
         if not files:
             print(json.dumps({'error': 'MEDIA_LIMIT', 'message': 'Audio was unavailable or outside this preview’s 30-minute / 150 MB processing limit.'}))
             return
-        from reazonspeech.k2.asr import audio_from_path, transcribe
-        from asr_reazon import load_model, recognize
-        model = load_model()
-        cues = recognize(files[0], model, transcribe, audio_from_path)
-        print(json.dumps({'cues': cues}, ensure_ascii=False))
+        from asr_ensemble import recognize
+        def publish(data):
+            if len(sys.argv) < 3:
+                return
+            target = pathlib.Path(sys.argv[2])
+            temporary = target.with_suffix('.tmp')
+            temporary.write_text(json.dumps(data, ensure_ascii=False))
+            temporary.replace(target)
+        data = recognize(files[0], publish)
+        print(json.dumps(data, ensure_ascii=False))
+
 
 if __name__ == '__main__':
     try:

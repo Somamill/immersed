@@ -1,0 +1,46 @@
+{
+  "dataset": "japanese-asr/ja_asr.reazonspeech_test",
+  "rows": [
+    6,
+    7,
+    8,
+    9,
+    10,
+    11
+  ],
+  "clips": 6,
+  "audioSeconds": 43.46,
+  "reference": "supplied dataset text, not manually verified",
+  "normalization": "NFKC; remove whitespace/punctuation/symbols; preserve kanji distinctions",
+  "metrics": {
+    "reazon": {
+      "edits": 31,
+      "characters": 139,
+      "cer": 0.223,
+      "seconds": 14.15
+    },
+    "kotoba": {
+      "edits": 44,
+      "characters": 139,
+      "cer": 0.3165,
+      "seconds": 109.01
+    },
+    "whisper-small": {
+      "edits": 66,
+      "characters": 139,
+      "cer": 0.4748,
+      "seconds": 40.47
+    },
+    "ensemble": {
+      "edits": 31,
+      "characters": 139,
+      "cer": 0.223,
+      "seconds": 163.63
+    }
+  },
+  "limits": [
+    "Small convenience sample; no proof of accuracy on casual YouTube conversations.",
+    "Timing includes model loading and concurrent browser-test load on CPU.",
+    "Majority selected Reazon in all six clips; no ensemble CER improvement measured."
+  ]
+}

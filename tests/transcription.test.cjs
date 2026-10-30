@@ -25,7 +25,7 @@ test('a failed audio job can recover instead of being cached forever', async () 
 test('cached transcripts survive disk failure and concurrent requests share one job', async () => {
   const { service, callbacks, storage } = fixture();
   const first = await service.start(videoId);
-  assert.equal(await service.start(videoId), first);
+  assert.deepEqual(await service.start(videoId), first);
   assert.equal(callbacks.length, 1);
   assert.equal((await service.start('dQw4w9WgXcQ')).status, 'busy');
   storage.promises.writeFile = async () => { throw new Error('disk full'); };
@@ -46,4 +46,18 @@ test('preview middleware preserves Connect fallback for unhandled Metro requests
     reached = true;
   })(req, res, fallback);
   assert.equal(reached, true);
+});
+
+test('processing polls return partial captions and comparisons without leaking paths or starting another worker', async () => {
+  const { service, callbacks, storage } = fixture();
+  await service.start(videoId);
+  storage.promises.readFile = async file => {
+    assert.ok(file.endsWith('.progress.json'));
+    return JSON.stringify({ cues: [{ start: 0, end: 2, text: '日本語' }], comparisons: [{ selected: 'reazon' }], processedSeconds: 2 });
+  };
+  const partial = await service.start(videoId);
+  assert.equal(partial.status, 'processing');
+  assert.equal(partial.cues[0].text, '日本語');
+  assert.equal(partial.progressFile, undefined);
+  assert.equal(callbacks.length, 1);
 });

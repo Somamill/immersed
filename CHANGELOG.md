@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.5.13 — 2026-10-30
+
+Compare three Japanese speech recognizers progressively
+
+- Add ReazonSpeech K2, Kotoba Whisper and Whisper Small with per-chunk text agreement, alternatives and measured timings.
+- Stream partial caption updates through polling; preserve creator tracks while cross-checking automatic sources; invalidate stale recognition caches.
+- Model disagreement remains unverified. CPU comparison is incremental, not guaranteed real-time. Kotoba timing is approximate; YouTube source audio remains blocked here.
+
 ## 0.5.12 — 2026-10-30
 
 Improve Japanese subtitle recognition
