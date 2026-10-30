@@ -1,0 +1,23 @@
+name: Archive pinned context corpus
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/data/context-source.json
+      - scripts/archive-context.cjs
+      - .github/workflows/archive-context.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify and archive the attributed source snapshot
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/archive-context.cjs
