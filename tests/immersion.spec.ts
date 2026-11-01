@@ -1,3 +1,4 @@
+import { configuredServiceOrigin } from '../src/service-origin';
 import { preserveCaptionTokens } from '../src/subtitle-tokens';
 import { test, expect } from '@playwright/test';
 import { refineCaptionTrack } from '../src/caption-reflow';
@@ -1176,4 +1177,12 @@ test('sentence seeking stays ordered when a second window interrupts a rolling c
   ] });
   expect(sentenceTarget(cues, 2.6, -1)).toBe(1);
   expect(sentenceTarget(cues, 2.6, 1)).toBe(6);
+});
+
+
+test('production manifests can select a stable HTTPS API without an Expo tunnel', () => {
+  expect(configuredServiceOrigin('https://immersed.example/')).toBe('https://immersed.example');
+  expect(configuredServiceOrigin(undefined)).toBeNull();
+  expect(configuredServiceOrigin('http://localhost:8080')).toBe('http://localhost:8080');
+  for (const origin of ['http://public.example','https://user:password@public.example','https://public.example/path']) expect(() => configuredServiceOrigin(origin)).toThrow();
 });

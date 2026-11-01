@@ -1,0 +1,34 @@
+services:
+  app:
+    build:
+      context: ..
+    restart: unless-stopped
+    init: true
+    environment:
+      PUBLIC_ORIGIN: https://${DOMAIN:?Set DOMAIN in deploy/.env}
+      PORT: "8080"
+      IMMERSED_FORCE_ALIGNMENT: "1"
+      HF_HOME: /models
+    volumes:
+      - language-data:/app/.data
+      - models:/models
+    expose: ["8080"]
+    stop_grace_period: 20s
+  https:
+    image: caddy:2.10
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in deploy/.env}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - certificates:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+volumes:
+  language-data:
+  models:
+  certificates:
+  caddy-config:

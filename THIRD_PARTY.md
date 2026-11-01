@@ -86,3 +86,10 @@ Tatoeba Japanese sentences © their contributors, CC BY 2.0 France: https://tato
 - `npm run context:setup` verifies the archive and derives a SQLite table of unigram, bigram and trigram counts/document frequencies using Kuromoji dictionary forms. The index retains sentence ID/author attribution. No sentence examples are shown to app users, and no audio is downloaded from Tatoeba.
 - 235,085 deduplicated sentences are used for counts; 12,486 are held out by sentence ID before training. This is a small community-contributed text corpus, with uneven domain/word coverage and possible source errors. It is not a verified conversational speech corpus.
 - Corpus/index licenses are separate from the MIT app code. Redistribute the source/derived index with this notice, contributor list and preserved attribution. Counts use an original additive/interpolated backoff implementation, not KenLM code or its modified Kneser–Ney estimator.
+
+## Acoustic alignment and optional recognition evaluation (0.6.0)
+
+- Qwen3 ForcedAligner 0.6B, Qwen team, Apache-2.0: https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B, pinned revision `c7cbfc2048c462b0d63a45797104fc9db3ad62b7`. Weights are downloaded separately, not bundled in the app.
+- `qwen-asr` 0.0.6 (Apache-2.0): https://github.com/QwenLM/Qwen3-ASR. The optional isolated runtime installs inference dependencies without its unused demo services. Transformers 4.57.6 and Accelerate 1.12.0 are Apache-2.0; Nagisa is MIT; SoyNLP is GPL-3.0 and SoX's Python wrapper is BSD-3-Clause. See each distribution's included license; these server dependencies are separate from the MIT app.
+- Optional benchmark models Qwen3 ASR 0.6B/1.7B are Apache-2.0; exact revisions and measured limitations are in [the upgrade report](docs/RECOGNITION_UPGRADE.md). They are not enabled as production recognizers.
+- FLEURS, Google and contributors: https://huggingface.co/datasets/google/fleurs. Used only for local diagnostic evaluation; no recordings or transcripts are redistributed in this update.

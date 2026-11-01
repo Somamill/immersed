@@ -2,7 +2,7 @@
   "expo": {
     "name": "Immersed",
     "slug": "immersed",
-    "version": "0.5.18",
+    "version": "0.6.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -24,6 +24,9 @@
     "plugins": [
       "expo-router"
     ],
-    "scheme": "immersed"
+    "scheme": "immersed",
+    "extra": {
+      "storageScopeKey": "@anonymous/immersed-6848fb61-7eac-408c-9365-26aaec27faeb"
+    }
   }
 }

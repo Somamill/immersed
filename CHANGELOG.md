@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.6.0 — 2026-11-01
+
+Acoustic timing and persistent-host deployment
+
+- Added a standalone HTTPS host and production native bundles, with Docker deployment instructions. A permanent host has not yet been connected or deployed.
+- Added optional audio-conditioned word alignment, explicit estimated-timing fallback, and reusable recognizer processes across chunks.
+- Larger recognizers tied or lost to the baseline in local read-speech tests; no recognition accuracy gain is claimed. Current cloud YouTube audio access remains blocked and preview URLs remain temporary.
+
 ## 0.5.18 — 2026-10-31
 
 Recover the preview and repair subtitle timing and cache priority

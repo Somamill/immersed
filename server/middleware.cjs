@@ -3,8 +3,8 @@ const { lookupContext } = require('./lookup-context.cjs');
 const { key: dictionaryKey } = require('./grammar.cjs');
 const transcription = require('./transcription.cjs');
 const { reflowCaptions, validBatch } = require('./caption-reflow.cjs');
-// Development-preview API, shared through the existing Expo tunnel. Production
-// will require a separately hosted service; these files never enter the client.
+// Shared language API for the development preview and standalone hosted server.
+// These server files never enter the client bundle.
 module.exports = function middleware(next) {
   void language.initialize().catch(() => {});
   return async (req, res, fallback) => {

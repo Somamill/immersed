@@ -2,7 +2,9 @@ const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-function createTranscriptionService({ execute = execFile, storage = fs, now = Date.now, root = path.join(__dirname, '../.data/transcripts'), python = path.join(__dirname, '../.venv/bin/python') } = {}) {
+function createTranscriptionService({ execute = execFile, storage = fs, now = Date.now, root = path.join(__dirname, '../.data/transcripts'), python = process.env.IMMERSED_PYTHON || (fs.existsSync(path.join(__dirname, '../.data/qwen-runtime/ready.json')) ? path.join(__dirname, '../.data/qwen-runtime/bin/python') : path.join(__dirname, '../.venv/bin/python')) } = {}) {
+  const forceAlignment = process.env.IMMERSED_FORCE_ALIGNMENT || (python.includes('qwen-runtime') ? '1' : '0');
+  const cacheSuffix = forceAlignment === '1' ? '.ensemble-acoustic-v4.json' : '.ensemble-estimated-v4.json';
   const jobs = new Map();
   let running = false;
   const valid = cues => Array.isArray(cues) && cues.length > 0 && cues.length <= 20000 && cues.every((c, i) => c && typeof c.text === 'string' && Number.isFinite(c.start) && Number.isFinite(c.end) && (c.hardEnd === undefined || typeof c.hardEnd === 'boolean') && c.start >= 0 && c.end > c.start && c.text.trim().length > 0 && c.text.length <= 2000 && (!i || c.start >= cues[i - 1].end - .02));
@@ -24,7 +26,7 @@ function createTranscriptionService({ execute = execFile, storage = fs, now = Da
       jobs.delete(videoId);
     }
     try {
-      const cached = JSON.parse(await storage.promises.readFile(path.join(root, videoId + '.ensemble-statistical-v3.json'), 'utf8'));
+      const cached = JSON.parse(await storage.promises.readFile(path.join(root, videoId + cacheSuffix), 'utf8'));
       if (valid(cached.cues)) return { ...cached, status: 'ready' };
     } catch { /* Missing/stale cache is recomputed. */ }
     if (running) return { status: 'busy', message: 'Another video is being prepared. Waiting for a free subtitle worker…' };
@@ -35,7 +37,7 @@ function createTranscriptionService({ execute = execFile, storage = fs, now = Da
     jobs.set(videoId, job); running = true;
     try { await storage.promises.mkdir(root, { recursive: true }); } catch {}
     const fail = (reason, message) => Object.assign(job, { status: 'unavailable', reason, message, failedAt: now(), canRetry: true });
-    execute(python, [path.join(__dirname, 'transcribe.py'), videoId, progressFile], { timeout: 15 * 60 * 1000, maxBuffer: 2 * 1024 * 1024 }, async (error, stdout) => {
+    execute(python, [path.join(__dirname, 'transcribe.py'), videoId, progressFile], { timeout: 30 * 60 * 1000, maxBuffer: 2 * 1024 * 1024, env: { ...process.env, IMMERSED_PERSISTENT_MODELS: '1', IMMERSED_FORCE_ALIGNMENT: forceAlignment } }, async (error, stdout) => {
       running = false;
       try { await storage.promises.unlink?.(progressFile); } catch {}
       try {
@@ -45,7 +47,7 @@ function createTranscriptionService({ execute = execFile, storage = fs, now = Da
         if (!valid(data.cues)) throw new Error('No speech detected');
         Object.assign(job, { status: 'ready', cues: data.cues, comparisons: data.comparisons, pipeline: data.pipeline, processedSeconds: data.processedSeconds, duration: data.duration });
         // A cache-write failure must never invalidate successfully generated cues.
-        try { await storage.promises.mkdir(root, { recursive: true }); await storage.promises.writeFile(path.join(root, videoId + '.ensemble-statistical-v3.json'), JSON.stringify(data)); } catch {}
+        try { await storage.promises.mkdir(root, { recursive: true }); await storage.promises.writeFile(path.join(root, videoId + cacheSuffix), JSON.stringify(data)); } catch {}
       } catch { fail('TRANSCRIPTION_FAILED', 'Japanese subtitle preparation failed. Existing Japanese captions can still be used.'); }
     });
     const { progressFile: privatePath, ...publicJob } = job;

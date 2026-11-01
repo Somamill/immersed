@@ -25,6 +25,6 @@ jobs:
       - run: npm run language:setup
       - run: npm run context:setup
       - run: npm run test:language
-      - run: npm run export:web
+      - run: npm run build:hosted
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

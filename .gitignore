@@ -48,3 +48,6 @@ playwright-report/
 .data/
 .venv/
 __pycache__/
+
+# Deployment-local domain configuration
+deploy/.env

@@ -1,0 +1,15 @@
+const fs = require('node:fs');
+const path = require('node:path');
+const { execFileSync } = require('node:child_process');
+const root = path.join(__dirname, '..');
+const base = process.env.IMMERSED_BASE_PYTHON || path.join(root, '.venv/bin/python');
+const directory = process.env.IMMERSED_ALIGNMENT_ENV || path.join(root, '.data/qwen-runtime');
+execFileSync(base, ['-m', 'venv', '--system-site-packages', directory], { stdio: 'inherit' });
+const python = path.join(directory, 'bin/python');
+const location = command => execFileSync(command, ['-c', 'import sysconfig;print(sysconfig.get_path("purelib"))'], { encoding: 'utf8' }).trim();
+fs.writeFileSync(path.join(location(python), 'immersed-base.pth'), location(base) + '\n');
+execFileSync(python, ['-m', 'pip', 'install', '-r', path.join(root, 'server/requirements-alignment.txt')], { stdio: 'inherit' });
+execFileSync(python, ['-m', 'pip', 'install', '--no-deps', 'qwen-asr==0.0.6'], { stdio: 'inherit' });
+execFileSync(python, ['-c', 'from qwen_asr import Qwen3ForcedAligner; print("Acoustic alignment runtime ready")'], { stdio: 'inherit' });
+fs.writeFileSync(path.join(directory, 'ready.json'), JSON.stringify({ qwenAsr: '0.0.6', transformers: '4.57.6' }));
+if (process.argv.includes('--download-model')) execFileSync(python, ['-c', 'import sys;sys.path.insert(0,"server");from forced_alignment import AcousticAligner;AcousticAligner().load()'], { cwd: root, stdio: 'inherit' });

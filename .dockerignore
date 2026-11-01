@@ -1,0 +1,13 @@
+.git
+node_modules
+.data
+.venv
+.expo
+dist
+test-results
+playwright-report
+.env*
+*.log
+
+Dockerfile
+.dockerignore

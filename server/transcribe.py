@@ -5,6 +5,7 @@ import sys
 import tempfile
 import subprocess
 import re
+import os
 
 def access_error(stderr):
     message = stderr.lower()
@@ -25,7 +26,7 @@ def main():
         result = subprocess.run([
             sys.executable, '-m', 'yt_dlp', '--no-playlist', '--no-progress',
             '--socket-timeout', '15', '--retries', '1', '--extractor-retries', '0', '--max-filesize', '150M',
-            '--match-filter', 'duration <= 1800', '-f', 'bestaudio/best',
+            '--match-filter', 'duration <= ' + str(min(14400, max(60, int(os.environ.get('IMMERSED_MAX_VIDEO_SECONDS', '1800'))))), '-f', 'bestaudio/best',
             '-o', str(pathlib.Path(directory) / 'audio.%(ext)s'),
             'https://www.youtube.com/watch?v=' + video_id,
         ], capture_output=True, text=True, timeout=180)
@@ -34,7 +35,7 @@ def main():
             return
         files = list(pathlib.Path(directory).glob('audio.*'))
         if not files:
-            print(json.dumps({'error': 'MEDIA_LIMIT', 'message': 'Audio was unavailable or outside this preview’s 30-minute / 150 MB processing limit.'}))
+            print(json.dumps({'error': 'MEDIA_LIMIT', 'message': 'Audio was unavailable or outside this server’s configured duration / 150 MB processing limit.'}))
             return
         from asr_ensemble import recognize
         def publish(data):
@@ -49,6 +50,12 @@ def main():
 
 
 if __name__ == '__main__':
+    if sys.platform.startswith('linux'):
+        import ctypes
+        import os
+        ctypes.CDLL(None).prctl(1, 15)
+        if os.getppid() == 1:
+            sys.exit(1)
     try:
         main()
     except Exception as error:
