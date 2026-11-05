@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.6.1 — 2026-11-05
+
+Prepare iOS App Store project
+
+- Link Immersed to the owner's Expo project and add in-app privacy and support links with draft App Store listing and review steps.
+- Apple Developer membership is confirmed, but signed iPhone testing, App Store Connect setup, persistent language hosting, and captionless-video acceptance remain outstanding.
+
 ## 0.6.0 — 2026-11-01
 
 Acoustic timing and persistent-host deployment

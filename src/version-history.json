@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.6.1",
+    "date": "2026-11-05",
+    "title": "Prepare iOS App Store project",
+    "notes": [
+      "Link Immersed to the owner's Expo project and add in-app privacy and support links with draft App Store listing and review steps.",
+      "Apple Developer membership is confirmed, but signed iPhone testing, App Store Connect setup, persistent language hosting, and captionless-video acceptance remain outstanding."
+    ]
+  },
+  {
     "version": "0.6.0",
     "date": "2026-11-01",
     "title": "Acoustic timing and persistent-host deployment",

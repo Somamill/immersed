@@ -76,6 +76,10 @@ Built for learners looking for a **free, open-source Migaku alternative for iPho
 
 </details>
 
+## App Store preparation
+
+The project is linked to the owner's Expo account, and the current App Store listing draft, privacy policy, support route and release gates are in [App Store preparation](docs/APP_STORE.md). Apple Developer Program membership is confirmed. A public release still needs a signed iPhone acceptance test and permanent language service.
+
 ## Persistent hosting
 
 A standalone HTTPS server can serve the Expo Go bundle and language API from one stable origin, without a development tunnel. The Docker/Compose setup includes persistent caches and HTTPS. **It has not been deployed to a permanent host.** See [deployment instructions and acceptance checks](docs/DEPLOYMENT.md).

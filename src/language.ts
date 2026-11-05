@@ -6,7 +6,7 @@ export const dictionaryKey = (token: AnalyzedToken) => ['particle', 'auxiliary']
 export type GeneratedCue = import('./captions').TimedCue;
 export type Transcription = { status: 'processing' | 'ready' | 'busy' | 'unavailable'; message?: string; processedSeconds?: number; duration?: number; cues?: GeneratedCue[]; comparisons?: { start: number; end: number; selected: string | null; reason: string; agreement: number | null; alignment?: { status: 'aligned' | 'estimated'; method?: string; reason?: string }; candidates: { model: string; text: string; seconds?: number; error?: string }[] }[]; reason?: string; canRetry?: boolean };
 export function serviceUrl(route: string, params: Record<string, string>) {
-  let origin = configuredServiceOrigin(Constants.expoConfig?.extra?.apiBaseUrl) || '';
+  let origin = configuredServiceOrigin(process.env.EXPO_PUBLIC_IMMERSED_API_ORIGIN) || configuredServiceOrigin(Constants.expoConfig?.extra?.apiBaseUrl) || '';
   if (!origin && Platform.OS !== 'web') {
     const host = Constants.expoConfig?.hostUri;
     if (!host) throw new Error('The language service needs the cloud preview server.');
