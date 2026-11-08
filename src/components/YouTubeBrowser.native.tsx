@@ -6,7 +6,7 @@ import { japaneseCaptionUrl, parseCaptionTrack, captionSourceRank, type CaptionS
 import history from '../version-history.json';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../youtube';
 import type { BrowserHandle, BrowserProps } from './YouTubeBrowser';
-export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, minimumMinutes = 0, onCaption, onError, onPage, onClock, onTranscript }, ref) {
+export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, minimumMinutes = 0, onCaption, onError, onPlayerBlocked, onPage, onClock, onTranscript }, ref) {
   // WebView 14 defaults its extra-props generic to undefined, which intersects
   // its props to never under TS 6 strict mode. Explicit object preserves props.
   const initial = youtubeUrl(uri);
@@ -90,7 +90,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
           if (url.protocol === 'https:' && ['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)) pageChanged(url.toString());
           return;
         }
-        if (v.type === 'playerError' && v.videoId === currentVideo.current) { onError('This video cannot play in the embedded player.'); return; }
+        if (v.type === 'playerError' && v.videoId === currentVideo.current) { onPlayerBlocked?.(v.videoId); return; }
         if (v.type === 'captionData' && v.language === 'ja' && typeof v.videoId === 'string' && v.videoId === currentVideo.current) {
           const cues = parseCaptionTrack(v.data);
           if (cues.length) onTranscript?.(cues, v.videoId, v.source === 'human' || v.source === 'youtube-asr' ? v.source : 'unknown');

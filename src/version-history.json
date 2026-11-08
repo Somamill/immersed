@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.6.2",
+    "date": "2026-11-09",
+    "title": "Recover from blocked YouTube embeds",
+    "notes": [
+      "Return to YouTube discovery when a video owner blocks embedded playback, instead of leaving a dead player and empty subtitle area.",
+      "Owner-restricted videos still cannot play inside Immersed, and captionless YouTube transcription remains blocked by source-audio access."
+    ]
+  },
+  {
     "version": "0.6.1",
     "date": "2026-11-05",
     "title": "Prepare iOS App Store project",

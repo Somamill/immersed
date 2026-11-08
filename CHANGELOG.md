@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.6.2 — 2026-11-09
+
+Recover from blocked YouTube embeds
+
+- Return to YouTube discovery when a video owner blocks embedded playback, instead of leaving a dead player and empty subtitle area.
+- Owner-restricted videos still cannot play inside Immersed, and captionless YouTube transcription remains blocked by source-audio access.
+
 ## 0.6.1 — 2026-11-05
 
 Prepare iOS App Store project

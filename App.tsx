@@ -105,6 +105,7 @@ export default function App() {
   const [comparisonReport, setComparisonReport] = useState<{ videoId: string; data: NonNullable<Transcription['comparisons']> } | null>(null);
   const [subtitleStatus, setSubtitleStatus] = useState('');
   const [error, setError] = useState('');
+  const [blockedVideoNotice, setBlockedVideoNotice] = useState('');
   const [lookup, setLookup] = useState<Lookup | null>(null);
   const [spellingResult, setSpellingResult] = useState<{ lookup: Lookup; alternatives: SpellingAlternative[] } | null>(null);
   const [dictionaryResult, setDictionaryResult] = useState<{ key: string; entries: DictionaryEntry[]; error: string } | null>(null);
@@ -305,7 +306,7 @@ export default function App() {
   const handlePage = (url: string) => {
     const canonical = youtubeUrl(url);
     const id = canonical ? new URL(canonical).searchParams.get('v') : null;
-    if (id !== pageVideo.current) { pageVideo.current = id; seenSourceCaption.current = false; transcriptRank.current = 0; pendingSeek.current = null; latestTime.current = 0; setSubtitleStatus(''); setGenerated([]); setGeneratedThrough(0); setNativeCaption(null); setClock({ time: 0, paused: true }); setLookup(null); }
+    if (id !== pageVideo.current) { pageVideo.current = id; seenSourceCaption.current = false; transcriptRank.current = 0; pendingSeek.current = null; latestTime.current = 0; setSubtitleStatus(''); setGenerated([]); setGeneratedThrough(0); setNativeCaption(null); setClock({ time: 0, paused: true }); setLookup(null); setBlockedVideoNotice(''); }
     if (!id && /^https:\/\/(?:m\.|www\.)?youtube\.com\//.test(url)) lastBrowse.current = url;
     setPageUrl(url);
   };
@@ -317,7 +318,12 @@ export default function App() {
       if (id && id === pageVideo.current) { seenSourceCaption.current = true; setSubtitleStatus(''); }
     }
   };
-  const browse = (url: string) => { Keyboard.dismiss(); setError(''); setNativeCaption(null); setLookup(null); handlePage(url); setUri(url); setBrowserVersion(v => v + 1); };
+  const browse = (url: string) => { Keyboard.dismiss(); setError(''); setBlockedVideoNotice(''); setNativeCaption(null); setLookup(null); handlePage(url); setUri(url); setBrowserVersion(v => v + 1); };
+  const onPlayerBlocked = (id: string) => {
+    if (id !== pageVideo.current) return;
+    browse(lastBrowse.current);
+    setBlockedVideoNotice("The owner of this video doesn't allow playback here. Choose another video.");
+  };
   const openInput = () => {
     const text = input.trim(); if (!text) return;
     if (hideShorts && /^https?:/i.test(text)) { try { if (new URL(text).pathname.startsWith('/shorts/')) { setError('Shorts are hidden. Enable them in Settings to open this link.'); return; } } catch {} }
@@ -451,9 +457,9 @@ export default function App() {
   return <DarkContext.Provider value={dark}><KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}><SafeAreaView edges={watching ? [] : ['top', 'left', 'right']} style={s.safe} onLayout={event => { const next = event.nativeEvent.layout.height; setViewportHeight(old => Math.abs(old - next) < 1 ? old : next); }} {...appGestures.panHandlers}><StatusBar hidden={watching} style={dark ? "light" : "dark"} />
     {!watching && <View style={s.header}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Image source={require('./assets/icon.png')} accessibilityLabel="Immersed app icon" style={{ width: 36, height: 36, borderRadius: 9 }} /><Text style={s.brand}>immersed.</Text></View><Text style={s.hint}>日本語 · N{level}</Text></View>}
     {!watching && <><View style={s.search}><TextInput accessibilityLabel="Search Japanese topics or paste a YouTube link" placeholder="Search a topic or paste a YouTube link" placeholderTextColor={dark ? "#999" : "#70776E"} value={input} onChangeText={setInput} onSubmitEditing={openInput} returnKeyType="search" autoCapitalize="none" style={s.input} /><Button onPress={openInput}>Go</Button></View><View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.topics}>{topics.map(item => <Pressable accessibilityRole="button" key={item.label} onPress={() => { setTopic(item.label); browse(topicUrl(item.query)); }} style={[s.topic, topic === item.label && s.activeTopic]}><Text style={s.topicText}>{item.label}</Text></Pressable>)}</ScrollView></View></>}
-    {!!error && <View style={[s.error, watching && { position: 'absolute', top: insets.top + 12, left: 12, right: 12, zIndex: 15, borderRadius: 18 }]}><Text style={s.hint}>{error}</Text></View>}
+    {!!(error || blockedVideoNotice) && <View style={[s.error, watching && { position: 'absolute', top: insets.top + 12, left: 12, right: 12, zIndex: 15, borderRadius: 18 }]}><Text style={s.hint}>{blockedVideoNotice || error}</Text></View>}
     <View testID="content-surface" style={s.contentSurface}>
-      <View testID="video-surface" style={watching ? s.watchVideo : s.browser}><YouTubeBrowser key={browserVersion} ref={browser} uri={uri} dark={dark} hideShorts={hideShorts} minimumMinutes={minimumMinutes} onCaption={receiveCaption} onPage={handlePage} onTranscript={(cues, id, source = 'unknown') => { if (!validCaptionCues(cues) || id !== pageVideo.current || captionSourceRank(source) < transcriptRank.current) return; transcriptRank.current = captionSourceRank(source); seenSourceCaption.current = true; setSourceTranscript({ videoId: id, cues }); setSubtitleStatus(''); void saveCaptionCache(id, cues, source); }} onClock={receiveClock} onError={setError} /></View>
+      <View testID="video-surface" style={watching ? s.watchVideo : s.browser}><YouTubeBrowser key={browserVersion} ref={browser} uri={uri} dark={dark} hideShorts={hideShorts} minimumMinutes={minimumMinutes} onCaption={receiveCaption} onPage={handlePage} onTranscript={(cues, id, source = 'unknown') => { if (!validCaptionCues(cues) || id !== pageVideo.current || captionSourceRank(source) < transcriptRank.current) return; transcriptRank.current = captionSourceRank(source); seenSourceCaption.current = true; setSourceTranscript({ videoId: id, cues }); setSubtitleStatus(''); void saveCaptionCache(id, cues, source); }} onClock={receiveClock} onError={setError} onPlayerBlocked={onPlayerBlocked} /></View>
       {watching && <View testID="subtitle-panel" style={[s.study, { height: readingHeight, paddingBottom: dockClearance, paddingHorizontal: panel ? 0 : 12, paddingTop: panel ? 0 : 6 }]} {...(!panel && !lookup ? gestures.panHandlers : {})}>
         {settings ? settingsPanel : library ? libraryPanel : <>
           <View style={{ height: coverageHeight, justifyContent: 'center' }}><VideoCoverage cues={rawTimeline} level={level} knowledge={knowledge} dark={dark} /></View>
