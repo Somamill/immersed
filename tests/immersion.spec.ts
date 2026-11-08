@@ -431,6 +431,15 @@ test('an explicit embedded-player error is reported without navigating to a watc
   expect(page.url()).toContain('/embed/M7lc1UVf-VE');
 });
 
+test('a normal watch page keeps only the video in view and reports a confirmed player error', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="movie_player"><div class="ytp-error-content-wrap">Playback is unavailable</div></div><div id="comments">Comments</div>' }));
+  await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
+  await page.evaluate(() => { const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (raw: string) => void } }; w.messages = []; w.ReactNativeWebView = { postMessage: raw => w.messages.push(JSON.parse(raw)) }; });
+  await page.addScriptTag({ content: CAPTION_BRIDGE });
+  await expect(page.locator('#movie_player')).toHaveCSS('position', 'fixed');
+  expect(await page.evaluate(() => (window as unknown as { messages: { type: string; videoId?: string }[] }).messages.filter(m => m.type === 'playerError'))).toEqual([{ type: 'playerError', videoId: 'M7lc1UVf-VE' }]);
+});
+
 test('navigation uses large labelled icons with an active state and no visible text tabs', async ({ page }) => {
   await page.goto('/');
   for (const label of ['Browse', 'Words · 0', 'Settings']) {

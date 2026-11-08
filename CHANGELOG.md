@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.6.3 — 2026-11-09
+
+Restore playback for videos that block embedding
+
+- When YouTube rejects the embedded player, automatically retry the same video on its normal watch page inside Immersed while keeping the learning view.
+- If YouTube also blocks the normal watch page, return to discovery with a clear message; source-audio restrictions still limit captionless transcription.
+
 ## 0.6.2 — 2026-11-09
 
 Recover from blocked YouTube embeds

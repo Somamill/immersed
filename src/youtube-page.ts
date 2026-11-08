@@ -7,6 +7,7 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
   window.__immersedOptions = window.__immersedOptions || { dark: true, hideShorts: true, minimumMinutes: 0, fillPortrait: false };
   const css = document.createElement('style');
   css.textContent = 'html[data-immersed-dark] { color-scheme:dark!important; background:#000!important; --yt-spec-base-background:#000!important; --yt-spec-raised-background:#171717!important; --yt-spec-menu-background:#171717!important; --yt-spec-general-background-a:#000!important; --yt-spec-general-background-b:#000!important; --yt-spec-text-primary:#eee!important; --yt-spec-text-secondary:#aaa!important; --yt-spec-brand-background-primary:#000!important; --yt-spec-brand-background-secondary:#171717!important; --yt-spec-brand-background-solid:#000!important; } html[data-immersed-dark] body, html[data-immersed-dark] ytm-app, html[data-immersed-dark] ytm-search, html[data-immersed-dark] ytm-mobile-topbar-renderer, html[data-immersed-dark] ytm-header-bar, html[data-immersed-dark] ytm-searchbox, html[data-immersed-dark] .searchbox-input, html[data-immersed-dark] .pivot-bar-renderer { background-color:#000!important; color:#eee!important; } html[data-immersed-watch] video.html5-main-video { width:100vw!important; height:100vh!important; top:0!important; left:0!important; object-fit:contain!important; background:#000!important; } html[data-immersed-fill] video.html5-main-video { width:100vw!important; height:100vh!important; top:0!important; left:0!important; object-fit:cover!important; } html[data-immersed-browse], html[data-immersed-browse] body { margin-bottom:0!important; padding-bottom:0!important; min-height:100vh!important; } html[data-immersed-browse] ytm-app, html[data-immersed-browse] ytm-search, html[data-immersed-browse] ytm-browse { padding-bottom:0!important; min-height:100vh!important; } html[data-immersed-browse] ytm-pivot-bar-renderer, html[data-immersed-browse] .pivot-bar-renderer { display:none!important; } html[data-immersed-watch] .ytp-caption-window-container, html[data-immersed-watch] .ytp-caption-window-container *, html[data-immersed-watch] .ytp-caption-segment, html[data-immersed-watch] .captions-text { visibility:hidden!important; pointer-events:none!important; } [data-immersed-short], [data-immersed-duration] { display:none!important; }';
+  css.textContent += ' html[data-immersed-watch-page], html[data-immersed-watch-page] body { overflow:hidden!important; background:#000!important; } html[data-immersed-watch-page] #movie_player { position:fixed!important; inset:0!important; width:100vw!important; height:100vh!important; max-width:none!important; max-height:none!important; z-index:2147483640!important; background:#000!important; }';
   let preferenceDark;
   const flag = (root, name, enabled) => {
     if (enabled && !root.hasAttribute(name)) root.setAttribute(name, '');
@@ -70,6 +71,7 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
     flag(root, 'dark', options.dark);
     const watch = /^\/(embed\/|watch|shorts\/)/.test(location.pathname);
     flag(root, 'data-immersed-watch', watch);
+    flag(root, 'data-immersed-watch-page', location.pathname === '/watch');
     flag(root, 'data-immersed-browse', !watch);
     flag(root, 'data-immersed-fill', options.fillPortrait && watch);
     root.style.colorScheme = options.dark ? 'dark' : 'light';
@@ -263,7 +265,7 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     if (response?.videoDetails?.videoId === videoId) tracks = response.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
     let selectedJapanese = false;
     const playerError = player?.querySelector('.ytp-error-content-wrap');
-    if (location.pathname.startsWith('/embed/') && videoId && lastErrorVideo !== videoId && (['UNPLAYABLE', 'ERROR'].includes(response?.playabilityStatus?.status) || (playerError?.getClientRects().length && playerError.textContent.trim()))) { lastErrorVideo = videoId; send({ type: 'playerError', videoId }); }
+    if (videoId && lastErrorVideo !== videoId && ((location.pathname.startsWith('/embed/') && ['UNPLAYABLE', 'ERROR'].includes(response?.playabilityStatus?.status)) || ((location.pathname.startsWith('/embed/') || location.pathname === '/watch') && playerError?.getClientRects().length && playerError.textContent.trim()))) { lastErrorVideo = videoId; send({ type: 'playerError', videoId }); }
     if (videoId && /^[A-Za-z0-9_-]{11}$/.test(videoId)) {
       const track = chooseTrack(tracks);
       if (track?.baseUrl) void requestTrack(track, videoId);

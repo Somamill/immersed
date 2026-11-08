@@ -322,7 +322,7 @@ export default function App() {
   const onPlayerBlocked = (id: string) => {
     if (id !== pageVideo.current) return;
     browse(lastBrowse.current);
-    setBlockedVideoNotice("The owner of this video doesn't allow playback here. Choose another video.");
+    setBlockedVideoNotice("YouTube could not play this video inside Immersed. Choose another video.");
   };
   const openInput = () => {
     const text = input.trim(); if (!text) return;
