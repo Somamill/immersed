@@ -1,5 +1,5 @@
 <p align="center"><img src="assets/icon.png" width="88" alt="Immersed mint play-and-book icon" /></p>
-<h1 align="center">Immersed · Japanese immersion for iPhone</h1>
+<h1 align="center">Immersed · Japanese immersion for iPhone and Mac</h1>
 <p align="center"><strong>Japanese worth watching.</strong><br />Watch a video. Tap a word. Keep your flow.</p>
 <p align="center">Free, open-source language learning with YouTube subtitles, tap-to-lookup dictionaries and vocabulary in context.</p>
 <p align="center">
@@ -7,22 +7,26 @@
   <a href="https://github.com/Somamill/immersed/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Somamill/immersed?color=b4dec4&amp;label=release" /></a>
   <a href="LICENSE"><img alt="Code license MIT" src="https://img.shields.io/badge/code-MIT-b4dec4" /></a>
   <img alt="iPhone preview with Expo Go" src="https://img.shields.io/badge/iPhone-Expo%20Go-171717" />
+  <img alt="Mac local test via Homebrew" src="https://img.shields.io/badge/Mac-Homebrew%20test-171717" />
 </p>
 <p align="center">
   <a href="https://github.com/Somamill/immersed/releases/latest">Download source</a> ·
   <a href="#try-it-on-your-iphone">Try on iPhone</a> ·
+  <a href="docs/MACOS.md">Try on Mac</a> ·
   <a href="CHANGELOG.md">What's new</a> ·
   <a href="docs/SUBTITLE_QUALITY.md">Subtitle quality</a> ·
   <a href="docs/SUBTITLE_AUDIT.md">Latest audit</a>
 </p>
 
-![Illustration of listening to Japanese in a lantern-lit neighborhood](docs/images/immersion-illustration.png)
+![Concept illustration of Immersed on an iPhone and a Mac](docs/images/hero-iphone-mac.png)
+
+*Original AI-generated concept art; device screens illustrate the product goal and are not screenshots of a live transcription.*
 
 **Turn the Japanese you already enjoy into daily practice.** Watch real conversations, gaming, travel or science on YouTube. Tap a subtitle word, understand the grammar, save it with its sentence, and keep your flow.
 
-Built for learners looking for a **free, open-source Migaku alternative for iPhone**, with a simple portrait interface and inspectable dictionary and subtitle tools. This is an independent early project; it does not claim feature parity with Migaku or Language Reactor.
+Built for learners looking for a **free, open-source immersion tool for iPhone and macOS**, with inspectable dictionary and subtitle tools. This is an independent early project; it does not claim feature parity with Migaku or Language Reactor.
 
-> **Prototype status:** source-caption study, dictionary search and saved vocabulary are implemented. Creating fresh subtitles for captionless YouTube videos is **not working in the current cloud preview** because it cannot acquire the audio. Recognition can also choose incorrect words or kanji. This is not yet a reliable universal transcription service or an App Store release.
+> **Prototype status:** The iPhone preview supports source-caption study, dictionary search and saved vocabulary. Fresh subtitles for captionless YouTube videos are **not working in that cloud preview** because it cannot acquire the audio. The Mac test downloads accessible video audio locally and begins showing generated subtitles after its first 60-second recognition chunk. Neither platform guarantees every video or perfect Japanese recognition; the Mac install has not yet been tested on physical macOS hardware.
 
 ## A small interface for a bigger world
 
@@ -43,7 +47,7 @@ Built for learners looking for a **free, open-source Migaku alternative for iPho
 
 <p align="center"><img src="docs/images/watch-dictionary.png" width="250" alt="Dictionary search below the selected video" /> <img src="docs/images/watch-settings.png" width="250" alt="Settings below the selected video" /></p>
 
-*Screenshots show the actual app UI rendered in a browser at phone dimensions. The study and inline-panel images use clearly labelled illustrative media and sample captions; vocabulary estimates in them are computed from that sample; it is not a live YouTube/iPhone transcription demonstration. The banner is original generated artwork.*
+*Screenshots show the actual iPhone app UI rendered in a browser at phone dimensions. The study and inline-panel images use illustrative media and sample captions; they are not a live YouTube/iPhone transcription demonstration.*
 
 ## Watch → tap → understand
 
@@ -112,7 +116,7 @@ These projects share an immersion-learning idea; their platforms and scope diffe
 
 | Project | Explore it for |
 | --- | --- |
-| **Immersed** | An open-source, iPhone-first experiment combining video, Japanese dictionary lookup and saved vocabulary. Expo Go preview today. |
+| **Immersed** | An open-source iPhone and Mac experiment combining video, Japanese dictionary lookup and saved vocabulary. Expo Go preview and local Mac test today. |
 | [Migaku](https://migaku.com/) | An established commercial immersion ecosystem and browser workflow. |
 | [Language Reactor](https://www.languagereactor.com/) | A browser-based language-learning companion. |
 | [asbplayer](https://docs.asbplayer.dev/) | Free, open-source browser video study and subtitle sentence mining. |

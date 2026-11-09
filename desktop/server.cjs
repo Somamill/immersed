@@ -3,7 +3,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
-const { execFile } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
 const { promisify } = require('node:util');
 const api = require('../server/middleware.cjs');
 const run = promisify(execFile);
@@ -20,6 +20,33 @@ function state(id) {
   }
   return jobs.get(id) || { status: 'idle' };
 }
+function recognize(python, audio, id) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(python, [path.join(__dirname, 'transcribe.py'), audio], { stdio: ['ignore', 'pipe', 'ignore'] });
+    let buffer = '', final;
+    const timer = setTimeout(() => child.kill(), 60 * 60_000);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', chunk => {
+      buffer += chunk;
+      if (buffer.length > 20 * 1024 * 1024) { child.kill(); return; }
+      let newline;
+      while ((newline = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, newline); buffer = buffer.slice(newline + 1);
+        try {
+          const message = JSON.parse(line);
+          if (message.status === 'processing' && Array.isArray(message.cues)) jobs.set(id, { status: 'processing', stage: 'Recognizing Japanese speech on this Mac', cues: message.cues, processedSeconds: message.processedSeconds });
+          if (message.status === 'ready' || message.status === 'unavailable') final = message;
+        } catch { /* Ignore model progress that is not JSON. */ }
+      }
+    });
+    child.on('error', error => { clearTimeout(timer); reject(error); });
+    child.on('close', code => {
+      clearTimeout(timer);
+      if (code || !final || final.status !== 'ready') reject(new Error(final?.error || 'Local speech recognition stopped'));
+      else resolve(final.cues);
+    });
+  });
+}
 async function transcribe(id) {
   let folder;
   try {
@@ -30,11 +57,10 @@ async function transcribe(id) {
     if (!audio) throw new Error('Video audio could not be downloaded on this Mac');
     jobs.set(id, { status: 'processing', stage: 'Recognizing Japanese speech on this Mac' });
     const python = process.env.IMMERSED_PYTHON || path.join(root, '.venv/bin/python');
-    const { stdout } = await run(python, [path.join(__dirname, 'transcribe.py'), path.join(folder, audio)], { timeout: 60 * 60_000, maxBuffer: 20 * 1024 * 1024 });
-    const result = JSON.parse(stdout);
-    if (result.error || !Array.isArray(result.cues) || !result.cues.length) throw new Error(result.error || 'No Japanese speech was recognized');
-    fs.writeFileSync(path.join(cache, id + '.json'), JSON.stringify({ cues: result.cues }));
-    jobs.set(id, { status: 'ready', cues: result.cues });
+    const cues = await recognize(python, path.join(folder, audio), id);
+    if (!Array.isArray(cues) || !cues.length) throw new Error('No Japanese speech was recognized');
+    fs.writeFileSync(path.join(cache, id + '.json'), JSON.stringify({ cues }));
+    jobs.set(id, { status: 'ready', cues });
   } catch (error) {
     jobs.set(id, { status: 'unavailable', message: String(error.message || error).slice(0, 220) });
   } finally { if (folder) fs.rmSync(folder, { recursive: true, force: true }); }

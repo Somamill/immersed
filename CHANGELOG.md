@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.8.1 — 2026-11-09
+
+Show Mac subtitle chunks and iPhone–Mac artwork
+
+- Add original concept artwork to the repository and describe Immersed as an iPhone and Mac project. The Mac companion now publishes each 60-second Japanese recognition chunk and waits for the first subtitle before playback.
+- The Mac worker still needs a real macOS installation and accuracy test; its initial audio download/model startup can be slow and some YouTube videos may block playback or audio access. iPhone captionless generation remains unavailable in Expo Go.
+
 ## 0.8.0 — 2026-11-09
 
 Add local Mac transcription draft
