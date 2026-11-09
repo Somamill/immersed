@@ -5,7 +5,7 @@ import { japaneseCaptionUrl, parseCaptionTrack, captionSourceRank, type CaptionS
 import history from '../version-history.json';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../youtube';
 import type { BrowserHandle, BrowserProps } from './YouTubeBrowser';
-export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, minimumMinutes = 0, onCaption, onError, onPage, onClock, onTranscript }, ref) {
+export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, minimumMinutes = 0, onCaption, onError, onPage, onClock, onTranscript, onPlaybackDiagnostic }, ref) {
   // WebView 14 defaults its extra-props generic to undefined, which intersects
   // its props to never under TS 6 strict mode. Explicit object preserves props.
   const initial = youtubeUrl(uri);
@@ -58,7 +58,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
       web.current?.injectJavaScript(`window.__immersedCommand?.(${JSON.stringify(command)}, ${Number.isFinite(time) ? time : 'null'}); true;`);
     },
   }));
-  return <WebView<object> key={`${history[0].version}:${playerId || 'browse'}`} ref={web} source={source} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo={false} injectedJavaScriptBeforeContentLoaded={optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
+  return <WebView<object> key={`${history[0].version}:${playerId || 'browse'}`} ref={web} source={source} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo injectedJavaScriptBeforeContentLoaded={playerId ? undefined : optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
     onNavigationStateChange={state => { canGoBack.current = state.canGoBack; if (state.url !== 'about:blank') pageChanged(state.url); }} onLoadStart={() => { onCaption(null); onError(''); }} onError={event => onError(event.nativeEvent.description)}
     onShouldStartLoadWithRequest={request => {
       if (request.url === 'about:blank' || request.isTopFrame === false) return true;
@@ -85,6 +85,10 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
         if (v.type === 'page' && typeof v.url === 'string') {
           const url = new URL(v.url);
           if (url.protocol === 'https:' && ['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)) pageChanged(url.toString());
+          return;
+        }
+        if (v.type === 'playbackDiagnostic' && v.videoId === currentVideo.current && typeof v.status === 'string' && typeof v.reason === 'string' && typeof v.playerMessage === 'string' && typeof v.hasVideo === 'boolean' && [v.mediaError, v.readyState, v.networkState].every(Number.isFinite)) {
+          onPlaybackDiagnostic?.({ videoId: v.videoId, status: v.status.slice(0, 40), reason: v.reason.slice(0, 160), playerMessage: v.playerMessage.slice(0, 160), mediaError: v.mediaError, readyState: v.readyState, networkState: v.networkState, hasVideo: v.hasVideo });
           return;
         }
         if (v.type === 'captionData' && v.language === 'ja' && typeof v.videoId === 'string' && v.videoId === currentVideo.current) {

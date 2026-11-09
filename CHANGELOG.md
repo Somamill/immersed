@@ -2,6 +2,15 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.6.5 — 2026-11-09
+
+Focus YouTube watch pages and diagnose playback
+
+- Hide watch-page metadata and comments without repositioning YouTube's player, and defer caption hooks until the page loads.
+- Let YouTube enter native fullscreen when inline playback is unavailable.
+- Show YouTube playability and media diagnostics under Settings → About when a video fails.
+- The public Kiyo video still needs an on-device playback check; this cloud cannot access YouTube media, and videos without source captions still need accessible audio for transcription.
+
 ## 0.6.4 — 2026-11-09
 
 Use YouTube watch pages for playback

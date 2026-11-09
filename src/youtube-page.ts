@@ -1,4 +1,5 @@
-// Runs before the page loads, then again after navigation. Only caption responses
+// Browsing pages install this before load; watch pages wait until load so YouTube
+// initializes its player first. Only caption responses
 // are observed; audio, account traffic and unrelated requests are never captured.
 export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
   if (!/(^|\.)youtube\.com$/.test(location.hostname)) return;
@@ -7,6 +8,7 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
   window.__immersedOptions = window.__immersedOptions || { dark: true, hideShorts: true, minimumMinutes: 0, fillPortrait: false };
   const css = document.createElement('style');
   css.textContent = 'html[data-immersed-dark] { color-scheme:dark!important; background:#000!important; --yt-spec-base-background:#000!important; --yt-spec-raised-background:#171717!important; --yt-spec-menu-background:#171717!important; --yt-spec-general-background-a:#000!important; --yt-spec-general-background-b:#000!important; --yt-spec-text-primary:#eee!important; --yt-spec-text-secondary:#aaa!important; --yt-spec-brand-background-primary:#000!important; --yt-spec-brand-background-secondary:#171717!important; --yt-spec-brand-background-solid:#000!important; } html[data-immersed-dark] body, html[data-immersed-dark] ytm-app, html[data-immersed-dark] ytm-search, html[data-immersed-dark] ytm-mobile-topbar-renderer, html[data-immersed-dark] ytm-header-bar, html[data-immersed-dark] ytm-searchbox, html[data-immersed-dark] .searchbox-input, html[data-immersed-dark] .pivot-bar-renderer { background-color:#000!important; color:#eee!important; } html[data-immersed-embed] video.html5-main-video { width:100vw!important; height:100vh!important; top:0!important; left:0!important; object-fit:contain!important; background:#000!important; } html[data-immersed-embed][data-immersed-fill] video.html5-main-video { width:100vw!important; height:100vh!important; top:0!important; left:0!important; object-fit:cover!important; } html[data-immersed-browse], html[data-immersed-browse] body { margin-bottom:0!important; padding-bottom:0!important; min-height:100vh!important; } html[data-immersed-browse] ytm-app, html[data-immersed-browse] ytm-search, html[data-immersed-browse] ytm-browse { padding-bottom:0!important; min-height:100vh!important; } html[data-immersed-browse] ytm-pivot-bar-renderer, html[data-immersed-browse] .pivot-bar-renderer { display:none!important; } html[data-immersed-watch] .ytp-caption-window-container, html[data-immersed-watch] .ytp-caption-window-container *, html[data-immersed-watch] .ytp-caption-segment, html[data-immersed-watch] .captions-text { visibility:hidden!important; pointer-events:none!important; } [data-immersed-short], [data-immersed-duration] { display:none!important; }';
+  css.textContent += ' html[data-immersed-watch] ytm-mobile-topbar-renderer, html[data-immersed-watch] ytm-slim-video-metadata-renderer, html[data-immersed-watch] ytm-slim-owner-renderer, html[data-immersed-watch] ytm-slim-metadata-button-renderer, html[data-immersed-watch] ytm-comment-section-renderer, html[data-immersed-watch] ytm-comments-entry-point-header-renderer, html[data-immersed-watch] ytm-watch-next-secondary-results-renderer { display:none!important; } html[data-immersed-watch], html[data-immersed-watch] body { overflow:hidden!important; }';
   let preferenceDark;
   const flag = (root, name, enabled) => {
     if (enabled && !root.hasAttribute(name)) root.setAttribute(name, '');
@@ -74,7 +76,7 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
     flag(root, 'data-immersed-browse', !watch);
     flag(root, 'data-immersed-fill', options.fillPortrait && watch);
     root.style.colorScheme = options.dark ? 'dark' : 'light';
-    if (preferenceDark !== options.dark) {
+    if (!watch && preferenceDark !== options.dark) {
       preferenceDark = options.dark;
       // Preserve all other PREF fields and flags, including language preferences.
       // YouTube's preference format is unofficial; CSS remains the fallback.
@@ -153,7 +155,7 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
 export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
   if (window.__immersedBridge || !/(^|\.)youtube\.com$/.test(location.hostname)) return;
   window.__immersedBridge = true;
-  let last = '', lastHref = location.href, lastVideo = null, captionText = '', captionTime = 0, clock = 0, lastModuleAttempt = 0, lastTrackChoice = 0, lastErrorVideo = null, staleCaptionText = null;
+  let last = '', lastHref = location.href, lastVideo = null, captionText = '', captionTime = 0, clock = 0, lastModuleAttempt = 0, lastTrackChoice = 0, lastErrorVideo = null, lastPlaybackReport = '', staleCaptionText = null;
   const requests = new Map();
   const send = value => window.ReactNativeWebView?.postMessage(JSON.stringify(value));
   const currentId = () => new URL(location.href).searchParams.get('v') || location.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1];
@@ -251,7 +253,7 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     };
   };
   const read = () => {
-    if (location.href !== lastHref) { lastHref = location.href; last = ''; captionText = ''; staleCaptionText = null; lastTrackChoice = 0; send({ type: 'reset' }); send({ type: 'page', url: location.href }); }
+    if (location.href !== lastHref) { lastHref = location.href; last = ''; captionText = ''; staleCaptionText = null; lastTrackChoice = 0; lastPlaybackReport = ''; send({ type: 'reset' }); send({ type: 'page', url: location.href }); }
     window.__immersedApplyOptions?.();
     const videoId = currentId();
     const player = document.getElementById('movie_player');
@@ -286,6 +288,20 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
       } catch { /* Player APIs are not guaranteed on every YouTube client. */ }
     }
     const video = selectVideo();
+    if (videoId && /^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+      const diagnostic = {
+        type: 'playbackDiagnostic', videoId,
+        status: String(response?.playabilityStatus?.status || '').slice(0, 40),
+        reason: String(response?.playabilityStatus?.reason || '').slice(0, 160),
+        playerMessage: String(playerError?.textContent || '').trim().slice(0, 160),
+        mediaError: video?.error?.code || 0,
+        readyState: video?.readyState || 0,
+        networkState: video?.networkState || 0,
+        hasVideo: !!video,
+      };
+      const report = JSON.stringify(diagnostic);
+      if (report !== lastPlaybackReport && (diagnostic.status || diagnostic.playerMessage || diagnostic.hasVideo)) { lastPlaybackReport = report; send(diagnostic); }
+    }
     if (video !== lastVideo) { stopClock(); lastVideo = video; last = ''; captionText = ''; lastFrameAt = 0; if (video) stopClock = attachClock(video); }
     if (!video) return;
     if (Date.now() - lastFrameAt > 250) emitClock(video);

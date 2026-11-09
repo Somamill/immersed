@@ -431,12 +431,16 @@ test('an explicit embedded-player error is reported without navigating to a watc
 });
 
 test('a normal watch page is left to YouTube rather than redirected on a player error', async ({ page }) => {
-  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="movie_player"><div class="ytp-error-content-wrap">Playback is unavailable</div></div><div id="comments">Comments</div>' }));
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="movie_player"><div class="ytp-error-content-wrap">Playback is unavailable</div></div><ytm-slim-video-metadata-renderer>Title and buttons</ytm-slim-video-metadata-renderer><ytm-comment-section-renderer>Comments</ytm-comment-section-renderer>' }));
   await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
   await page.evaluate(() => { const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (raw: string) => void } }; w.messages = []; w.ReactNativeWebView = { postMessage: raw => w.messages.push(JSON.parse(raw)) }; });
   await page.addScriptTag({ content: CAPTION_BRIDGE });
   await expect(page.locator('#movie_player')).not.toHaveCSS('position', 'fixed');
+  await expect(page.locator('#movie_player')).toBeVisible();
+  await expect(page.locator('ytm-slim-video-metadata-renderer')).toBeHidden();
+  await expect(page.locator('ytm-comment-section-renderer')).toBeHidden();
   expect(await page.evaluate(() => (window as unknown as { messages: { type: string; videoId?: string }[] }).messages.filter(m => m.type === 'playerError'))).toEqual([]);
+  expect(await page.evaluate(() => (window as unknown as { messages: { type: string; videoId?: string; playerMessage?: string }[] }).messages.find(m => m.type === 'playbackDiagnostic'))).toMatchObject({ videoId: 'M7lc1UVf-VE', playerMessage: 'Playback is unavailable' });
 });
 
 test('navigation uses large labelled icons with an active state and no visible text tabs', async ({ page }) => {
