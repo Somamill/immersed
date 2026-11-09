@@ -62,14 +62,14 @@ test('caption adapter reads player text, pauses, ignores comments, and clears on
   const tracks = await page.evaluate(() => (window as unknown as { messages: { type: string; url?: string }[] }).messages.filter(m => m.type === 'captionTrack'));
   expect(tracks).toHaveLength(1);
   expect(tracks[0].url).toContain('name=manual');
-  await expect(page.locator('.comment')).toBeVisible();
+  await expect(page.locator('.comment')).toBeHidden();
   await expect(page.locator('ytm-reel-shelf-renderer')).toBeHidden();
   await expect(page.locator('.ytp-subtitles-button')).toHaveAttribute('aria-pressed', 'false');
   await expect(page.locator('.ytp-caption-segment').first()).toHaveCSS('visibility', 'hidden');
   await expect(page.locator('[data-immersed-player]')).toHaveCount(0);
   await page.evaluate(() => (window as unknown as { __immersedCommand: (command: string) => void }).__immersedCommand('pause'));
   expect(await page.evaluate(() => (window as unknown as { pausedByApp: boolean }).pausedByApp)).toBe(true);
-  await expect(page.locator('.comment')).toBeVisible();
+  await expect(page.locator('.comment')).toBeHidden();
   await page.evaluate(() => { history.pushState({}, '', '/watch?v=OTHER_VIDEO'); document.querySelector('.ytp-caption-segment')!.remove(); });
   await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string }[] }).messages.some(m => m.type === 'reset'))).toBe(true);
 });
@@ -441,6 +441,18 @@ test('a normal watch page is left to YouTube rather than redirected on a player 
   await expect(page.locator('ytm-comment-section-renderer')).toBeHidden();
   expect(await page.evaluate(() => (window as unknown as { messages: { type: string; videoId?: string }[] }).messages.filter(m => m.type === 'playerError'))).toEqual([]);
   expect(await page.evaluate(() => (window as unknown as { messages: { type: string; videoId?: string; playerMessage?: string }[] }).messages.find(m => m.type === 'playbackDiagnostic'))).toMatchObject({ videoId: 'M7lc1UVf-VE', playerMessage: 'Playback is unavailable' });
+});
+
+test('focus follows the player through unknown watch-page wrappers and restores browse content', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<div><section id="title">Title and buttons</section><main><aside id="comments">Comments</aside><div><div id="movie_player"><video></video></div></div></main></div>' }));
+  await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
+  await page.addScriptTag({ content: YOUTUBE_BOOTSTRAP });
+  await expect(page.locator('#movie_player')).toBeVisible();
+  await expect(page.locator('#title')).toBeHidden();
+  await expect(page.locator('#comments')).toBeHidden();
+  await page.evaluate(() => { history.pushState({}, '', '/results?search_query=japanese'); (window as unknown as { __immersedApplyOptions: () => void }).__immersedApplyOptions(); });
+  await expect(page.locator('#title')).toBeVisible();
+  await expect(page.locator('#comments')).toBeVisible();
 });
 
 test('navigation uses large labelled icons with an active state and no visible text tabs', async ({ page }) => {

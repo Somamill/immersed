@@ -59,7 +59,13 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     },
   }));
   return <WebView<object> key={`${history[0].version}:${playerId || 'browse'}`} ref={web} source={source} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo injectedJavaScriptBeforeContentLoaded={playerId ? undefined : optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
-    onNavigationStateChange={state => { canGoBack.current = state.canGoBack; if (state.url !== 'about:blank') pageChanged(state.url); }} onLoadStart={() => { onCaption(null); onError(''); }} onError={event => onError(event.nativeEvent.description)}
+    onLoadEnd={event => {
+      try {
+        const url = new URL(event.nativeEvent.url);
+        if (playerId && url.pathname === '/watch' && url.searchParams.get('v') === currentVideo.current) web.current?.injectJavaScript(optionsScript + CAPTION_BRIDGE);
+      } catch { /* Ignore intermediate and non-URL loads. */ }
+    }}
+    onNavigationStateChange={state => { canGoBack.current = state.canGoBack; if (state.url !== 'about:blank') pageChanged(state.url); }} onLoadStart={() => { onCaption(null); onError(''); }} onError={event => { onError(event.nativeEvent.description); if (__DEV__) console.info('Immersed WebView error', event.nativeEvent.description); }}
     onShouldStartLoadWithRequest={request => {
       if (request.url === 'about:blank' || request.isTopFrame === false) return true;
       try {
@@ -89,6 +95,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
         }
         if (v.type === 'playbackDiagnostic' && v.videoId === currentVideo.current && typeof v.status === 'string' && typeof v.reason === 'string' && typeof v.playerMessage === 'string' && typeof v.hasVideo === 'boolean' && [v.mediaError, v.readyState, v.networkState].every(Number.isFinite)) {
           onPlaybackDiagnostic?.({ videoId: v.videoId, status: v.status.slice(0, 40), reason: v.reason.slice(0, 160), playerMessage: v.playerMessage.slice(0, 160), mediaError: v.mediaError, readyState: v.readyState, networkState: v.networkState, hasVideo: v.hasVideo });
+          if (__DEV__) console.info('Immersed playback check', v.videoId, v.status, v.reason, v.playerMessage, v.mediaError, v.readyState, v.networkState, v.hasVideo);
           return;
         }
         if (v.type === 'captionData' && v.language === 'ja' && typeof v.videoId === 'string' && v.videoId === currentVideo.current) {

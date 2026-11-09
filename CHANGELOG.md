@@ -2,6 +2,15 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.6.6 — 2026-11-09
+
+Keep YouTube player in focus
+
+- Hide watch-page title, actions and comments by following the visible player through YouTube's changing mobile layout.
+- Retry the caption and playback-diagnostic bridge after the watch page finishes loading so About can report an actual player state.
+- Log the same playback state to the active Expo preview for device-side diagnosis.
+- The iPhone's Video unavailable error is not yet diagnosed from a device report; signing credentials are also still required for a TestFlight build.
+
 ## 0.6.5 — 2026-11-09
 
 Focus YouTube watch pages and diagnose playback
