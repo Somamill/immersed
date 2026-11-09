@@ -230,7 +230,14 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
   window.__immersedBridge = true;
   let last = '', lastHref = location.href, lastVideo = null, captionText = '', captionTime = 0, clock = 0, lastModuleAttempt = 0, lastTrackChoice = 0, lastErrorVideo = null, lastPlaybackReport = '', lastCaptionDiagnostic = '', staleCaptionText = null;
   const requests = new Map();
+  const invalidTrackReports = new Set();
   const send = value => window.__immersedPost(value);
+  const reportInvalidTrack = (videoId, status) => {
+    const key = videoId + ':' + status;
+    if (invalidTrackReports.has(key)) return;
+    invalidTrackReports.add(key);
+    send({ type: 'trackFetchDiagnostic', videoId, source: 'page', status, bytes: 0, parsed: false });
+  };
   window.addEventListener('message', event => {
     if (window.parent === window || event.source !== window.parent || event.origin !== new URL(location.href).searchParams.get('origin') || event.data?.__immersedCommand !== true) return;
     const command = event.data.command;
@@ -287,12 +294,14 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
   const requestTrack = async (track, videoId) => {
     let url;
     try {
-      url = new URL(track.baseUrl);
+      // Mobile YouTube can expose a path-relative timedtext URL. Resolve it
+      // against the watch page before applying the same origin/language checks.
+      url = new URL(track.baseUrl, location.href);
       if (url.protocol !== 'https:' || !/(^|\.)youtube\.com$/.test(url.hostname) || url.pathname !== '/api/timedtext' || url.searchParams.get('v') !== videoId || !/^ja(?:-|$)/.test(url.searchParams.get('lang') || '') || (url.searchParams.get('tlang') && !/^ja(?:-|$)/.test(url.searchParams.get('tlang')))) {
-        send({ type: 'trackFetchDiagnostic', videoId, source: 'page', status: -2, bytes: 0, parsed: false });
+        reportInvalidTrack(videoId, -2);
         return;
       }
-    } catch { send({ type: 'trackFetchDiagnostic', videoId, source: 'page', status: -3, bytes: 0, parsed: false }); return; }
+    } catch { reportInvalidTrack(videoId, -3); return; }
     const state = requests.get(videoId) || { attempts: 0, pending: false, ready: false, next: 0, fallback: false };
     if (state.ready || state.pending || state.attempts >= 3 || Date.now() < state.next) return;
     state.attempts++; state.pending = true; requests.set(videoId, state);
@@ -314,7 +323,7 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
       }
     } catch { send({ type: 'trackFetchDiagnostic', videoId, source: 'page', status: 0, bytes: 0, parsed: false }); } finally {
       clearTimeout(timer); state.pending = false; state.next = Date.now() + state.attempts * 2000;
-      if (!state.ready && !state.fallback && currentId() === videoId) { state.fallback = true; send({ type: 'captionTrack', language: 'ja', source: track.kind === 'asr' ? 'youtube-asr' : 'human', videoId, url: track.baseUrl }); }
+      if (!state.ready && !state.fallback && currentId() === videoId) { state.fallback = true; send({ type: 'captionTrack', language: 'ja', source: track.kind === 'asr' ? 'youtube-asr' : 'human', videoId, url: url.toString() }); }
     }
   };
   let stopClock = () => {}, lastFrameAt = 0;

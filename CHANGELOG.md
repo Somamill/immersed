@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.7.4 — 2026-11-09
+
+Load mobile YouTube Japanese caption URLs
+
+- Resolve path-relative mobile YouTube timedtext URLs against the selected watch page before validating and fetching them. This addresses the iPhone track rejection observed on eslI8_s5blg and stops repeated diagnostic spam.
+- Automatic speech captions for videos with no usable Japanese track still require verified audio capture. The cloud preview cannot fetch YouTube audio; the native iPhone prototype requires an Apple-signed build and device test.
+
 ## 0.7.3 — 2026-11-09
 
 Restore early Japanese caption capture

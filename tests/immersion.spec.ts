@@ -376,7 +376,7 @@ test('page-session Japanese tracks load before a video element and are selected 
   await page.evaluate(() => {
     const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (raw: string) => void }; ytInitialPlayerResponse: unknown };
     w.messages = []; w.ReactNativeWebView = { postMessage: raw => w.messages.push(JSON.parse(raw)) };
-    const tracks = [{ languageCode: 'en' }, { languageCode: 'ja', kind: 'asr', baseUrl: 'https://m.youtube.com/api/timedtext?v=M7lc1UVf-VE&lang=ja&kind=asr' }];
+    const tracks = [{ languageCode: 'en' }, { languageCode: 'ja', kind: 'asr', baseUrl: '/api/timedtext?v=M7lc1UVf-VE&lang=ja&kind=asr' }];
     w.ytInitialPlayerResponse = { videoDetails: { videoId: 'M7lc1UVf-VE' }, captions: { playerCaptionsTracklistRenderer: { captionTracks: tracks } } };
     const player = document.getElementById('movie_player') as HTMLElement & { getOption: (module: string, key: string) => unknown; setOption: (module: string, key: string, track: { languageCode: string }) => void };
     player.getOption = (_module, key) => key === 'tracklist' ? tracks : { languageCode: player.dataset.selected || 'en' };
