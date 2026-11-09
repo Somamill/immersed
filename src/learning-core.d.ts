@@ -19,3 +19,17 @@ export function estimateVocabulary(
   lower: number;
   upper: number;
 } | null;
+
+export function shouldHighlightToken(
+  vocabulary: Record<string, number>,
+  token: {
+    word: boolean;
+    lemma: string;
+    reading: string;
+    pos: string;
+    proper?: boolean;
+    detail?: string;
+  },
+  level: number,
+  knowledge: Record<string, boolean>,
+): boolean;

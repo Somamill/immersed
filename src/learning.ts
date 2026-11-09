@@ -1,6 +1,9 @@
 // Community JLPT estimates; attribution and the pinned source are in src/data and licenses.
 import levels from "./data/jlpt-levels.json";
-import { familiarity as classify } from "./learning-core";
+import {
+  familiarity as classify,
+  shouldHighlightToken as highlight,
+} from "./learning-core";
 export type JlptLevel = 1 | 2 | 3 | 4 | 5;
 const vocabulary: Record<string, number> = levels;
 export function familiarity(
@@ -22,4 +25,19 @@ export function showFurigana(
     enabled &&
     familiarity(lemma, reading, completedLevel, overrides) === "unknown"
   );
+}
+
+export function shouldHighlightToken(
+  token: {
+    word: boolean;
+    lemma: string;
+    reading: string;
+    pos: string;
+    proper?: boolean;
+    detail?: string;
+  },
+  level: JlptLevel,
+  knowledge: Record<string, boolean>,
+): boolean {
+  return highlight(vocabulary, token, level, knowledge);
 }

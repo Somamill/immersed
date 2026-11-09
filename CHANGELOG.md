@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.9.1 — 2026-11-10
+
+Quiet advanced-level subtitle highlighting
+
+- Use a shared token-aware highlighting policy to skip automatic particle, auxiliary, name and grammatical-fragment highlights caused by homophone level collisions. Keep explicit known/unknown choices authoritative.
+- Replace solid Mac word blocks with subtle underlines and use furigana only for highlighted vocabulary. Validate a near-N1 profile against the reported sentence in Chromium and WebKit; personal N2-completed/known-word choices stay on the user's device.
+
 ## 0.9.0 — 2026-11-09
 
 Add local video, Japanese audiobooks and offline Mac study

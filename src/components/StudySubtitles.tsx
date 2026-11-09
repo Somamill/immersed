@@ -1,6 +1,6 @@
 import React from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { familiarity, showFurigana, type JlptLevel } from '../learning';
+import { shouldHighlightToken, type JlptLevel } from '../learning';
 import type { AnalyzedToken } from '../language';
 
 export default function StudySubtitles({ tokens, tail, dark, level, knowledge, readings, onHeight, onWord }: { tokens: AnalyzedToken[]; tail: string; dark: boolean; level: JlptLevel; knowledge: Record<string, boolean>; readings: boolean; onHeight?: (height: number) => void; onWord: (token: AnalyzedToken) => void }) {
@@ -15,9 +15,9 @@ export default function StudySubtitles({ tokens, tail, dark, level, knowledge, r
   const ink = dark ? '#F3F3F3' : '#242D28';
   return <View testID="subtitle-words" onLayout={event => onHeight?.(event.nativeEvent.layout.height)} style={styles.words}>
     {groups.map(({ token, punctuation, prefix }, index) => {
-      const unknown = token.word && familiarity(token.lemma, token.reading, level, knowledge) === 'unknown';
+      const unknown = shouldHighlightToken(token, level, knowledge);
       const color = ink;
-      const furigana = /[一-龯]/.test(token.text) && !!token.reading && showFurigana(token.lemma, token.reading, level, knowledge, readings);
+      const furigana = /[一-龯]/.test(token.text) && !!token.reading && readings && unknown;
       return <View key={`${token.start}:${index}`} style={styles.group}>
         {!!prefix && <Text selectable={false} style={[styles.japanese, { color: ink, paddingBottom: 2 }]}>{prefix}</Text>}
         <Pressable accessibilityRole={token.word ? 'button' : undefined} accessibilityLabel={token.word ? `Look up ${token.text}` : token.text} disabled={!token.word} onPress={() => onWord(token)} style={[styles.word, { paddingTop: readings ? 16 * fontScale : 0 }]}>

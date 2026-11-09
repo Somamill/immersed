@@ -447,7 +447,12 @@ async function renderCue() {
       line.append(document.createTextNode(token.text));
       continue;
     }
-    const unknown = familiarity(token) === "unknown",
+    const unknown = ImmersedLearning.shouldHighlightToken(
+        levels,
+        token,
+        prefs.level,
+        prefs.knowledge,
+      ),
       button = el("button", null, "word" + (unknown ? " unknown" : ""));
     button.setAttribute("aria-label", "Look up " + token.text);
     if (

@@ -6,6 +6,31 @@
     const level = vocabulary[lemma] || vocabulary[reading];
     return !level ? "unlisted" : level >= completedLevel ? "known" : "unknown";
   }
+  function shouldHighlightToken(vocabulary, token, level, knowledge) {
+    if (!token.word) return false;
+    // Explicit study choices take precedence, including a grammar point the learner chose.
+    if (Object.prototype.hasOwnProperty.call(knowledge, token.lemma))
+      return !knowledge[token.lemma];
+    // Kana grammar forms must not inherit the JLPT rank of an unrelated homophone.
+    if (
+      token.proper ||
+      [
+        "particle",
+        "auxiliary",
+        "punctuation",
+        "symbol",
+        "unparsed",
+        "prefix",
+        "interjection",
+      ].includes(token.pos) ||
+      ["非自立", "接尾", "代名詞"].includes(token.detail)
+    )
+      return false;
+    return (
+      familiarity(vocabulary, token.lemma, token.reading, level, knowledge) ===
+      "unknown"
+    );
+  }
   function estimateVocabulary(vocabulary, tokens, level, knowledge) {
     let known = 0,
       unknown = 0,
@@ -36,7 +61,7 @@
         }
       : null;
   }
-  const api = { familiarity, estimateVocabulary };
+  const api = { familiarity, estimateVocabulary, shouldHighlightToken };
   if (typeof module === "object") module.exports = api;
   else root.ImmersedLearning = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

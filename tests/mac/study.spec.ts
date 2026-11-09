@@ -173,3 +173,29 @@ test("original-language search filtering excludes unknown and dubbed metadata", 
   );
   await expect(page.locator("#panelBody")).not.toContainText("Unknown source");
 });
+
+test("near-N1 screenshot passage stays quiet and manual unknown uses an underline", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "immersed.preferences",
+      JSON.stringify({ level: 2, knowledge: { 体験: true } }),
+    ),
+  );
+  await page.goto("/");
+  await page.evaluate(() => {
+    (window as unknown as { eval(s: string): void }).eval(
+      `youtube={getCurrentTime:()=>0.2,getPlayerState:()=>2,pauseVideo:()=>{},playVideo:()=>{}};cues=[{start:0,end:4,text:'個人的な体験とは何かみたいな話をどんどんなさってるんですよね'}];cueIndex=-1;renderCue();`,
+    );
+  });
+  await expect(page.locator(".word").filter({ hasText: "体験" })).toBeVisible();
+  await expect(page.locator(".unknown")).toHaveCount(0);
+  await expect(page.locator("rt")).toHaveCount(0);
+  await page.locator(".word").filter({ hasText: "体験" }).click();
+  await page.locator("#known").click();
+  const marked = page.locator(".word.unknown").filter({ hasText: "体験" });
+  await expect(marked).toBeVisible();
+  await expect(marked).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(marked).toHaveCSS("text-decoration-line", "underline");
+});

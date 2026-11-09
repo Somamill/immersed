@@ -578,3 +578,30 @@ dialog::backdrop {
     min-width: 0;
   }
 }
+
+/* Learning emphasis stays quiet; hover/focus remains a separate transient state. */
+.word.unknown {
+  background: transparent;
+  text-decoration: underline;
+  text-decoration-color: #97b8a180;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.16em;
+}
+.word:hover,
+.word:focus-visible {
+  background: #b4dec414;
+  color: inherit;
+}
+.word:focus:not(:focus-visible) {
+  background: transparent;
+  color: inherit;
+}
+.light .word.unknown {
+  background: transparent;
+  text-decoration-color: #42694d80;
+}
+.light .word:hover,
+.light .word:focus-visible {
+  background: #34583d10;
+  color: inherit;
+}
