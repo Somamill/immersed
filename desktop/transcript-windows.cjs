@@ -55,16 +55,29 @@ function createTranscriptWindows({ folder, get, recognize }) {
       done = state.complete.get(range.start),
       part = state.partial.get(range.start),
       near = [];
+    function append(start, data) {
+      for (const cue of data.cues) {
+        const left = Math.max(start, cue.start),
+          right = Math.min(item.duration, start + WINDOW, cue.end);
+        if (
+          typeof cue.text === "string" &&
+          Number.isFinite(left) &&
+          Number.isFinite(right) &&
+          right > left
+        )
+          near.push({ ...cue, start: left, end: right });
+      }
+    }
     for (const [start, data] of state.complete)
       if (start >= range.start - WINDOW && start <= range.start + WINDOW)
-        near.push(...data.cues);
+        append(start, data);
     for (const [start, data] of state.partial)
       if (
         !state.complete.has(start) &&
         start >= range.start - WINDOW &&
         start <= range.start + WINDOW
       )
-        near.push(...data.cues);
+        append(start, data);
     const unique = new Map();
     for (const cue of near)
       unique.set([cue.start, cue.end, cue.text].join(":"), cue);
@@ -82,6 +95,7 @@ function createTranscriptWindows({ folder, get, recognize }) {
         : part?.processedSeconds || 0,
       cues: [...unique.values()].sort((a, b) => a.start - b.start),
       preparedMinutes: state.complete.size,
+      pipeline: done?.pipeline || part?.pipeline || null,
       model:
         quality === "accurate"
           ? "Whisper large-v3 / MLX"
@@ -119,6 +133,7 @@ function createTranscriptWindows({ folder, get, recognize }) {
                       cues: previous.cues.concat(progress.cues || []),
                       processedSeconds:
                         prepared + (progress.processedSeconds || 0),
+                      pipeline: "mac-whisper-context-v3",
                     };
                     state.partial.set(start, checkpoint);
                     write(state, start, checkpoint, true);
@@ -138,6 +153,7 @@ function createTranscriptWindows({ folder, get, recognize }) {
           const final = {
             cues: previous.cues.concat(cues),
             processedSeconds: end - start,
+            pipeline: "mac-whisper-context-v3",
           };
           state.complete.set(start, final);
           write(state, start, final);
@@ -164,6 +180,8 @@ function createTranscriptWindows({ folder, get, recognize }) {
     const state = context(id, quality),
       range = bounds(item, at);
     if (state.complete.has(range.start) && !retry)
+      return result(id, quality, at);
+    if (retry && state.jobs.get(range.start)?.status === "processing")
       return result(id, quality, at);
     if (retry) {
       state.complete.delete(range.start);

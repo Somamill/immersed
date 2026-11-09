@@ -219,6 +219,9 @@ const media = createMedia({
 });
 function state(id, quality = "balanced") {
   const key = id + ":" + quality;
+  const active = jobs.get(key);
+  if (active && ["processing", "queued", "unavailable"].includes(active.status))
+    return active;
   try {
     return {
       status: "ready",
@@ -292,7 +295,7 @@ async function transcribe(id, quality = "balanced") {
     if (!cues.length) throw Error("No Japanese speech was recognized.");
     fs.writeFileSync(
       path.join(cache, id + "-" + quality + ".json.tmp"),
-      JSON.stringify({ cues }),
+      JSON.stringify({ cues, pipeline: "mac-whisper-context-v3", quality }),
     );
     fs.renameSync(
       path.join(cache, id + "-" + quality + ".json.tmp"),
@@ -541,7 +544,11 @@ async function fallback(req, res) {
       .createReadStream(path.join(root, "src", path.basename(url.pathname)))
       .pipe(res);
   }
-  if (url.pathname === "/study.js" || url.pathname === "/study.css") {
+  if (
+    url.pathname === "/study.js" ||
+    url.pathname === "/study.css" ||
+    url.pathname === "/compare.js"
+  ) {
     res.writeHead(200, {
       "Content-Type": url.pathname.endsWith(".js")
         ? "application/javascript"

@@ -490,10 +490,17 @@ async function pollTranscript(route, params, generation) {
     const data = await api(route, params);
     if (generation !== requestGeneration) return;
     if (Array.isArray(data.cues) && (data.cues.length || data.windowed)) {
-      const previousText = cues[cueIndex]?.text;
+      const previous = JSON.stringify(cues[cueIndex]);
       cues = data.cues;
+      const active = cues.findLastIndex(
+        (c) => c.start <= currentTime() && currentTime() < c.end,
+      );
+      if (JSON.stringify(cues[active]) !== previous) {
+        cueIndex = -1;
+        renderGeneration++;
+      } else cueIndex = active;
       if (!cues.length) $("subtitles").textContent = "Listening…";
-      if (cues[cueIndex]?.text !== previousText) cueIndex = -1;
+
       void renderCue();
       $("count").textContent =
         (data.windowed
@@ -505,6 +512,11 @@ async function pollTranscript(route, params, generation) {
         " segments";
     }
     if (data.status === "ready") {
+      $("retry").textContent = data.windowed
+        ? "Regenerate section"
+        : data.source === "youtube" || data.source === "authored"
+          ? "Reload subtitles"
+          : "Regenerate subtitles";
       status(
         data.windowed
           ? "Subtitles ready for " +
@@ -547,9 +559,14 @@ async function pollTranscript(route, params, generation) {
   }
 }
 async function renderCue() {
-  if (!cues.length) return;
+  if (!cues.length) {
+    renderGeneration++;
+    cueIndex = -1;
+    if (source) $("subtitles").textContent = "Listening…";
+    return;
+  }
   const t = currentTime(),
-    i = cues.findIndex((c) => c.start <= t && t < c.end);
+    i = cues.findLastIndex((c) => c.start <= t && t < c.end);
   if (i === cueIndex) return;
   cueIndex = i;
   const generation = ++renderGeneration;
@@ -945,6 +962,12 @@ function setting(body, label, description, key, options, isExtra = false) {
         typeof object[key] === "number" ? Number(control.value) : control.value;
       persist();
       applyPreferences();
+      if (key === "speechQuality" && source) {
+        requestGeneration++;
+        clearTimeout(pollTimer);
+        prefetchedWindow = -1;
+        void beginTranscript();
+      }
     };
   } else {
     control = el("input");
@@ -1258,36 +1281,32 @@ async function compareTranscript() {
       if (data.status === "unavailable")
         throw Error(data.message || "The second model failed.");
       if (data.status === "ready") {
-        progress.textContent =
-          "Passages with different text or boundaries (first 20). Listen before choosing a wording.";
-        let count = 0;
-        for (const cue of baseline) {
-          const other = (data.cues || [])
-            .filter((c) => c.start < cue.end && c.end > cue.start)
-            .map((c) => c.text)
-            .join("");
-          if (
-            other &&
-            other.replace(/[\s。、！？]/g, "") !==
-              cue.text.replace(/[\s。、！？]/g, "")
-          ) {
-            const row = el("article", null, "entry");
-            row.append(
-              el("p", "Current: " + cue.text),
-              el("p", "Second model: " + other),
-              button("Listen at " + Math.floor(cue.start) + "s", () => {
-                closePanel();
-                seekTo(cue.start);
-                play();
-              }),
-            );
-            body.append(row);
-            if (++count >= 20) break;
-          }
+        const differences = ImmersedTranscript.compare(
+          baseline,
+          data.cues || [],
+          data.windowed
+            ? { start: data.rangeStart, end: data.rangeEnd }
+            : undefined,
+        );
+        progress.textContent = differences.length
+          ? "Passages with different wording (first 20). Listen to check each result."
+          : "No text differences found in this section. Agreement does not verify the audio.";
+        for (const passage of differences.slice(0, 20)) {
+          const row = el("article", null, "entry");
+          row.append(
+            el("p", "Current: " + (passage.current || "No speech recognized")),
+            el(
+              "p",
+              "Second model: " + (passage.other || "No speech recognized"),
+            ),
+            button("Listen at " + formatDuration(passage.start), () => {
+              closePanel();
+              seekTo(passage.start);
+              play();
+            }),
+          );
+          body.append(row);
         }
-        if (!count)
-          progress.textContent =
-            "No text differences were found in the overlapping passages. Listen to verify uncertain speech.";
         return;
       }
       progress.textContent =

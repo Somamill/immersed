@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.9.3 — 2026-11-10
+
+Cross-checked subtitle timing and Whisper decoding
+
+- Mac and iPhone now share the rolling YouTube caption parser. Whisper uses bounded surrounding audio context, word ownership at chunk boundaries and limited confidence-based decode retries. Fixes cached retries, immediate model switching, stale captions and misleading cross-model comparison caused by different segmentation. Earlier cached sections remain available; regenerate a section to use the updated decoder. Model agreement and confidence are not a guarantee of transcription accuracy.
+
 ## 0.9.2 — 2026-11-10
 
 Faster audiobooks and reliable listening progress

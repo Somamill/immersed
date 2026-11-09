@@ -12,7 +12,7 @@ from desktop import transcribe
 class MacTranscriptionTest(unittest.TestCase):
     def test_requested_slice_keeps_book_timestamps(self):
         original = transcribe.recognizer
-        transcribe.recognizer = lambda: lambda _path: [{'start': .1, 'end': .4, 'text': '日本語です。'}]
+        transcribe.recognizer = lambda: lambda _path: [{'start': 2.1, 'end': 2.4, 'text': '日本語です。'}]
         try:
             with tempfile.TemporaryDirectory() as folder:
                 audio = Path(folder) / 'sample.wav'

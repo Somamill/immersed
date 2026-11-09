@@ -262,7 +262,11 @@ test("audiobook cover, chapter, speed and listening position survive reopening",
     );
     await page.goto("/");
     await page.evaluate((id) => (window as any).openLocalMedia(id), item.id);
-    await expect.poll(()=>page.locator("audio").evaluate((a:HTMLAudioElement)=>a.readyState)).toBeGreaterThanOrEqual(1);
+    await expect
+      .poll(() =>
+        page.locator("audio").evaluate((a: HTMLAudioElement) => a.readyState),
+      )
+      .toBeGreaterThanOrEqual(1);
     await expect
       .poll(() =>
         page
@@ -288,4 +292,77 @@ test("audiobook cover, chapter, speed and listening position survive reopening",
   } finally {
     fs.rmSync(folder, { recursive: true, force: true });
   }
+});
+
+test("switching Whisper models immediately refreshes captions and confidence flags", async ({
+  page,
+}) => {
+  const qualities: string[] = [];
+  await page.route("**/api/desktop/transcribe?**", (route) => {
+    const quality =
+      new URL(route.request().url()).searchParams.get("quality") || "balanced";
+    if (route.request().method() === "POST") qualities.push(quality);
+    return route.fulfill({
+      json: {
+        status: "ready",
+        source: "generated",
+        cues: [
+          {
+            start: 0,
+            end: 4,
+            text: "日本語です。",
+            ...(quality === "accurate" ? { uncertain: true } : {}),
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("/");
+  await page.evaluate(() =>
+    (window as any).eval(
+      "source={type:'youtube',id:'abcdefghijk'};youtube={getCurrentTime:()=>1,getPlayerState:()=>2};void beginTranscript();",
+    ),
+  );
+  await expect(page.locator("#subtitles .line")).toHaveCount(1);
+  await expect(page.locator("#subtitles .line")).not.toHaveClass(/uncertain/);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page
+    .getByLabel("Speech model", { exact: true })
+    .selectOption("accurate");
+  await expect.poll(() => qualities).toEqual(["balanced", "accurate"]);
+  await expect(page.locator("#subtitles .line")).toHaveClass(/uncertain/);
+  await page.locator("#closePanel").click();
+  await page.evaluate(() =>
+    (window as any).eval("youtube.getCurrentTime=()=>10;void renderCue();"),
+  );
+  await expect(page.locator("#subtitles")).toHaveText("Listening…");
+});
+
+test("model comparison aligns wording across cue boundaries and reports missing speech", async ({
+  page,
+}) => {
+  await page.route("**/api/desktop/transcribe?**", (route) =>
+    route.fulfill({
+      json: {
+        status: "ready",
+        cues: [
+          { start: 0, end: 4, text: "今日は日本語です。" },
+          { start: 6, end: 8, text: "追加です。" },
+        ],
+      },
+    }),
+  );
+  await page.goto("/");
+  await page.evaluate(() =>
+    (window as any).eval(
+      "source={type:'youtube',id:'abcdefghijk'};youtube={getCurrentTime:()=>1,getPlayerState:()=>2};cues=[{start:0,end:2,text:'今日は'},{start:2,end:4,text:'日本語です。'}];void compareTranscript();",
+    ),
+  );
+  await expect(page.locator("#panelBody .entry")).toHaveCount(1);
+  await expect(page.locator("#panelBody .entry")).toContainText(
+    "Current: No speech recognized",
+  );
+  await expect(page.locator("#panelBody .entry")).toContainText(
+    "Second model: 追加です。",
+  );
 });

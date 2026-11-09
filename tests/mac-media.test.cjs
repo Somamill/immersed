@@ -124,6 +124,14 @@ test("local M4B import persists chapters, supports byte seeking, and serializes 
   assert.equal(restored.progress(item.id).rate, 1.5);
   assert.equal(await restored.artwork(item.id), null);
   assert.equal(restored.transcript(item.id).cues[0].text, "日本語です。");
+  media.start(item.id, true);
+  assert.equal(
+    media.transcript(item.id).status,
+    "processing",
+    "retry must not be hidden behind the old cache",
+  );
+  await new Promise((r) => setTimeout(r, 40));
+  assert.equal(media.transcript(item.id).status, "ready");
   const bad = await fetch(base + "/?name=bad.mp4", {
     method: "POST",
     body: "not media",

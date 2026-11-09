@@ -87,3 +87,63 @@ test("existing full-book partial work migrates without retranscribing completed 
   assert.equal(windows.result("book", "balanced", 2410).processedSeconds, 30);
   assert.equal(windows.result("book", "balanced", 2410).preparedMinutes, 40);
 });
+
+test("retry during an active minute keeps its saved checkpoint", async (t) => {
+  let finish;
+  const options = setup(t, async (_file, progress) => {
+    progress({
+      processedSeconds: 26,
+      cues: [{ start: 1, end: 2, text: "日本語" }],
+    });
+    await new Promise((r) => (finish = r));
+    return [{ start: 1, end: 2, text: "日本語" }];
+  });
+  const windows = createTranscriptWindows(options);
+  windows.start("book", "balanced", 0);
+  assert.equal(windows.result("book", "balanced", 0).processedSeconds, 26);
+  windows.start("book", "balanced", 0, true);
+  assert.equal(windows.result("book", "balanced", 0).processedSeconds, 26);
+  assert.ok(
+    fs.existsSync(
+      path.join(options.folder, "windows/book/balanced/0.partial.json"),
+    ),
+  );
+  finish();
+  await wait(() => windows.result("book", "balanced", 0).status === "ready");
+});
+
+test("retry of a legacy full-book cache exposes current-window progress", async (t) => {
+  const options = setup(t, async () => []);
+  const root = options.folder;
+  const folder = path.join(root, ".data/mac-library");
+  fs.mkdirSync(folder, { recursive: true });
+  fs.writeFileSync(
+    path.join(folder, "library.json"),
+    JSON.stringify([{ id: "book", duration: 54000, file: "book.m4b" }]),
+  );
+  fs.writeFileSync(
+    path.join(folder, "book-balanced.json"),
+    JSON.stringify({ cues: [{ start: 0, end: 1, text: "old" }] }),
+  );
+  let finish;
+  const { createMedia } = require("../desktop/media.cjs");
+  const media = createMedia({
+    root,
+    run: async () => ({}),
+    recognize: async () => {
+      await new Promise((r) => (finish = r));
+      return [{ start: 30001, end: 30002, text: "new" }];
+    },
+  });
+  assert.equal(media.transcript("book").status, "ready");
+  media.start("book", true, "balanced", 30000);
+  assert.equal(
+    media.transcript("book", "balanced", 30000).status,
+    "processing",
+  );
+  finish();
+  await wait(
+    () => media.transcript("book", "balanced", 30000).status === "ready",
+  );
+  assert.equal(media.transcript("book", "balanced", 30000).cues[0].text, "new");
+});

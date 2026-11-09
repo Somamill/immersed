@@ -155,6 +155,17 @@ function createMedia({ root, run, recognize }) {
     return item.progress || { position: 0, chapterIndex: 0, rate: 1 };
   }
   function transcript(id, quality = "balanced", at = 0) {
+    const active = jobs.get(id + ":" + quality);
+    if (
+      active &&
+      ["processing", "queued", "unavailable"].includes(active.status)
+    )
+      return active;
+    if (get(id)?.duration > 600) {
+      const window = windows.result(id, quality, at);
+      if (window.status !== "idle" || window.processedSeconds > 0)
+        return window;
+    }
     const file = path.join(folder, id + "-" + quality + ".json");
     try {
       return { status: "ready", ...JSON.parse(fs.readFileSync(file, "utf8")) };
@@ -194,7 +205,9 @@ function createMedia({ root, run, recognize }) {
             quality === "accurate"
               ? "Whisper large-v3 / MLX"
               : "Whisper large-v3-turbo / MLX",
-          version: 2,
+          version: 3,
+          pipeline: "mac-whisper-context-v3",
+          quality,
         };
         fs.writeFileSync(
           path.join(folder, id + "-" + quality + ".json.tmp"),

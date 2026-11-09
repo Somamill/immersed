@@ -77,5 +77,35 @@ test("supplied Japanese caption parser preserves wording and timing", () => {
   assert.deepEqual(cues, [
     { start: 1, end: 2.5, text: "日本語です。" },
     { start: 2.5, end: 3.5, text: "次の文。" },
+    { start: 5, end: 8, text: "invalid end" },
   ]);
+});
+
+test("Mac uses the iPhone rolling-caption parser including clear and append events", () => {
+  const { parseYouTubeCaptions } = require("../desktop/captions.cjs");
+  const { readingCue, readingTimeline } = require("../src/captions.ts");
+  const cues = parseYouTubeCaptions({
+    events: [
+      null,
+      {
+        tStartMs: 1000,
+        dDurationMs: 3000,
+        wWinId: 1,
+        segs: [{ utf8: "今日は" }, { utf8: "公園", tOffsetMs: 800 }],
+      },
+      {
+        tStartMs: 2000,
+        dDurationMs: 2000,
+        wWinId: 1,
+        aAppend: 1,
+        segs: [{ utf8: "へ行く" }],
+      },
+      { tStartMs: 3000, wWinId: 1, segs: [] },
+    ],
+  });
+  assert.equal(readingCue(cues, 1.1).text, "今日は");
+  assert.equal(readingCue(cues, 1.9).text, "今日は公園");
+  assert.equal(readingCue(cues, 2.1).text, "今日は公園へ行く");
+  assert.equal(readingCue(readingTimeline(cues), 3.1), undefined);
+  assert.ok(cues.every((cue, i) => !i || cue.start >= cues[i - 1].end));
 });
