@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.8.3 — 2026-11-09
+
+Open immersed in a native Apple Silicon window
+
+- Compile an arm64 AppKit application with persistent embedded WebKit playback, native menus and no browser launch. Fix JLPT word highlighting using shared iOS vocabulary data and morphology; add hover lookup, pause and Space/arrow shortcuts.
+- The Mac interface is not yet at iOS feature parity. iCloud signing is deferred; YouTube login, ad filtering, language filtering and offline playback remain unfinished. Generated transcripts require audio verification, and restricted videos can remain unavailable.
+
 ## 0.8.2 — 2026-11-09
 
 Add a searchable Mac app launcher

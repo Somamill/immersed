@@ -67,6 +67,7 @@ async function transcribe(id) {
 }
 const fallback = (req, res) => {
   const url = new URL(req.url, 'http://127.0.0.1');
+  if (url.pathname === '/api/desktop/levels' && req.method === 'GET') return json(res, 200, require('../src/data/jlpt-levels.json'));
   if (url.pathname === '/api/desktop/transcribe') {
     const id = url.searchParams.get('videoId');
     if (!validId(id)) return json(res, 400, { error: 'Invalid video ID' });

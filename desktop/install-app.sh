@@ -3,9 +3,9 @@ set -eu
 
 source_dir="${1:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
 applications_dir="$HOME/Applications"
-app_bundle="$applications_dir/Immersed Mac.app"
+app_bundle="$applications_dir/immersed.app"
 staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/immersed-mac-app.XXXXXX")"
-staged_bundle="$staging_dir/Immersed Mac.app"
+staged_bundle="$staging_dir/immersed.app"
 bundle_id="com.somamill.immersedmac"
 
 cleanup() {
@@ -15,7 +15,7 @@ trap cleanup EXIT HUP INT TERM
 
 mkdir -p "$applications_dir" "$staged_bundle/Contents/MacOS" "$staged_bundle/Contents/Resources"
 cp "$source_dir/desktop/macos-app/Info.plist" "$staged_bundle/Contents/Info.plist"
-cp "$source_dir/desktop/macos-app/ImmersedMac" "$staged_bundle/Contents/MacOS/ImmersedMac"
+xcrun swiftc -parse-as-library -O -target arm64-apple-macos13.0 -framework Cocoa -framework WebKit "$source_dir/desktop/NativeApp.swift" -o "$staged_bundle/Contents/MacOS/ImmersedMac"
 cp "$source_dir/desktop/macos-app/ImmersedMac.icns" "$staged_bundle/Contents/Resources/ImmersedMac.icns"
 chmod 755 "$staged_bundle/Contents/MacOS/ImmersedMac"
 
