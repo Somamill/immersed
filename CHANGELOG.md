@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.8.0 — 2026-11-09
+
+Add local Mac transcription draft
+
+- Add a macOS study window in the same repository with YouTube playback, generated Japanese subtitles, clickable dictionary lookup, known words and sentence navigation. Local MLX Whisper large-v3-turbo on Apple Silicon and faster-whisper large-v3 on Intel transcribe downloaded audio.
+- Add a Homebrew tap formula and launch command. First launch downloads dependencies, dictionary and model; Mac hardware, YouTube audio access, speed and accuracy are not yet validated. This is a browser-window prototype, not a signed native app, and subtitles appear after full transcription rather than in real time.
+
 ## 0.7.4 — 2026-11-09
 
 Load mobile YouTube Japanese caption URLs
