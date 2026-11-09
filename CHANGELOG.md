@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.6.8 — 2026-11-09
+
+Restore hosted-player captions and compact video layout
+
+- Relay Japanese caption, clock and playback messages from the HTTPS YouTube iframe to the iPhone app; relay sentence controls back to the frame and place the reading panel directly below the video.
+- The captionless-video transcription worker remains blocked from YouTube audio on this preview network. A source video with no accessible Japanese track cannot be generated here; the app now reports this without calling it a YouTube subtitle requirement.
+- Live iPhone verification of the new relay remains necessary; no claim is made that every YouTube video can be transcribed or embedded.
+
 ## 0.6.7 — 2026-11-09
 
 Try HTTPS YouTube player when iPhone watch playback fails

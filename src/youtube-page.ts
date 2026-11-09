@@ -3,6 +3,11 @@
 // are observed; audio, account traffic and unrelated requests are never captured.
 export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
   if (!/(^|\.)youtube\.com$/.test(location.hostname)) return;
+  const parentOrigin = new URL(location.href).searchParams.get('origin');
+  window.__immersedPost = value => {
+    if (window.parent !== window && parentOrigin) window.parent.postMessage({ __immersedBridge: JSON.stringify(value) }, parentOrigin);
+    else window.ReactNativeWebView?.postMessage(JSON.stringify(value));
+  };
   if (window.__immersedBootstrap) { window.__immersedApplyOptions?.(); return; }
   window.__immersedBootstrap = true;
   window.__immersedOptions = window.__immersedOptions || { dark: true, hideShorts: true, minimumMinutes: 0, fillPortrait: false };
@@ -63,7 +68,7 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
     window.__immersedOptions.fillPortrait = fill;
     window.__immersedApplyOptions?.();
     const videoId = new URL(location.href).searchParams.get('v') || location.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1];
-    window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'viewport', videoId, fillPortrait: fill }));
+    window.__immersedPost({ type: 'viewport', videoId, fillPortrait: fill });
   };
   const distance = touches => Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY);
   document.addEventListener('touchstart', event => {
@@ -136,7 +141,7 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
         }) };
       } else data = JSON.parse(raw);
       if (!Array.isArray(data?.events) || !data.events.some(e => e.segs?.some(s => typeof s.utf8 === 'string' && s.utf8.trim()))) return false;
-      window.ReactNativeWebView?.postMessage(JSON.stringify({ type: 'captionData', language: 'ja', source, videoId, data }));
+      window.__immersedPost({ type: 'captionData', language: 'ja', source, videoId, data });
       lastId = videoId; lastResponse = raw; lastSource = source;
       return true;
     } catch { return false; }
@@ -173,7 +178,16 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
   window.__immersedBridge = true;
   let last = '', lastHref = location.href, lastVideo = null, captionText = '', captionTime = 0, clock = 0, lastModuleAttempt = 0, lastTrackChoice = 0, lastErrorVideo = null, lastPlaybackReport = '', staleCaptionText = null;
   const requests = new Map();
-  const send = value => window.ReactNativeWebView?.postMessage(JSON.stringify(value));
+  const send = value => window.__immersedPost(value);
+  window.addEventListener('message', event => {
+    if (window.parent === window || event.source !== window.parent || event.origin !== new URL(location.href).searchParams.get('origin') || event.data?.__immersedCommand !== true) return;
+    const command = event.data.command;
+    if (['pause','play','seek','seekTo'].includes(command)) window.__immersedCommand?.(command, event.data.time);
+    if (event.data.options && typeof event.data.options === 'object') {
+      window.__immersedOptions = { ...window.__immersedOptions, ...event.data.options };
+      window.__immersedApplyOptions?.();
+    }
+  });
   const currentId = () => new URL(location.href).searchParams.get('v') || location.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1];
   const selectVideo = () => {
     const videos = [...document.querySelectorAll('video')].filter(v => v.isConnected && v.getClientRects().length);

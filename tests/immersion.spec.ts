@@ -223,6 +223,28 @@ test('HTTPS fallback embeds the selected video with an origin referrer', async (
   expect(await page.locator('iframe').getAttribute('src')).toContain('cc_lang_pref=ja');
 });
 
+test('hosted player relays Japanese captions and playback commands across its iframe', async ({ page }) => {
+  await page.addInitScript(() => {
+    if (location.hostname === '127.0.0.1') {
+      const host = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (data: string) => void } };
+      host.messages = [];
+      host.ReactNativeWebView = { postMessage: data => host.messages.push(JSON.parse(data)) };
+    }
+  });
+  await page.route('https://www.youtube.com/embed/**', route => route.fulfill({ contentType: 'text/html', body: '<meta name="viewport" content="width=device-width,initial-scale=1"><div id="movie_player"><video></video></div>' }));
+  await page.goto('/youtube-player.html?v=M7lc1UVf-VE');
+  await page.frameLocator('iframe').locator('#movie_player').waitFor();
+  await page.frameLocator('iframe').locator('body').evaluate((_, script) => {
+    const frame = window as unknown as { ytInitialPlayerResponse: unknown };
+    frame.ytInitialPlayerResponse = { videoDetails: { videoId: 'M7lc1UVf-VE' }, playabilityStatus: { status: 'OK' } };
+    const element = document.createElement('script'); element.textContent = script; document.body.appendChild(element);
+    (window as unknown as { __immersedPost?: (value: unknown) => void }).__immersedPost?.({ type: 'caption', text: '今日はいい天気です。', tokens: [], language: 'ja', time: 1, paused: false, title: 'Test', url: location.href });
+  }, CAPTION_BRIDGE);
+  await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string; text?: string }[] }).messages.some(m => m.type === 'caption' && m.text === '今日はいい天気です。'))).toBe(true);
+  await page.evaluate(() => (window as unknown as { __immersedCommand: (command: string, time?: number) => void }).__immersedCommand('seekTo', 12));
+  await expect.poll(() => page.frameLocator('iframe').locator('video').evaluate(video => (video as HTMLVideoElement).currentTime)).toBe(12);
+});
+
 test('swipes reject taps/diagonals and select unambiguous player actions', () => {
   expect(swipeAction(5, 3)).toBeNull();
   expect(swipeAction(90, 90)).toBeNull();
@@ -290,7 +312,7 @@ test('a blocked subtitle source shows a passive failure without recovery buttons
   await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');
   await page.getByRole('button', { name: 'Go', exact: true }).click();
   await expect(page.getByTestId('subtitle-panel')).toBeVisible();
-  await expect(page.getByText('Japanese subtitles unavailable', { exact: true })).toBeVisible({ timeout: 7000 });
+  await expect(page.getByText('Captions could not be generated for this video', { exact: true })).toBeVisible({ timeout: 7000 });
   await expect(page.getByRole('button', { name: /retry|details|refresh/i })).toHaveCount(0);
 });
 
@@ -1115,6 +1137,9 @@ test('the video does not resize when changing between short and long subtitle li
   await page.getByRole('button',{name:'Go',exact:true}).click();
   await expect(page.getByRole('button',{name:'Look up はい',exact:true})).toBeVisible({timeout:12000});
   const before = await page.getByTestId('video-surface').boundingBox();
+  expect(before!.height).toBeLessThan(270);
+  const reading = await page.getByTestId('subtitle-panel').boundingBox();
+  expect(Math.abs((before!.y + before!.height) - reading!.y)).toBeLessThan(2);
   await page.getByRole('button',{name:'Next sentence',exact:true}).click();
   await expect(page.getByRole('button',{name:'Look up 日本語',exact:true})).toBeVisible();
   expect(await page.getByTestId('video-surface').boundingBox()).toEqual(before);

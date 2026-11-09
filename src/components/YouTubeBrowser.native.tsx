@@ -98,7 +98,10 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
         if (v.type === 'viewport' && typeof v.fillPortrait === 'boolean' && v.videoId === currentVideo.current) { setFillPortrait(v.fillPortrait); return; }
         if (v.type === 'page' && typeof v.url === 'string') {
           const url = new URL(v.url);
-          if (url.protocol === 'https:' && ['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)) pageChanged(url.toString());
+          if (url.protocol === 'https:' && ['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)) {
+            if (__DEV__ && hostedFallback) console.info('Immersed hosted caption bridge connected', url.pathname);
+            pageChanged(url.toString());
+          }
           return;
         }
         if (v.type === 'playbackDiagnostic' && v.videoId === currentVideo.current && typeof v.status === 'string' && typeof v.reason === 'string' && typeof v.playerMessage === 'string' && typeof v.hasVideo === 'boolean' && [v.mediaError, v.readyState, v.networkState].every(Number.isFinite)) {
