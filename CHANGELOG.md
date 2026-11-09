@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.9.4 — 2026-11-10
+
+Subtitle loading status and release verification
+
+- Keep model loading distinct from recognition progress, so a newly requested section does not report a misleading zero-percent download. Automated checks now install FFmpeg, exercise desktop subtitle logic and run mobile and desktop browser suites against their own services.
+
 ## 0.9.3 — 2026-11-10
 
 Cross-checked subtitle timing and Whisper decoding

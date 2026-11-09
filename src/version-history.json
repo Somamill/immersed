@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.9.4",
+    "date": "2026-11-10",
+    "title": "Subtitle loading status and release verification",
+    "notes": [
+      "Keep model loading distinct from recognition progress, so a newly requested section does not report a misleading zero-percent download. Automated checks now install FFmpeg, exercise desktop subtitle logic and run mobile and desktop browser suites against their own services."
+    ]
+  },
+  {
     "version": "0.9.3",
     "date": "2026-11-10",
     "title": "Cross-checked subtitle timing and Whisper decoding",

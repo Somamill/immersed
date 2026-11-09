@@ -141,6 +141,7 @@ test("retry of a legacy full-book cache exposes current-window progress", async 
     media.transcript("book", "balanced", 30000).status,
     "processing",
   );
+  assert.equal(media.transcript("book","balanced",30000).phase,"loading");
   finish();
   await wait(
     () => media.transcript("book", "balanced", 30000).status === "ready",

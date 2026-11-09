@@ -121,6 +121,7 @@ function createTranscriptWindows({ folder, get, recognize }) {
         state.jobs.set(start, {
           status: "processing",
           stage: "Loading the local speech model",
+          phase: "loading",
         });
         try {
           const cues =
