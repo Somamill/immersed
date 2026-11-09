@@ -19,3 +19,11 @@ YouTube video playback and browsing occur inside a YouTube web view. Google/YouT
 You can remove saved words in the app and clear local app data by deleting the app. To report a privacy problem or request removal of a video transcript from a service operated by Immersed, email [k4jenx@gmail.com](mailto:k4jenx@gmail.com). Do not post private information in a public GitHub issue. Because server captions are keyed by public video ID rather than an Immersed user account, the service cannot identify a personal viewing history to export.
 
 This policy will be updated when the public hosting arrangement and its retention terms are finalized.
+
+## Apple Silicon Mac app
+
+The Mac app runs its language and speech service on `127.0.0.1`. Imported video/audio, including Japanese M4B audiobooks, is copied into the local library under `~/Library/Application Support/Immersed Mac`. Downloaded media, chapter metadata, transcripts and runtime files remain there until removed. Media and speech audio are not uploaded to a remote transcription service. YouTube browsing, search, metadata requests and downloads contact YouTube; initial dictionary, corpus and model installation contacts their download hosts.
+
+Mac settings, known/unknown choices, playback positions and saved words persist in the app's local WebKit storage. Website data also persists in its embedded WebKit store. The app does not import cookies from your personal browsers or provide embedded Google authentication. JSON backups can contain settings, saved words and their source context; they are written only where you choose in the Mac save dialog, which can include iCloud Drive. Automatic iPhone/Mac iCloud synchronization is not currently enabled.
+
+Removing a media item from the Mac library removes the app's copied file and associated transcripts, and leaves the original imported file unchanged. Deleting the Mac app or uninstalling its Homebrew formula does not automatically erase its Application Support library or WebKit data. Local startup logs may include setup errors and local file paths. These Mac storage rules differ from deleting an iOS application.
