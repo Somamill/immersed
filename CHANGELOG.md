@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.7.0 — 2026-11-09
+
+Prototype on-device Japanese captions from iPhone app audio
+
+- Add a native iOS proof of concept that requests ReplayKit and Speech permission, captures app-audio samples transiently, and sends them to Apple's on-device Japanese recognizer for tappable timed lines when source captions are absent.
+- This feature requires a custom signed iPhone build and cannot run in Expo Go. An unsigned simulator build compiled successfully; live YouTube audio capture, accuracy, timing and protected-content behavior still require iPhone testing.
+- YouTube access and policy review remain necessary before an App Store release; the cloud transcription worker still cannot access YouTube audio on this preview network.
+
 ## 0.6.8 — 2026-11-09
 
 Restore hosted-player captions and compact video layout

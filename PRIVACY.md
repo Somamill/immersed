@@ -8,6 +8,8 @@ Saved words, sentences, viewing preferences, knowledge choices and a limited cap
 
 The app sends a word, sentence or search query to the Immersed language service when you request analysis or dictionary results. To request generated subtitles, it sends the selected public YouTube video ID. The service may process video audio obtained from that source, the resulting transcript and word timing. It caches generated captions by video ID for reuse; the current server has no automatic expiry for this shared cache. The service does not ask for your name, email or Immersed login. It may receive ordinary connection information such as IP address through its host or proxy. Hosting and retention settings must be reviewed again before public deployment.
 
+In an iPhone build with local captions enabled, Immersed requests iOS screen/audio capture and speech-recognition permission when a selected video lacks Japanese captions. ReplayKit audio samples are passed directly to Apple's on-device Japanese speech recognizer. Immersed does not save the captured audio or video or send those samples to its server. Generated caption text may be cached on the iPhone as described above. Local capture is not present in Expo Go and may be unavailable for protected media or unsupported devices.
+
 ## Third parties
 
 YouTube video playback and browsing occur inside a YouTube web view. Google/YouTube may receive your IP address, device/browser information, interactions and any cookies they set. Their [privacy policy](https://policies.google.com/privacy) applies to those services. Immersed does not transfer a Safari or Google sign-in session into its player. Expo services may be involved in app distribution and updates. This app does not include its own advertising or analytics SDK.

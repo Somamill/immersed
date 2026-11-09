@@ -8,6 +8,7 @@ import { estimateVocabulary, sampleCaptionVocabulary } from '../src/coverage';
 import type { AnalyzedToken } from '../src/language';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
 import { hostedPlayerSource, watchPlayerSource, swipeAction } from '../src/player';
+import { groupLocalSpeech } from '../src/local-caption-cues';
 import { familiarity, showFurigana } from '../src/learning';
 import { combineCaptionTracks, validCaptionCues, allowLiveCaptionFallback, readingTimeline, japaneseCaptionUrl, parseCaptionTrack, readingCue, normalizeJapaneseCaption, captionSourceRank, sentenceTarget } from '../src/captions';
 import { automaticRetryDelay } from '../src/subtitle-policy';
@@ -243,6 +244,16 @@ test('hosted player relays Japanese captions and playback commands across its if
   await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string; text?: string }[] }).messages.some(m => m.type === 'caption' && m.text === '今日はいい天気です。'))).toBe(true);
   await page.evaluate(() => (window as unknown as { __immersedCommand: (command: string, time?: number) => void }).__immersedCommand('seekTo', 12));
   await expect.poll(() => page.frameLocator('iframe').locator('video').evaluate(video => (video as HTMLVideoElement).currentTime)).toBe(12);
+});
+
+test('local speech segments become readable timed lines without losing Japanese text', () => {
+  expect(groupLocalSpeech([
+    { text: '今日は', start: 1, end: 1.6 }, { text: '旅行です。', start: 1.65, end: 2.4 },
+    { text: '雪がきれいです。', start: 4, end: 5.3 },
+  ])).toEqual([
+    { text: '今日は旅行です。', start: 1, end: 2.4 },
+    { text: '雪がきれいです。', start: 4, end: 5.3 },
+  ]);
 });
 
 test('swipes reject taps/diagonals and select unambiguous player actions', () => {

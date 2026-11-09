@@ -13,6 +13,8 @@ import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { readingCue, readingTimeline, combineCaptionTracks, validCaptionCues, allowLiveCaptionFallback, normalizeJapaneseCaption, captionSourceRank, sentenceTarget } from './src/captions';
 import { automaticRetryDelay } from './src/subtitle-policy';
+import { localCaptionsAvailable, observeLocalCaptions, startLocalCaptions, stopLocalCaptions } from './src/local-captions';
+import { groupLocalSpeech } from './src/local-caption-cues';
 import { swipeAction } from './src/player';
 import { familiarity, type JlptLevel } from './src/learning';
 import StudySubtitles from './src/components/StudySubtitles';
@@ -205,6 +207,30 @@ export default function App() {
     return () => { active = false; };
   }, [videoId]);
   useEffect(() => { if (sourceTranscript?.videoId === videoId && sourceTranscript.cues.length) seenSourceCaption.current = true; }, [sourceTranscript, videoId]);
+  useEffect(() => {
+    if (!videoId || !localCaptionsAvailable) return;
+    let active = true;
+    const subscription = observeLocalCaptions(event => {
+      if (!active || event.videoId !== pageVideo.current || transcriptRank.current >= 2) return;
+      const cues = groupLocalSpeech(event.cues);
+      if (!cues.length) return;
+      setGenerated(cues);
+      setGeneratedThrough(cues.at(-1)!.end);
+      setSubtitleStatus('');
+      if (event.final) void saveCaptionCache(event.videoId, cues, 'generated', cues.at(-1)!.end);
+    });
+    // Give YouTube's own Japanese track a brief chance to load first.
+    const timer = setTimeout(() => {
+      if (!active || transcriptRank.current >= 2) return;
+      void startLocalCaptions(videoId, latestTime.current).catch(() => {
+        // The server response or a source track remains the fallback.
+      });
+    }, 2000);
+    return () => { active = false; clearTimeout(timer); subscription.remove(); void stopLocalCaptions(videoId); };
+  }, [videoId]);
+  useEffect(() => {
+    if (videoId && sourceTranscript?.videoId === videoId && transcriptRank.current >= 2) void stopLocalCaptions(videoId);
+  }, [videoId, sourceTranscript]);
   useEffect(() => {
     if (!videoId || !preferencesReady) return;
     let active = true;
