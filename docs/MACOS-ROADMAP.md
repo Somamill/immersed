@@ -1,18 +1,20 @@
-# Mac requirements and current gaps
+# Mac requirement coverage
 
-The Mac app is named immersed. and must keep playback inside its own window. GitHub/Homebrew distribution is authorized; Apple Developer signing and iCloud connection are deferred until a Team ID is supplied.
+| Requested behavior | Current implementation / limit |
+| --- | --- |
+| Full Apple Silicon Mac app, named immersed. | Compiled arm64 AppKit executable, native windows/menus/file dialogs, embedded WebKit. Homebrew runtime dependencies remain required. |
+| iOS study features and settings | Shared preference, familiarity and vocabulary-coverage logic; same dictionary/morphology/JLPT data. Mac controls provide furigana, pitch, saved context, lookup, level overrides, themes, filters, history and transcript checks. This is a desktop interface rather than the iOS gesture layout. |
+| M1 speed and reliability | MLX on Apple Silicon, bounded chunks, one speech worker, cached analysis/model files/transcripts, dependency fingerprinting, playback-position restoration and request limits. Short natural-speech benchmarks and integration checks are recorded in MACOS-VALIDATION.md. |
+| YouTube login and search | In-app public search and native browsing are implemented. Google rejects embedded sign-in; account authentication remains unresolved pending a supported Google integration. |
+| Default ad blocking | Compiled WebKit rules, enabled by default and configurable. Complete removal of same-stream YouTube advertising is not promised. |
+| Original target-language videos | Original-Japanese metadata filter and toggle for search and direct playback; unknown originals are excluded while enabled. The optional general YouTube browsing window is labelled unfiltered. |
+| Natural Mac keyboard support | Native menus, standard editing, Command-O/L/comma/1/2/3, Space/K, J/L, sentence arrows, Escape, media controls and speed. |
+| iCloud settings connection | Local persistence and JSON import/export, including saving a backup to iCloud Drive. Automatic iPhone/Mac iCloud synchronization remains deferred per the no-Developer-ID decision. |
+| Hover lookup and pause | Delayed hover lookup, pause, controlled resume, click-to-pin, native speech pronunciation. |
+| Download and offline study | Local media library, accessible YouTube downloads, transcript reuse, dictionary availability, chapters, seeking and saved-word context. Models must be downloaded before offline recognition. |
+| Highlighting every word | Shared iOS familiarity policy fixes the level bug, including explicit unknown overrides and unlisted words. UI tests exercise N5/N1 and persistence. |
+| Captions without supplied Japanese subtitles | Local speech fallback for accessible audio, including imported video/audio. Access restrictions and recognition errors prevent universal support. |
+| Quoted transcription example | Checked against the provided video context with two local models. Main wording agreed closely; generated text stays labelled and differing passages can be replayed. |
+| Local MP4 and Japanese M4B audiobooks | Native import, playback/seek, chapter metadata, transcription, lookup and offline study. Tested H.264/AAC MP4 and AAC M4B. |
 
-Implemented in this update: compiled arm64 AppKit host, persistent embedded WKWebView, native edit/quit/search menus, no browser launch, shared iOS morphology and JLPT vocabulary data for highlighting, hover dictionary lookup with pause and controlled resume, persisted level and known words, Space and sentence arrow shortcuts, honest generated-transcript status.
-
-Still required before claiming iOS feature parity:
-
-- Share the complete preference schema, pitch accent, furigana, saved-word context, dictionary search, themes, Shorts and duration filters with iOS.
-- YouTube account browsing and in-app search. Google may reject embedded authentication; do not claim a successful connection without testing it.
-- Default ad filtering with an explicit control; do not claim complete ad removal without playback verification.
-- Target-language original-content filtering with a toggle and explicit handling of missing language metadata.
-- Offline library, downloads, local media playback and saved transcript/dictionary availability. Downloads can fail for restricted or unavailable source videos.
-- Signed iCloud synchronization on both apps; requires Apple signing configuration and cannot be enabled merely by adding a toggle.
-- ASR evaluation against real audio, word alignment, silence/hallucination handling, bounded worker concurrency, cancellation, cache invalidation, and speed/memory measurements on M1.
-- Speech fallback can work without supplied subtitles when video audio is accessible. Universal support for every YouTube video cannot be promised: private, DRM, geo/access restrictions, disabled embeds, download restrictions and absent Japanese speech remain concrete failure cases.
-
-The phrase “どんどんなさっているんですよね” cannot be corrected from text alone. Compare it with the original video audio and timestamps before substituting a transcription. A count such as 836 segments measures output volume, not transcript accuracy.
+Unresolved external work: provider-supported Google account integration and signed cross-device iCloud synchronization. Claims of universal source access, complete ad removal, or perfect transcription are intentionally excluded.

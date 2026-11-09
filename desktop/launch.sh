@@ -2,22 +2,21 @@
 set -eu
 source_dir="${1:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
 app_home="$HOME/Library/Application Support/Immersed Mac"
-mkdir -p "$app_home"
-rsync -a --exclude node_modules --exclude .git --exclude .data --exclude .venv --exclude dist --exclude test-results "$source_dir/" "$app_home/"
-cd "$app_home"
-if [ "${2:-}" != "--service" ] && [ -f desktop/install-app.sh ]; then
-  /bin/sh desktop/install-app.sh "$app_home"
-fi
 if [ "${2:-}" != "--service" ]; then
+  /bin/sh "$source_dir/desktop/install-app.sh" "$source_dir"
   open "$HOME/Applications/immersed.app"
   exit 0
 fi
-version="$(node -p "require('./package.json').version")"
-if [ ! -d node_modules ] || [ ! -f .installed-version ] || [ "$(cat .installed-version)" != "$version" ]; then
+mkdir -p "$app_home"
+rsync -a --exclude node_modules --exclude .git --exclude .data --exclude .venv --exclude dist --exclude test-results "$source_dir/" "$app_home/"
+cd "$app_home"
+dependency_hash="$(node -e "const fs=require('fs'),c=require('crypto'),p=JSON.parse(fs.readFileSync('package-lock.json')); delete p.version;delete p.packages[''].version;console.log(c.createHash('sha256').update(JSON.stringify(p)).digest('hex'))")"
+if [ ! -d node_modules ] || [ ! -f .dependencies-sha ] || [ "$(cat .dependencies-sha)" != "$dependency_hash" ]; then
   npm ci --omit=dev
-  printf '%s' "$version" > .installed-version
+  printf '%s' "$dependency_hash" > .dependencies-sha
 fi
 if [ ! -f .data/jmdict.json ]; then npm run language:setup; fi
+if [ ! -f .data/context-ngrams.sqlite ]; then npm run context:setup; fi
 if [ ! -x .venv/bin/python ]; then
   python3 -m venv .venv
   .venv/bin/python -m pip install --upgrade pip

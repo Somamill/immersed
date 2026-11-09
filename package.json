@@ -1,6 +1,6 @@
 {
   "name": "immersed",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/metro-runtime": "~58.0.15",
@@ -52,7 +52,8 @@
     "build:hosted": "node scripts/build-hosted.cjs",
     "start:hosted": "node server/hosted.cjs",
     "mac:serve": "node desktop/server.cjs",
-    "alignment:setup": "node scripts/setup-alignment.cjs"
+    "alignment:setup": "node scripts/setup-alignment.cjs",
+    "test:mac": "node --test tests/mac-media.test.cjs tests/mac-server.test.cjs && python3 -m unittest tests/test_mac_quality.py tests/test_mac_transcribe.py && playwright test --config playwright.mac.config.ts"
   },
   "private": true,
   "engines": {

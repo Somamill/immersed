@@ -2,6 +2,15 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.9.0 — 2026-11-09
+
+Add local video, Japanese audiobooks and offline Mac study
+
+- Add native file opening and a persistent library for MP4/MOV video, M4B/M4A audiobooks and other supported audio, including chapters, seeking, offline subtitles and saved context. Add accessible YouTube downloads and filtered in-app search.
+- Share iOS preference, familiarity and coverage rules; add furigana, pitch, saved words, settings backups, context suggestions, version history, hover pause/resume and Mac shortcuts. Add default WebKit ad-request filtering and original-Japanese metadata checks.
+- Improve MLX speech with bounded chunks, one worker, silence/confidence handling, separate fast/accuracy caches and model comparison/replay. Validate native M4B import and both WebKit/Chromium playback flows; benchmark a 35-second natural-speech excerpt on M1 Pro.
+- Google embedded account login remains unavailable. Automatic cross-device iCloud sync is deferred until signing is configured; JSON backups can be saved to iCloud Drive. Complete ad removal, every restricted video, and perfect transcription cannot be guaranteed.
+
 ## 0.8.3 — 2026-11-09
 
 Open immersed in a native Apple Silicon window

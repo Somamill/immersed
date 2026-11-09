@@ -1,0 +1,175 @@
+import { test, expect } from "@playwright/test";
+import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
+test("real morphology, level changes and hover pause/resume share the iOS policy", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await expect(page.locator("#status")).toHaveText("Ready when you are");
+  await page.evaluate(() => {
+    (window as unknown as { eval(s: string): void }).eval(
+      `youtube={getCurrentTime:()=>0.2,getPlayerState:()=>window.__paused?2:1,pauseVideo:()=>{window.__paused=true},playVideo:()=>{window.__paused=false}}; cues=[{start:0,end:4,text:'猫は政治について話します。'}]; cueIndex=-1; renderCue();`,
+    );
+  });
+  await expect(page.locator(".word").filter({ hasText: "政治" })).toHaveClass(
+    /unknown/,
+  );
+  await expect(page.locator(".word").filter({ hasText: "猫" })).not.toHaveClass(
+    /unknown/,
+  );
+  await page.locator(".word").filter({ hasText: "政治" }).hover();
+  await expect(page.locator("#lookup")).toHaveClass(/show/);
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as unknown as { __paused: boolean }).__paused,
+      ),
+    )
+    .toBe(true);
+  await expect(page.locator("#definitions")).toContainText(
+    /politic|government/i,
+  );
+  await page.locator("#closeLookup").click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => (window as unknown as { __paused: boolean }).__paused,
+      ),
+    )
+    .toBe(false);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.getByLabel("Completed Japanese level").selectOption("1");
+  await page.locator("#closePanel").click();
+  await expect(page.locator(".unknown")).toHaveCount(0);
+  await page.locator(".word").filter({ hasText: "猫" }).click();
+  await page.locator("#known").click();
+  await expect(page.locator(".word").filter({ hasText: "猫" })).toHaveClass(
+    /unknown/,
+  );
+  await page.reload();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByLabel("Completed Japanese level")).toHaveValue("1");
+});
+
+test("MP4/M4B-style local media flows work while all remote requests are blocked", async ({
+  page,
+}) => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "immersed-ui-"));
+  const audio = path.join(folder, "日本語.m4b");
+  const video = path.join(folder, "日本語.mp4");
+  execFileSync("ffmpeg", [
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=2",
+    "-c:a",
+    "aac",
+    audio,
+  ]);
+  execFileSync("ffmpeg", [
+    "-v",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "color=black:size=320x180:rate=24:duration=2",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=440:duration=2",
+    "-c:v",
+    "libx264",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-shortest",
+    video,
+  ]);
+  try {
+    await page.route("https://**", (route) => route.abort());
+    await page.route("**/api/desktop/local-transcript?**", (route) =>
+      route.fulfill({
+        json: {
+          status: "ready",
+          source: "generated",
+          cues: [{ start: 0, end: 2, text: "日本語です。" }],
+        },
+      }),
+    );
+    await page.goto("/");
+    await page.locator("#fileInput").setInputFiles(audio);
+    await expect(page.locator(".audioBook h2")).toHaveText("日本語.m4b");
+    await expect(page.locator("#count")).toHaveText("1 segments");
+    await page.locator("#play").click();
+    await expect
+      .poll(() =>
+        page
+          .locator("audio")
+          .evaluate((audio: HTMLAudioElement) => audio.currentTime),
+      )
+      .toBeGreaterThan(0);
+    await page.getByRole("button", { name: "Library", exact: true }).click();
+    await expect(page.locator("#panelBody")).toContainText("日本語.m4b");
+    await page.locator("#closePanel").click();
+    await page.locator("#fileInput").setInputFiles(video);
+    await expect(page.locator("video")).toHaveCount(1);
+    await page.locator("#play").click();
+    await expect
+      .poll(() =>
+        page
+          .locator("video")
+          .evaluate((video: HTMLVideoElement) => video.currentTime),
+      )
+      .toBeGreaterThan(0);
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+});
+
+test("original-language search filtering excludes unknown and dubbed metadata", async ({
+  page,
+}) => {
+  await page.route("**/api/desktop/search?**", (route) =>
+    route.fulfill({
+      json: {
+        items: [
+          {
+            id: "aaaaaaaaaaa",
+            title: "日本語オリジナル",
+            duration: 1400,
+            language: "ja",
+            isShort: false,
+          },
+          {
+            id: "bbbbbbbbbbb",
+            title: "English original",
+            duration: 1400,
+            language: "en",
+            isShort: false,
+          },
+          {
+            id: "ccccccccccc",
+            title: "Unknown source",
+            duration: 1400,
+            language: null,
+            isShort: false,
+          },
+        ],
+      },
+    }),
+  );
+  await page.goto("/");
+  await page.locator("#query").fill("歴史");
+  await page.locator("#search").getByRole("button").click();
+  await expect(page.locator("#panelBody")).toContainText("日本語オリジナル");
+  await expect(page.locator("#panelBody")).not.toContainText(
+    "English original",
+  );
+  await expect(page.locator("#panelBody")).not.toContainText("Unknown source");
+});

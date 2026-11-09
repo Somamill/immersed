@@ -93,7 +93,7 @@ The optional acoustic alignment pass uses real audio to place selected words; it
 
 ## Try the Mac transcription draft
 
-On macOS, the companion runs a local Whisper speech model and shows generated Japanese subtitles alongside video and clickable dictionary lookup. The first Homebrew launch creates an **immersed.app** in `~/Applications`, so you can find it in Finder, Spotlight, or Launchpad. See the [Mac install and current limits](docs/MACOS.md), including the Homebrew command. The Mac build has not yet been run on physical macOS hardware.
+The Apple Silicon Mac app **immersed.** opens its own window with embedded YouTube, a local video/audiobook library, offline study, hover lookup, shared iOS learning settings and local MLX speech recognition. It imports MP4 and Japanese M4B/M4A/MP3 media, supports chapters and keyboard controls, and includes filtered YouTube search and accessible-video downloads. See [Mac installation, features and limits](docs/MACOS.md) and [validation](docs/MACOS-VALIDATION.md). Google embedded sign-in and automatic cross-device iCloud synchronization remain unresolved/deferred.
 
 ## Try it on your iPhone
 

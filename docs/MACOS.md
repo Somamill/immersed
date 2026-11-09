@@ -1,8 +1,8 @@
-# Immersed for Mac — first local test
+# immersed. for Apple Silicon Mac
 
-This companion lives in the same repository as the iPhone app. It opens a local study window with YouTube playback, Japanese subtitle lines, word lookup, known-word marking and sentence skipping. A Mac-local worker downloads the selected video's audio with yt-dlp and runs an open Whisper model; the audio is deleted when transcription finishes. Japanese transcription is generated independently of YouTube caption availability.
+immersed. is a compiled arm64 AppKit application with an embedded WebKit study interface and YouTube player. It opens its own Mac window. Homebrew manages its local Node, Python, FFmpeg and yt-dlp dependencies; MLX runs speech recognition on Apple Silicon. Distribution currently uses GitHub/Homebrew without Developer ID signing or notarization.
 
-Install with Homebrew on macOS:
+## Install and launch
 
 ```sh
 brew tap Somamill/immersed https://github.com/Somamill/immersed.git
@@ -10,10 +10,53 @@ brew install --HEAD Somamill/immersed/immersed-mac
 immersed-mac
 ```
 
-The first launch creates `~/Applications/immersed.app`, then installs npm packages, the pinned JMdict/JMnedict dictionary, and a Python model runner in `~/Library/Application Support/Immersed Mac`. Find **immersed.** in Finder, Spotlight, or Launchpad after the first launch; future launches open the local study window. If the service is already running, opening the app reuses it. On Apple Silicon it uses MLX Whisper large-v3-turbo; on Intel it uses faster-whisper large-v3 on CPU. The model downloads on first transcription and can require several GB. Subsequent starts reuse the installed files and generated transcript cache. Press Ctrl-C in Terminal to stop the local service when started from Terminal. For updates, run `brew upgrade --fetch-HEAD Somamill/immersed/immersed-mac`.
+The first command launch creates `~/Applications/immersed.app`. Open **immersed.** from Finder, Spotlight or Launchpad afterward. Initial setup installs the local dictionaries, context database and speech runtime. Speech models download on first use; prepare them before going offline. Subsequent starts reuse dependencies, dictionaries, models and transcripts. Quit immersed. before updating with `brew upgrade --fetch-HEAD Somamill/immersed/immersed-mac`.
 
-Paste a YouTube URL in Immersed and click Watch. A plain search phrase opens YouTube search in a browser tab; paste a result's video URL to study it. All processing runs locally after yt-dlp downloads the audio. The local server listens only on `127.0.0.1:4765`. The compiled arm64 AppKit application embeds the study page and YouTube in WKWebView, with persistent WebKit website storage. It opens no external browser. Command-L focuses search, Space toggles playback, and the arrow keys move between sentences. Hovering a word opens lookup and pauses playback; closing lookup resumes playback only when hover had paused it. The video itself stays in YouTube's embedded player; owner-disabled embeds or audio-download restrictions can still prevent a video from working. Playback waits for the first generated line, then starts while the remaining audio is transcribed in 60-second chunks. The initial audio download and model startup can still take time; this is not low-latency live transcription. Apple Silicon and Intel timing and model installation have **not** been physically tested in this Linux workspace.
+## Local video and Japanese audiobooks
 
-The Homebrew formula installs the repository's main branch with `--HEAD`. `immersed.app` contains a compiled arm64 AppKit executable with an embedded WebKit interface. The local Node language service and MLX speech runtime still require Homebrew and first-run dependencies. This is a hybrid Mac application, distributed without Developer ID signing or notarization. The first run needs internet access for dependencies and the model. The Mac companion uses a separate desktop layout and does not yet share the phone's saved-word library or every phone setting.
+Use **Open file**, Command-O, drag and drop, or Finder’s Open With menu. Supported import extensions are MP4, M4V, MOV, M4B, M4A, MP3, WAV, AAC, FLAC, OGG and WebM. Actual playback depends on the codecs WebKit supports; H.264/AAC MP4 and AAC M4B/M4A are the tested paths. Imports copy media into the local library so moving the original does not break study sessions.
 
-The model choice follows [MLX Whisper's word-timestamp API](https://github.com/ml-explore/mlx-examples/blob/main/whisper/README.md), the [MLX large-v3-turbo checkpoint](https://huggingface.co/mlx-community/whisper-large-v3-turbo), and [faster-whisper's CPU backend](https://github.com/SYSTRAN/faster-whisper). The Homebrew tap structure follows [Homebrew's tap guide](https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap).
+M4B/M4A audio has native media controls and chapter selection when chapter metadata is present. Local video and audio share timed Japanese subtitles, word lookup, furigana, pitch accent, saved-word context, known/unknown overrides, sentence navigation, playback speed and position restoration. The local dictionary and completed transcripts work offline.
+
+For accessible YouTube videos, **Download for offline** saves media to the same library. A completed online transcript is reused when available; otherwise local recognition generates one. Downloads are limited to 2 GB, local imports to 8 GB. A video’s access restrictions can prevent downloading. Cached transcripts are stored separately for fast and accuracy modes. Remove a library item with its two-step Remove control; an actively transcribing item must finish first.
+
+## Study settings and Mac controls
+
+The Mac and iOS app share preference restoration, vocabulary familiarity and coverage estimation code, as well as the same Japanese morphology/dictionary service and JLPT data. Settings include completed JLPT level, dark mode, furigana, pitch accent, known/unknown overrides, Shorts filtering and minimum duration. Unlisted words have no assumed JLPT level. Explicit unknown overrides remain highlighted at every level.
+
+Hover briefly to look up a word and pause playback; leaving the lookup resumes only if hover originally paused it. Click to pin lookup. Saved words retain their meaning, reading, source sentence and playback context. Dictionary search accepts Japanese and English. Contextual spelling suggestions are suggestions, not verified corrections.
+
+- Space / K: play or pause.
+- Left / Right: previous or next sentence.
+- J / L: seek ten seconds.
+- Command-L: focus search.
+- Command-O: native file picker.
+- Command-comma: settings.
+- Command-1 / 2 / 3: study window / library / saved words.
+- Escape: close lookup or a panel.
+
+Settings and saved words persist locally. Export/import provides a JSON backup through a native Mac save dialog; a backup can be saved to iCloud Drive. Automatic iPhone/Mac iCloud synchronization remains deferred until Apple signing configuration is available. Exporting a file is not automatic cross-device synchronization.
+
+## YouTube search and filtering
+
+Search runs inside the app. **Original Japanese only** is enabled by default and checks original-language metadata, not just titles or the selected dub. Unknown-language results are excluded. The toggle also guards directly opened video links. Shorts and duration filters apply to search results and playback selection. The native YouTube browsing window is explicitly labelled unfiltered; choosing a video sends it to the filtered study player.
+
+Known advertising domains and ad request paths are blocked by default using compiled WebKit content rules, with a toggle in Settings. This does not guarantee removal of every YouTube ad, particularly advertising delivered with the content stream.
+
+Google blocks account authentication in embedded web views. The app does not spoof a trusted browser or import personal browser cookies. Public YouTube browsing/search/playback work; authenticated account features still need a provider-supported sign-in integration. Google’s policy is documented at https://developers.google.com/identity/protocols/oauth2/policies#use-secure-browsers.
+
+## Speech recognition and transcript checks
+
+Video-supplied Japanese captions are preferred when available. Otherwise the app recognizes accessible audio locally. Fast mode uses MLX Whisper large-v3-turbo; accuracy mode uses the larger MLX Whisper large-v3 checkpoint. Both retain word timing and reuse the loaded model across bounded 30-second audio chunks. Only one speech worker runs at a time. Digital near-silence is skipped; low-confidence segments are marked, and the text is never automatically replaced with a context-model guess.
+
+**Check transcript** runs the second speech model and lists passages whose text or boundaries differ, with a replay control. Agreement does not prove accuracy. The supplied example “どんどんなさっているんですよね” was reproduced closely by both models with surrounding audio; it should not be replaced simply because it looks unusual out of context.
+
+A 35-second natural-speech excerpt from the reported video took 10.30 seconds in fast mode and 13.57 seconds in accuracy mode on an M1 Pro with 16 GB memory, after model downloads. These measurements include worker startup and exclude network/download time. They are a short smoke benchmark, not a guarantee for every file or every M1 configuration.
+
+Private, restricted, region-blocked, DRM-protected, unavailable or embedding-disabled videos can remain inaccessible. No implementation can promise support or perfect transcription for every YouTube video. See [validation details](MACOS-VALIDATION.md).
+
+## Data and attribution
+
+Media, transcripts, startup logs and dependencies live under `~/Library/Application Support/Immersed Mac`; the local HTTP service binds only to `127.0.0.1:4765`. Imported media and speech audio are not uploaded to a remote transcription service. First-time model and dictionary downloads need internet access.
+
+JMdict/JMnedict: EDRDG, CC BY-SA 4.0. Pitch accents: Kanjium / Uros O., CC BY-SA 4.0. Context counts: Tatoeba contributors, CC BY 2.0 FR. Kuromoji/IPADIC provides morphology. See THIRD_PARTY.md and the source metadata under src/data for credits and pinned sources.

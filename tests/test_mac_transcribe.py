@@ -20,7 +20,7 @@ class MacTranscriptionTest(unittest.TestCase):
                     out.setnchannels(1)
                     out.setsampwidth(2)
                     out.setframerate(16000)
-                    out.writeframes(b'\0\0' * 16000)
+                    out.writeframes(b'\0\x10' * 16000)
                 progress = io.StringIO()
                 with contextlib.redirect_stdout(progress):
                     cues = transcribe.transcribe(str(audio))
