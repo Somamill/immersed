@@ -6,7 +6,7 @@ import { accentHeights, accentMorae } from '../src/pitch';
 import { restorePreferences } from '../src/preferences';
 import { estimateVocabulary, sampleCaptionVocabulary } from '../src/coverage';
 import type { AnalyzedToken } from '../src/language';
-import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
+import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, YOUTUBE_CAPTION_PRELOAD, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
 import { hostedPlayerSource, watchPlayerSource, swipeAction } from '../src/player';
 import { groupLocalSpeech } from '../src/local-caption-cues';
 import { familiarity, showFurigana } from '../src/learning';
@@ -670,6 +670,22 @@ test('the player’s actual timedtext response is captured when a copied caption
   await expect.poll(() => page.evaluate(() => (window as unknown as { messages: unknown[] }).messages.length)).toBe(1);
   const data = await page.evaluate(() => (window as unknown as { messages: { data: unknown }[] }).messages[0].data);
   expect(parseCaptionTrack(data)[0].text).toBe('字幕が届きました。');
+});
+
+test('a Japanese caption response fetched before the watch bridge is ready survives startup', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="movie_player"></div>' }));
+  await page.route('https://m.youtube.com/api/timedtext?**', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify({ events: [{ tStartMs: 0, dDurationMs: 2500, segs: [{ utf8: '早い字幕。' }] }] }) }));
+  await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
+  expect(new URL(page.url()).hostname).toBe('m.youtube.com');
+  await page.evaluate(() => { const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (raw: string) => void } }; w.messages = []; w.ReactNativeWebView = { postMessage: raw => w.messages.push(JSON.parse(raw)) }; });
+  await page.addScriptTag({ content: YOUTUBE_CAPTION_PRELOAD });
+  expect(await page.evaluate(() => (window as unknown as { __immersedCaptionPreload?: boolean }).__immersedCaptionPreload)).toBe(true);
+  expect(await page.evaluate(async () => (await fetch('/api/timedtext?v=M7lc1UVf-VE&lang=ja')).text())).toContain('早い字幕。');
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __immersedPendingCaptions?: unknown[] }).__immersedPendingCaptions?.length || 0)).toBe(1);
+  await page.addScriptTag({ content: YOUTUBE_BOOTSTRAP });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { messages: unknown[] }).messages.length)).toBe(1);
+  const data = await page.evaluate(() => (window as unknown as { messages: { data: unknown }[] }).messages[0].data);
+  expect(parseCaptionTrack(data)[0].text).toBe('早い字幕。');
 });
 
 test('horizontal gestures navigate settings and words using the floating dock routes', async ({ page }) => {

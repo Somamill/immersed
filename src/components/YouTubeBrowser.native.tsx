@@ -4,7 +4,7 @@ import Constants from 'expo-constants';
 import { WebView } from 'react-native-webview';
 import { japaneseCaptionUrl, parseCaptionTrack, captionSourceRank, type CaptionSource } from '../captions';
 import history from '../version-history.json';
-import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../youtube';
+import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, YOUTUBE_CAPTION_PRELOAD, isYouTubeSignInUrl, youtubeUrl } from '../youtube';
 import type { BrowserHandle, BrowserProps } from './YouTubeBrowser';
 export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, minimumMinutes = 0, onCaption, onError, onPage, onClock, onTranscript, onPlaybackDiagnostic }, ref) {
   // WebView 14 defaults its extra-props generic to undefined, which intersects
@@ -66,7 +66,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
       web.current?.injectJavaScript(`window.__immersedCommand?.(${JSON.stringify(command)}, ${Number.isFinite(time) ? time : 'null'}); true;`);
     },
   }));
-  return <WebView<object> key={`${history[0].version}:${playerId || 'browse'}:${hostedFallback ? 'hosted' : 'watch'}`} ref={web} source={source} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo injectedJavaScriptBeforeContentLoaded={playerId ? undefined : optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} injectedJavaScriptForMainFrameOnly={!hostedFallback} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
+  return <WebView<object> key={`${history[0].version}:${playerId || 'browse'}:${hostedFallback ? 'hosted' : 'watch'}`} ref={web} source={source} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo injectedJavaScriptBeforeContentLoaded={playerId ? YOUTUBE_CAPTION_PRELOAD : optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} injectedJavaScriptForMainFrameOnly={!hostedFallback} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
     onLoadEnd={event => {
       try {
         const url = new URL(event.nativeEvent.url);
@@ -114,8 +114,8 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
           if (__DEV__) console.info('Immersed playback check', v.videoId, v.status, v.reason, v.playerMessage, v.mediaError, v.readyState, v.networkState, v.hasVideo);
           return;
         }
-        if (v.type === 'captionDiagnostic' && v.videoId === currentVideo.current && [v.playerTracks, v.nativeTracks, v.visibleSegments].every(Number.isFinite) && Array.isArray(v.languages) && v.languages.length <= 8 && v.languages.every((language: unknown) => typeof language === 'string' && language.length <= 12) && typeof v.selectedJapanese === 'boolean') {
-          if (__DEV__) console.info('Immersed caption source', v.videoId, v.languages.join(','), v.nativeTracks, v.selectedJapanese, v.visibleSegments);
+        if (v.type === 'captionDiagnostic' && v.videoId === currentVideo.current && [v.playerTracks, v.nativeTracks, v.visibleSegments].every(Number.isFinite) && Array.isArray(v.languages) && v.languages.length <= 8 && v.languages.every((language: unknown) => typeof language === 'string' && language.length <= 12) && typeof v.selectedJapanese === 'boolean' && typeof v.trackUrlAvailable === 'boolean') {
+          if (__DEV__) console.info('Immersed caption source', v.videoId, v.languages.join(','), v.trackUrlAvailable, v.nativeTracks, v.selectedJapanese, v.visibleSegments);
           return;
         }
         if (v.type === 'trackFetchDiagnostic' && v.videoId === currentVideo.current && v.source === 'page' && Number.isFinite(v.status) && Number.isFinite(v.bytes) && typeof v.parsed === 'boolean') {

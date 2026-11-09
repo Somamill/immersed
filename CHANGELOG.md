@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.7.3 — 2026-11-09
+
+Restore early Japanese caption capture
+
+- Capture Japanese caption responses that arrive before the watch-page bridge starts, preserving tappable subtitles when YouTube exposes a track. Add track-source diagnostics for the iPhone.
+- Captionless videos still require audio speech recognition. This Expo preview cannot obtain YouTube audio on its cloud network; on-device recognition requires a signed iPhone build and device validation.
+
 ## 0.7.2 — 2026-11-09
 
 Restore large portrait player and retry Japanese caption formats

@@ -1,6 +1,51 @@
-// Browsing pages install this before load; watch pages wait until load so YouTube
-// initializes its player first. Only caption responses
-// are observed; audio, account traffic and unrelated requests are never captured.
+// Install this lightweight observer before the watch page loads. YouTube can
+// request timedtext before the full study bridge is ready; keep only a few
+// bounded Japanese responses until that bridge can parse them. The observer
+// leaves the player response and playback path untouched.
+export const YOUTUBE_CAPTION_PRELOAD = String.raw`(() => {
+  if (window.__immersedCaptionPreload || !/(^|\.)youtube\.com$/.test(location.hostname)) return;
+  window.__immersedCaptionPreload = true;
+  const captionUrl = input => {
+    try {
+      const url = new URL(input, location.href);
+      return url.protocol === 'https:' && /(^|\.)youtube\.com$/.test(url.hostname) && url.pathname === '/api/timedtext' && /^ja(?:-|$)/.test(url.searchParams.get('lang') || '') && (!url.searchParams.get('tlang') || /^ja(?:-|$)/.test(url.searchParams.get('tlang')));
+    } catch { return false; }
+  };
+  const receive = (url, raw) => {
+    if (!captionUrl(url) || typeof raw !== 'string' || !raw.trim() || raw.length > 2 * 1024 * 1024) return;
+    if (window.__immersedReadCaptionResponse) window.__immersedReadCaptionResponse(url, raw);
+    else {
+      const pending = window.__immersedPendingCaptions || (window.__immersedPendingCaptions = []);
+      pending.push({ url, raw });
+      if (pending.length > 3) pending.shift();
+    }
+  };
+  const originalFetch = window.fetch;
+  if (originalFetch) window.fetch = function(...args) {
+    const result = originalFetch.apply(this, args);
+    const url = typeof args[0] === 'string' || args[0] instanceof URL ? String(args[0]) : args[0]?.url;
+    if (captionUrl(url)) result.then(response => { if (response.ok) return response.clone().text().then(raw => receive(url, raw)); }).catch(() => {});
+    return result;
+  };
+  const originalOpen = XMLHttpRequest.prototype.open;
+  const urls = new WeakMap(), observed = new WeakSet();
+  XMLHttpRequest.prototype.open = function(method, url, ...rest) {
+    urls.set(this, String(url));
+    if (!observed.has(this)) {
+      observed.add(this);
+      this.addEventListener('load', () => {
+        const target = urls.get(this);
+        if (!captionUrl(target) || this.status < 200 || this.status >= 300) return;
+        try { receive(target, this.responseType === 'json' ? JSON.stringify(this.response) : this.responseText); } catch {}
+      });
+    }
+    return originalOpen.call(this, method, url, ...rest);
+  };
+})(); true;`;
+
+// The full bridge runs after load so YouTube initializes its player first.
+// Only caption responses are observed; audio, account traffic and unrelated
+// requests are never captured.
 export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
   if (!/(^|\.)youtube\.com$/.test(location.hostname)) return;
   const parentOrigin = new URL(location.href).searchParams.get('origin');
@@ -151,6 +196,8 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
       return true;
     } catch { return false; }
   };
+  for (const pending of window.__immersedPendingCaptions || []) window.__immersedReadCaptionResponse(pending.url, pending.raw);
+  window.__immersedPendingCaptions = [];
   const originalFetch = window.fetch;
   if (originalFetch) window.fetch = function(...args) {
     const result = originalFetch.apply(this, args);
@@ -241,8 +288,11 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     let url;
     try {
       url = new URL(track.baseUrl);
-      if (url.protocol !== 'https:' || !/(^|\.)youtube\.com$/.test(url.hostname) || url.pathname !== '/api/timedtext' || url.searchParams.get('v') !== videoId || !/^ja(?:-|$)/.test(url.searchParams.get('lang') || '') || (url.searchParams.get('tlang') && !/^ja(?:-|$)/.test(url.searchParams.get('tlang')))) return;
-    } catch { return; }
+      if (url.protocol !== 'https:' || !/(^|\.)youtube\.com$/.test(url.hostname) || url.pathname !== '/api/timedtext' || url.searchParams.get('v') !== videoId || !/^ja(?:-|$)/.test(url.searchParams.get('lang') || '') || (url.searchParams.get('tlang') && !/^ja(?:-|$)/.test(url.searchParams.get('tlang')))) {
+        send({ type: 'trackFetchDiagnostic', videoId, source: 'page', status: -2, bytes: 0, parsed: false });
+        return;
+      }
+    } catch { send({ type: 'trackFetchDiagnostic', videoId, source: 'page', status: -3, bytes: 0, parsed: false }); return; }
     const state = requests.get(videoId) || { attempts: 0, pending: false, ready: false, next: 0, fallback: false };
     if (state.ready || state.pending || state.attempts >= 3 || Date.now() < state.next) return;
     state.attempts++; state.pending = true; requests.set(videoId, state);
@@ -349,7 +399,7 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     if (!video) return;
     if (Date.now() - lastFrameAt > 250) emitClock(video);
     const japaneseTextTrack = [...video.textTracks].find(t => /^ja(?:-|$)/.test(t.language));
-    const diagnostic = { type: 'captionDiagnostic', videoId, playerTracks: tracks.length, languages: tracks.slice(0, 8).map(track => String(track.languageCode || '').slice(0, 12)), nativeTracks: video.textTracks.length, selectedJapanese, visibleSegments: document.querySelectorAll('.ytp-caption-segment').length };
+    const diagnostic = { type: 'captionDiagnostic', videoId, playerTracks: tracks.length, languages: tracks.slice(0, 8).map(track => String(track.languageCode || '').slice(0, 12)), trackUrlAvailable: !!chooseTrack(tracks)?.baseUrl, nativeTracks: video.textTracks.length, selectedJapanese, visibleSegments: document.querySelectorAll('.ytp-caption-segment').length };
     const diagnosticKey = JSON.stringify(diagnostic);
     if (videoId && diagnosticKey !== lastCaptionDiagnostic) { lastCaptionDiagnostic = diagnosticKey; send(diagnostic); }
     if (japaneseTextTrack && !observedTracks.has(japaneseTextTrack)) { observedTracks.add(japaneseTextTrack); japaneseTextTrack.addEventListener('cuechange', read); }
