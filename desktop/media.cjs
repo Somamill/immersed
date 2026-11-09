@@ -3,6 +3,7 @@ const path = require("node:path");
 const crypto = require("node:crypto");
 const { pipeline } = require("node:stream/promises");
 const { Transform } = require("node:stream");
+const { createTranscriptWindows } = require("./transcript-windows.cjs");
 const ALLOWED = new Set([
   ".mp4",
   ".m4v",
@@ -83,12 +84,84 @@ function createMedia({ root, run, recognize }) {
       })),
     };
   }
-  function transcript(id, quality = "balanced") {
+  const windows = createTranscriptWindows({ folder, get, recognize });
+  const coverTasks = new Map();
+  async function artwork(id) {
+    const item = get(id);
+    if (!item) throw Error("Media not found");
+    const target = path.join(folder, id + ".cover.jpg");
+    if (fs.existsSync(target)) return target;
+    if (fs.existsSync(target + ".missing")) return null;
+    if (!coverTasks.has(id))
+      coverTasks.set(
+        id,
+        (async () => {
+          try {
+            await run(
+              "ffmpeg",
+              [
+                "-v",
+                "error",
+                "-i",
+                path.join(folder, item.file),
+                "-map",
+                "0:v:0",
+                "-frames:v",
+                "1",
+                "-vf",
+                "scale=1024:1024:force_original_aspect_ratio=decrease",
+                "-q:v",
+                "2",
+                "-y",
+                target,
+              ],
+              { timeout: 30000, maxBuffer: 2000 },
+            );
+            return target;
+          } catch {
+            fs.rmSync(target, { force: true });
+            fs.writeFileSync(target + ".missing", "");
+            return null;
+          } finally {
+            coverTasks.delete(id);
+          }
+        })(),
+      );
+    return coverTasks.get(id);
+  }
+  function progress(id, data) {
+    const item = get(id);
+    if (!item) throw Error("Media not found");
+    if (data) {
+      const position = Number(data.position),
+        rate = Number(data.rate);
+      if (
+        !Number.isFinite(position) ||
+        position < 0 ||
+        position > item.duration + 1
+      )
+        throw Error("Invalid playback position");
+      const chapterIndex = (item.chapters || []).findLastIndex(
+        (c) => c.start <= position,
+      );
+      item.progress = {
+        position: Math.min(position, item.duration),
+        chapterIndex,
+        rate: [0.5, 0.75, 1, 1.25, 1.5, 2].includes(rate) ? rate : 1,
+        updatedAt: Date.now(),
+      };
+      save();
+    }
+    return item.progress || { position: 0, chapterIndex: 0, rate: 1 };
+  }
+  function transcript(id, quality = "balanced", at = 0) {
     const file = path.join(folder, id + "-" + quality + ".json");
     try {
       return { status: "ready", ...JSON.parse(fs.readFileSync(file, "utf8")) };
     } catch {
-      return jobs.get(id + ":" + quality) || { status: "idle" };
+      return get(id)?.duration > 600
+        ? windows.result(id, quality, at)
+        : jobs.get(id + ":" + quality) || { status: "idle" };
     }
   }
   async function drain() {
@@ -142,10 +215,12 @@ function createMedia({ root, run, recognize }) {
     }
     active = false;
   }
-  function start(id, retry = false, quality = "balanced") {
+  function start(id, retry = false, quality = "balanced", at = 0) {
     if (!get(id)) throw Error("Media was not found.");
     const key = id + ":" + quality,
-      current = transcript(id, quality);
+      current = transcript(id, quality, at);
+    if (get(id).duration > 600 && (current.windowed || retry))
+      return windows.start(id, quality, at, retry);
     if (current.status === "ready" && !retry) return current;
     if (!["processing", "queued"].includes(jobs.get(key)?.status)) {
       if (queue.length >= 20) throw Error("The speech queue is full.");
@@ -265,6 +340,10 @@ function createMedia({ root, run, recognize }) {
   function remove(id) {
     const item = get(id);
     if (!item) throw Error("Media was not found.");
+    if (windows.busy(id))
+      throw Error(
+        "Wait for the current minute to finish before removing this media.",
+      );
     if (
       [...jobs.entries()].some(
         ([key, job]) => key.startsWith(id + ":") && job.status === "processing",
@@ -278,6 +357,12 @@ function createMedia({ root, run, recognize }) {
     items = items.filter((x) => x.id !== id);
     save();
     fs.rmSync(path.join(folder, item.file), { force: true });
+    fs.rmSync(path.join(folder, "windows", id), {
+      recursive: true,
+      force: true,
+    });
+    for (const suffix of [".cover.jpg", ".cover.jpg.missing"])
+      fs.rmSync(path.join(folder, id + suffix), { force: true });
     for (const quality of ["balanced", "accurate"]) {
       fs.rmSync(path.join(folder, id + "-" + quality + ".json"), {
         force: true,
@@ -344,6 +429,8 @@ function createMedia({ root, run, recognize }) {
   }
   return {
     seed,
+    artwork,
+    progress,
     remove,
     list: () =>
       items.map(({ file, ...item }) => ({

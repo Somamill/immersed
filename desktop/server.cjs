@@ -27,78 +27,190 @@ const json = (res, status, value) => {
   res.end(JSON.stringify(value));
 };
 const speechChildren = new Set();
-let recognitionTail = Promise.resolve();
-function recognize(audio, onProgress = () => {}, quality = "balanced") {
-  const task = recognitionTail.then(
-    () =>
-      new Promise((resolve, reject) => {
-        const python =
-          process.env.IMMERSED_PYTHON || path.join(root, ".venv/bin/python");
-        const child = spawn(
-          python,
-          [path.join(__dirname, "transcribe.py"), audio],
-          {
-            stdio: ["ignore", "pipe", "pipe"],
-            env: { ...process.env, IMMERSED_SPEECH_QUALITY: quality },
-          },
-        );
-        speechChildren.add(child);
-        let buffer = "",
-          final,
-          stderr = "",
-          cues = [];
-        const timer = setTimeout(() => child.kill("SIGTERM"), 6 * 60 * 60_000);
-        child.stdout.setEncoding("utf8");
-        child.stderr.setEncoding("utf8");
-        child.stderr.on(
-          "data",
-          (chunk) => (stderr = (stderr + chunk).slice(-2000)),
-        );
-        child.stdout.on("data", (chunk) => {
-          buffer += chunk;
-          if (buffer.length > 20 * 1024 * 1024) {
-            child.kill();
-            return;
-          }
-          let n;
-          while ((n = buffer.indexOf("\n")) >= 0) {
-            const line = buffer.slice(0, n);
-            buffer = buffer.slice(n + 1);
-            try {
-              const m = JSON.parse(line);
-              if (m.status === "processing" && Array.isArray(m.cues)) {
-                cues = m.append ? cues.concat(m.cues) : m.cues;
-                onProgress({
-                  status: "processing",
-                  stage: "Recognizing Japanese speech on this Mac",
-                  cues,
-                  processedSeconds: m.processedSeconds,
-                  duration: m.duration,
-                });
-              }
-              if (m.status === "ready" || m.status === "unavailable") final = m;
-            } catch {}
-          }
-        });
-        child.on("error", (e) => {
-          clearTimeout(timer);
-          reject(e);
-        });
-        child.on("close", (code) => {
-          speechChildren.delete(child);
-          clearTimeout(timer);
-          if (code || final?.status !== "ready")
-            reject(
-              Error(
-                final?.error || "Speech worker stopped. " + stderr.slice(-180),
-              ),
-            );
-          else resolve(final.cues || cues);
-        });
-      }),
+let speechStopping = false;
+const speechQueue = [];
+let worker = null,
+  activeSpeech = null,
+  workerSequence = 0,
+  idleWorkerTimer = null;
+function ensureSpeechWorker() {
+  if (worker) return worker;
+  const python =
+    process.env.IMMERSED_PYTHON || path.join(root, ".venv/bin/python");
+  const child = spawn(
+    python,
+    [path.join(__dirname, "transcribe.py"), "--worker"],
+    { stdio: ["pipe", "pipe", "pipe"] },
   );
-  recognitionTail = task.catch(() => {});
-  return task;
+  worker = child;
+  speechChildren.add(child);
+  let buffer = "",
+    stderr = "";
+  child.stdin.on("error", () => {});
+  child.stdout.setEncoding("utf8");
+  child.stderr.setEncoding("utf8");
+  child.stderr.on("data", (chunk) => (stderr = (stderr + chunk).slice(-2000)));
+  child.stdout.on("data", (chunk) => {
+    buffer += chunk;
+    if (buffer.length > 20 * 1024 * 1024) {
+      child.kill();
+      return;
+    }
+    let newline;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, newline);
+      buffer = buffer.slice(newline + 1);
+      let message;
+      try {
+        message = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      const task = activeSpeech;
+      if (!task || message.id !== task.id) continue;
+      if (message.status === "processing") {
+        if (Array.isArray(message.cues))
+          task.cues = message.append
+            ? task.cues.concat(message.cues)
+            : message.cues;
+        task.progress({
+          status: "processing",
+          stage: message.stage || "Recognizing this minute on Apple Silicon",
+          phase: message.phase,
+          cues: task.cues,
+          processedSeconds: message.processedSeconds || 0,
+          duration: message.duration || task.duration,
+        });
+      } else if (
+        message.status === "ready" ||
+        message.status === "unavailable"
+      ) {
+        clearTimeout(task.timer);
+        activeSpeech = null;
+        if (message.status === "ready") task.resolve(message.cues || task.cues);
+        else task.reject(Error(message.error || "Speech recognition stopped."));
+        pumpSpeech();
+      }
+    }
+  });
+  function stopped(error) {
+    speechChildren.delete(child);
+    if (worker !== child) return;
+    worker = null;
+    const task = activeSpeech;
+    activeSpeech = null;
+    if (task) {
+      clearTimeout(task.timer);
+      task.reject(error);
+    }
+    pumpSpeech();
+  }
+  child.on("error", (error) => stopped(error));
+  child.on("close", () =>
+    stopped(Error("The speech worker stopped. " + stderr.slice(-180))),
+  );
+  return child;
+}
+function pumpSpeech() {
+  if (speechStopping || activeSpeech) return;
+  clearTimeout(idleWorkerTimer);
+  if (!speechQueue.length) {
+    idleWorkerTimer = setTimeout(() => {
+      if (!activeSpeech && worker) {
+        const old = worker;
+        worker = null;
+        speechChildren.delete(old);
+        old.kill();
+      }
+    }, 120000);
+    idleWorkerTimer.unref();
+    return;
+  }
+  speechQueue.sort((a, b) => b.priority - a.priority);
+  const task = speechQueue.shift();
+  activeSpeech = task;
+  const child = ensureSpeechWorker();
+  task.timer = setTimeout(() => {
+    if (activeSpeech === task) child.kill();
+  }, 15 * 60_000);
+  child.stdin.write(
+    JSON.stringify({
+      id: task.id,
+      audio: task.audio,
+      quality: task.quality,
+      start: task.start,
+      duration: task.duration,
+    }) + "\n",
+  );
+}
+function speechSlice(audio, progress, quality, start, duration, priority) {
+  return new Promise((resolve, reject) => {
+    if (speechStopping) return reject(Error("Speech service is stopping"));
+    speechQueue.push({
+      id: ++workerSequence,
+      audio,
+      progress,
+      quality,
+      start,
+      duration,
+      priority,
+      resolve,
+      reject,
+      cues: [],
+    });
+    pumpSpeech();
+  });
+}
+async function recognize(
+  audio,
+  onProgress = () => {},
+  quality = "balanced",
+  options = {},
+) {
+  if (Number.isFinite(options.duration))
+    return speechSlice(
+      audio,
+      onProgress,
+      quality,
+      options.start || 0,
+      options.duration,
+      options.priority || 10,
+    );
+  const { stdout } = await run(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "default=noprint_wrappers=1:nokey=1",
+      audio,
+    ],
+    { timeout: 30000, maxBuffer: 1000 },
+  );
+  const duration = Number(stdout);
+  if (!Number.isFinite(duration) || duration <= 0)
+    throw Error("Invalid audio duration");
+  const cues = [];
+  for (let start = 0; start < duration; start += 60) {
+    const next = await speechSlice(
+      audio,
+      (progress) =>
+        onProgress({
+          ...progress,
+          cues: cues.concat(progress.cues),
+          processedSeconds: start + progress.processedSeconds,
+          duration,
+        }),
+      quality,
+      start,
+      Math.min(60, duration - start),
+      0,
+    );
+    cues.push(...next);
+  }
+  return cues;
 }
 const media = createMedia({
   root: process.env.IMMERSED_DATA_ROOT || root,
@@ -321,6 +433,33 @@ async function fallback(req, res) {
     ["GET", "HEAD"].includes(req.method)
   )
     return media.serve(req, res, url.searchParams.get("id"));
+  if (url.pathname === "/api/desktop/artwork" && req.method === "GET") {
+    const cover = await media.artwork(url.searchParams.get("id"));
+    if (!cover) return json(res, 404, { error: "No embedded cover" });
+    res.writeHead(200, {
+      "Content-Type": "image/jpeg",
+      "Cache-Control": "private, max-age=86400",
+    });
+    return fs.createReadStream(cover).pipe(res);
+  }
+  if (
+    url.pathname === "/api/desktop/progress" &&
+    ["GET", "PUT"].includes(req.method)
+  ) {
+    const id = url.searchParams.get("id");
+    if (!media.get(id)) return json(res, 404, { error: "Media not found" });
+    let data;
+    if (req.method === "PUT") {
+      let body = "";
+      for await (const chunk of req) {
+        body += chunk;
+        if (body.length > 4096)
+          return json(res, 413, { error: "Progress too large" });
+      }
+      data = JSON.parse(body);
+    }
+    return json(res, 200, media.progress(id, data));
+  }
   if (url.pathname === "/api/desktop/video-info" && req.method === "GET") {
     const id = url.searchParams.get("videoId");
     if (!validId(id)) return json(res, 400, { error: "Invalid video ID" });
@@ -336,8 +475,17 @@ async function fallback(req, res) {
       res,
       200,
       req.method === "POST"
-        ? media.start(id, url.searchParams.get("retry") === "true", quality)
-        : media.transcript(id, quality),
+        ? media.start(
+            id,
+            url.searchParams.get("retry") === "true",
+            quality,
+            Number(url.searchParams.get("at")) || 0,
+          )
+        : media.transcript(
+            id,
+            quality,
+            Number(url.searchParams.get("at")) || 0,
+          ),
     );
   }
   if (url.pathname === "/api/desktop/search" && req.method === "GET") {
@@ -426,6 +574,9 @@ if (require.main === module)
     () => console.log("immersed. local service ready"),
   );
 process.once("SIGTERM", () => {
+  speechStopping = true;
+  for (const task of speechQueue.splice(0))
+    task.reject(Error("Speech service is stopping"));
   processAbort.abort();
   for (const child of speechChildren) child.kill("SIGTERM");
   server.close(() => process.exit(0));

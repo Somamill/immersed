@@ -15,7 +15,7 @@ trap cleanup EXIT HUP INT TERM
 
 mkdir -p "$applications_dir" "$staged_bundle/Contents/MacOS" "$staged_bundle/Contents/Resources"
 cp "$source_dir/desktop/macos-app/Info.plist" "$staged_bundle/Contents/Info.plist"
-xcrun swiftc -parse-as-library -O -target arm64-apple-macos13.0 -framework Cocoa -framework WebKit "$source_dir/desktop/NativeApp.swift" -o "$staged_bundle/Contents/MacOS/ImmersedMac"
+xcrun swiftc -parse-as-library -O -target arm64-apple-macos13.0 -framework Cocoa -framework WebKit -framework MediaPlayer "$source_dir/desktop/NativeApp.swift" -o "$staged_bundle/Contents/MacOS/ImmersedMac"
 cp "$source_dir/desktop/macos-app/ImmersedMac.icns" "$staged_bundle/Contents/Resources/ImmersedMac.icns"
 chmod 755 "$staged_bundle/Contents/MacOS/ImmersedMac"
 

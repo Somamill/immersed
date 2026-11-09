@@ -109,6 +109,8 @@ test("local M4B import persists chapters, supports byte seeking, and serializes 
   assert.equal(peak, 1);
   assert.equal(media.transcript(item.id).status, "ready");
   assert.equal(media.transcript(second.id).status, "ready");
+  media.progress(item.id, { position: 0.6, rate: 1.5 });
+  assert.throws(() => media.progress(item.id, { position: 9999 }), /Invalid/);
   const restored = createMedia({
     root,
     run,
@@ -117,6 +119,10 @@ test("local M4B import persists chapters, supports byte seeking, and serializes 
     },
   });
   assert.equal(restored.list().length, 2);
+  assert.equal(restored.progress(item.id).position, 0.6);
+  assert.equal(restored.progress(item.id).chapterIndex, 0);
+  assert.equal(restored.progress(item.id).rate, 1.5);
+  assert.equal(await restored.artwork(item.id), null);
   assert.equal(restored.transcript(item.id).cues[0].text, "日本語です。");
   const bad = await fetch(base + "/?name=bad.mp4", {
     method: "POST",

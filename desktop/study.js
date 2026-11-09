@@ -146,6 +146,7 @@ function seekTo(t) {
   void renderCue();
 }
 function stopMedia() {
+  void flushPlayback();
   clearTimeout(pollTimer);
   clearTimeout(hoverTimer);
   clearTimeout(leaveTimer);
@@ -153,6 +154,15 @@ function stopMedia() {
   renderGeneration++;
   pause();
   if (localMedia) {
+    for (const event of [
+      "timeupdate",
+      "pause",
+      "play",
+      "ratechange",
+      "seeked",
+      "loadedmetadata",
+    ])
+      localMedia["on" + event] = null;
     localMedia.removeAttribute("src");
     localMedia.load();
   }
@@ -279,11 +289,103 @@ async function refreshLibrary() {
   library = (await api("desktop/library")).items;
   return library;
 }
+let localWindow = -1,
+  prefetchedWindow = -1,
+  progressWrite = 0;
+function updateChapter() {
+  if (!source?.chapters?.length) return;
+  const index = source.chapters.findLastIndex((c) => c.start <= currentTime());
+  if (index >= 0) $("chapterSelect").selectedIndex = index;
+}
+async function flushPlayback() {
+  if (!source) return;
+  const position = currentTime();
+  positions[source.type + ":" + source.id] = position;
+  try {
+    localStorage.setItem("immersed.positions", JSON.stringify(positions));
+  } catch {}
+  if (source.type !== "local" || !localMedia || localMedia.readyState < 1)
+    return;
+  const id = source.id,
+    rate = localMedia.playbackRate;
+  const response = await fetch(
+    "/api/desktop/progress?id=" + encodeURIComponent(id),
+    {
+      method: "PUT",
+      headers: { "X-Immersed-Request": "1" },
+      body: JSON.stringify({ position, rate }),
+      keepalive: true,
+    },
+  ).catch(() => null);
+  if (!response?.ok)
+    status(
+      "Listening position could not be saved. Keep this window open and try again.",
+      true,
+    );
+}
+window.flushPlayback = flushPlayback;
+window.immersedPlayback = (action, value) => {
+  if (action === "play") play();
+  else if (action === "pause") pause();
+  else if (action === "toggle") playing() ? pause() : play();
+  else if (action === "seek") seekTo(value);
+  else if (action === "skip") seekTo(currentTime() + value);
+};
+function playbackChanged(force = false) {
+  updateChapter();
+  window.webkit?.messageHandlers?.immersed?.postMessage({
+    action: "playback",
+    title: source?.title || "",
+    position: currentTime(),
+    duration: localMedia?.duration || 0,
+    rate: localMedia?.playbackRate || 1,
+    playing: playing(),
+  });
+  if (force || Date.now() - progressWrite > 5000) {
+    progressWrite = Date.now();
+    void flushPlayback();
+  }
+  if (
+    source?.type === "local" &&
+    source.duration > 600 &&
+    localMedia?.readyState >= 1
+  ) {
+    const minute = Math.floor(currentTime() / 60);
+    if (minute !== localWindow) {
+      localWindow = minute;
+      requestGeneration++;
+      clearTimeout(pollTimer);
+      void beginTranscript();
+    } else if (
+      playing() &&
+      currentTime() % 60 > 30 &&
+      prefetchedWindow !== minute + 1 &&
+      (minute + 1) * 60 < source.duration
+    ) {
+      prefetchedWindow = minute + 1;
+      void api(
+        "desktop/local-transcript",
+        { id: source.id, quality: extras.speechQuality, at: (minute + 1) * 60 },
+        "POST",
+      ).catch(() => {});
+    }
+  }
+}
+document.addEventListener("visibilitychange", () => void flushPlayback());
+window.addEventListener("pagehide", () => void flushPlayback());
 async function openLocal(id, time = null) {
   const item = (await refreshLibrary()).find((x) => x.id === id);
   if (!item) throw Error("This media is no longer in the library.");
   stopMedia();
-  source = { type: "local", id, title: item.title };
+  source = {
+    type: "local",
+    id,
+    title: item.title,
+    duration: item.duration,
+    chapters: item.chapters,
+  };
+  localWindow = -1;
+  prefetchedWindow = -1;
   $("sourceBadge").textContent =
     item.kind === "audio" ? "AUDIOBOOK / AUDIO" : "LOCAL VIDEO";
   const media = document.createElement(
@@ -292,10 +394,25 @@ async function openLocal(id, time = null) {
   media.controls = true;
   media.preload = "metadata";
   media.src = "/api/desktop/media?id=" + encodeURIComponent(id);
-  media.playbackRate = Number($("speed").value);
+  media.playbackRate = item.progress?.rate || Number($("speed").value);
+  $("speed").value = String(media.playbackRate);
   media.onloadedmetadata = () => {
-    const resume = time ?? positions["local:" + id] ?? 0;
+    const resume =
+      time ?? item.progress?.position ?? positions["local:" + id] ?? 0;
     if (resume && resume < media.duration - 1) media.currentTime = resume;
+    localWindow = Math.floor(media.currentTime / 60);
+    playbackChanged(true);
+    void beginTranscript();
+  };
+  media.ontimeupdate = () => playbackChanged();
+  media.onpause =
+    media.onplay =
+    media.onratechange =
+      () => playbackChanged(true);
+  media.onseeked = () => {
+    cueIndex = -1;
+    void renderCue();
+    playbackChanged(true);
   };
   media.onerror = () =>
     status(
@@ -304,6 +421,17 @@ async function openLocal(id, time = null) {
     );
   if (item.kind === "audio") {
     const box = el("div", null, "audioBook");
+    const cover = el("img", null, "bookCover"),
+      background = el("img", null, "bookBackdrop");
+    cover.alt = "Audiobook cover";
+    background.alt = "";
+    cover.src = background.src =
+      "/api/desktop/artwork?id=" + encodeURIComponent(id);
+    cover.onerror = () => {
+      cover.remove();
+      background.remove();
+    };
+    box.append(background, cover);
     box.append(
       el("h2", item.title),
       el(
@@ -328,7 +456,6 @@ async function openLocal(id, time = null) {
     $("chapterSelect").onchange = () =>
       seekTo(Number($("chapterSelect").value));
   }
-  void beginTranscript();
   closePanel();
 }
 window.openLocalMedia = (id, time = null) =>
@@ -339,7 +466,7 @@ async function beginTranscript(retry = false) {
   const generation = requestGeneration;
   const params =
     source.type === "local"
-      ? { id: source.id, quality: extras.speechQuality }
+      ? { id: source.id, quality: extras.speechQuality, at: currentTime() }
       : { videoId: source.id, quality: extras.speechQuality };
   if (retry) params.retry = "true";
   const route =
@@ -362,21 +489,32 @@ async function pollTranscript(route, params, generation) {
   try {
     const data = await api(route, params);
     if (generation !== requestGeneration) return;
-    if (Array.isArray(data.cues) && data.cues.length) {
+    if (Array.isArray(data.cues) && (data.cues.length || data.windowed)) {
       const previousText = cues[cueIndex]?.text;
       cues = data.cues;
+      if (!cues.length) $("subtitles").textContent = "Listening…";
       if (cues[cueIndex]?.text !== previousText) cueIndex = -1;
       void renderCue();
       $("count").textContent =
-        (data.status === "ready" ? "" : "Preparing · ") +
+        (data.windowed
+          ? "Current section · "
+          : data.status === "ready"
+            ? ""
+            : "Preparing · ") +
         cues.length +
         " segments";
     }
     if (data.status === "ready") {
       status(
-        data.source === "authored" || data.source === "youtube"
-          ? "Japanese captions supplied with the media"
-          : "Generated Japanese transcript · verify uncertain words against the audio",
+        data.windowed
+          ? "Subtitles ready for " +
+              formatDuration(data.rangeStart) +
+              "–" +
+              formatDuration(data.rangeEnd) +
+              " · generated on this Mac"
+          : data.source === "authored" || data.source === "youtube"
+            ? "Japanese captions supplied with the media"
+            : "Generated Japanese transcript · verify uncertain words against the audio",
       );
       $("retry").hidden = false;
       $("compare").hidden =
@@ -1090,7 +1228,9 @@ async function compareTranscript() {
     baseline = [...cues],
     quality = extras.speechQuality === "accurate" ? "balanced" : "accurate",
     params = {
-      ...(source.type === "local" ? { id: source.id } : { videoId: source.id }),
+      ...(source.type === "local"
+        ? { id: source.id, at: currentTime() }
+        : { videoId: source.id }),
       quality,
     },
     route =

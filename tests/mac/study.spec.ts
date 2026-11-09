@@ -199,3 +199,93 @@ test("near-N1 screenshot passage stays quiet and manual unknown uses an underlin
   await expect(marked).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(marked).toHaveCSS("text-decoration-line", "underline");
 });
+
+test("audiobook cover, chapter, speed and listening position survive reopening", async ({
+  page,
+  request,
+}) => {
+  const folder = fs.mkdtempSync(path.join(os.tmpdir(), "immersed-resume-"));
+  try {
+    const cover = path.join(folder, "cover.jpg"),
+      metadata = path.join(folder, "chapters.txt"),
+      audio = path.join(folder, "resume.m4b");
+    execFileSync("ffmpeg", [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "color=c=blue:s=200x200",
+      "-frames:v",
+      "1",
+      cover,
+    ]);
+    fs.writeFileSync(
+      metadata,
+      ";FFMETADATA1\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=0\nEND=5000\ntitle=第一章\n[CHAPTER]\nTIMEBASE=1/1000\nSTART=5000\nEND=12000\ntitle=第二章\n",
+    );
+    execFileSync("ffmpeg", [
+      "-v",
+      "error",
+      "-f",
+      "lavfi",
+      "-i",
+      "sine=frequency=440:duration=12",
+      "-i",
+      cover,
+      "-i",
+      metadata,
+      "-map",
+      "0:a",
+      "-map",
+      "1:v",
+      "-map_chapters",
+      "2",
+      "-c:a",
+      "aac",
+      "-c:v",
+      "copy",
+      "-disposition:v",
+      "attached_pic",
+      audio,
+    ]);
+    const response = await request.post("/api/desktop/import?name=resume.m4b", {
+      headers: { "X-Immersed-Request": "1" },
+      data: fs.readFileSync(audio),
+    });
+    expect(response.ok()).toBe(true);
+    const item = await response.json();
+    await page.route("**/api/desktop/local-transcript?**", (route) =>
+      route.fulfill({
+        json: { status: "ready", cues: [], source: "generated" },
+      }),
+    );
+    await page.goto("/");
+    await page.evaluate((id) => (window as any).openLocalMedia(id), item.id);
+    await expect.poll(()=>page.locator("audio").evaluate((a:HTMLAudioElement)=>a.readyState)).toBeGreaterThanOrEqual(1);
+    await expect
+      .poll(() =>
+        page
+          .locator(".bookCover")
+          .evaluate((img: HTMLImageElement) => img.naturalWidth),
+      )
+      .toBeGreaterThan(0);
+    await page.locator("audio").evaluate((audio: HTMLAudioElement) => {
+      audio.currentTime = 7;
+      audio.playbackRate = 1.5;
+    });
+    await page.evaluate(() => (window as any).flushPlayback());
+    await expect(page.locator("#chapterSelect")).toHaveValue("5");
+    await page.reload();
+    await page.evaluate((id) => (window as any).openLocalMedia(id), item.id);
+    await expect
+      .poll(() =>
+        page.locator("audio").evaluate((a: HTMLAudioElement) => a.currentTime),
+      )
+      .toBeCloseTo(7, 0);
+    await expect(page.locator("audio")).toHaveJSProperty("playbackRate", 1.5);
+    await expect(page.locator("#chapterSelect")).toHaveValue("5");
+  } finally {
+    fs.rmSync(folder, { recursive: true, force: true });
+  }
+});

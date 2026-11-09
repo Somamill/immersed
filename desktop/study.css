@@ -605,3 +605,40 @@ dialog::backdrop {
   background: #34583d10;
   color: inherit;
 }
+
+.audioBook {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 340px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.audioBook .bookBackdrop {
+  position: absolute;
+  inset: -40px;
+  width: calc(100% + 80px);
+  height: calc(100% + 80px);
+  object-fit: cover;
+  filter: blur(32px) brightness(0.28);
+  z-index: -1;
+  pointer-events: none;
+}
+.audioBook .bookCover {
+  width: 180px;
+  height: 180px;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 8px 28px #0008;
+}
+.audioBook h2 {
+  position: relative;
+  font-size: 18px;
+  text-align: center;
+}
+.audioBook audio {
+  width: min(100%, 600px);
+}

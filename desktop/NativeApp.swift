@@ -1,5 +1,6 @@
 import Cocoa
 import WebKit
+import MediaPlayer
 import UniformTypeIdentifiers
 
 @MainActor
@@ -13,12 +14,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     var webViews: [WKWebView] = []
     var adRules: WKContentRuleList?
     var pendingFiles: [URL] = []
+    var terminating = false
     var ready = false
     let home = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Immersed Mac")
     var blockAds: Bool { UserDefaults.standard.object(forKey: "blockAds") as? Bool ?? true }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
+        setupPlaybackCommands()
         web = makeWebView()
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 860), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "immersed."
@@ -56,6 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         let file = submenu("File")
         item(file, "Open video or audiobook…", #selector(openMedia), "o")
         item(file, "Library", #selector(library), "2")
+        item(file, "Close window", #selector(closeStudy), "w")
         let edit = submenu("Edit")
         for (title, action, key) in [("Undo", "undo:", "z"), ("Copy", "copy:", "c"), ("Paste", "paste:", "v"), ("Cut", "cut:", "x"), ("Select All", "selectAll:", "a")] {
             edit.addItem(withTitle: title, action: Selector(action), keyEquivalent: key)
@@ -85,7 +89,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
             if blockAds, let rules = adRules { view.configuration.userContentController.add(rules) }
         }
     }
-    @objc func showStudy() { window.makeKeyAndOrderFront(nil); if !ready { connect() } }
+    @objc func closeStudy() { window.close() }
+    @objc func showStudy() { window.deminiaturize(nil); window.makeKeyAndOrderFront(nil); if !ready { connect() } }
     @objc func focusSearch() { showStudy(); web.evaluateJavaScript("document.getElementById('query')?.focus()", completionHandler: nil) }
     @objc func settings() { showStudy(); web.evaluateJavaScript("window.showSettings?.()", completionHandler: nil) }
     @objc func library() { showStudy(); web.evaluateJavaScript("window.showLibrary?.()", completionHandler: nil) }
@@ -135,6 +140,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
               let object = message.body as? [String: Any], let action = object["action"] as? String else { return }
         if action == "blockAds", let enabled = object["enabled"] as? Bool {
             UserDefaults.standard.set(enabled, forKey: "blockAds"); updateAdRules()
+        } else if action == "playback" {
+            let position = object["position"] as? Double ?? 0
+            let duration = object["duration"] as? Double ?? 0
+            let playing = object["playing"] as? Bool ?? false
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = [
+                MPMediaItemPropertyTitle: object["title"] as? String ?? "immersed.",
+                MPMediaItemPropertyPlaybackDuration: duration.isFinite ? duration : 0,
+                MPNowPlayingInfoPropertyElapsedPlaybackTime: position,
+                MPNowPlayingInfoPropertyPlaybackRate: playing ? (object["rate"] as? Double ?? 1) : 0
+            ]
+            MPNowPlayingInfoCenter.default().playbackState = playing ? .playing : .paused
         } else if action == "openMedia" { openMedia() }
         else if action == "exportSettings", let text = object["text"] as? String, text.utf8.count <= 5 * 1024 * 1024 {
             let panel = NSSavePanel(); panel.nameFieldStringValue = "immersed-settings.json"; panel.allowedContentTypes = [.json]
@@ -227,7 +243,43 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         if let url = navigationAction.request.url { if webView === web { openBrowser(url) } else { webView.load(URLRequest(url: url)) } }
         return nil
     }
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
+    func setupPlaybackCommands() {
+        let commands = MPRemoteCommandCenter.shared()
+        func command(_ command: MPRemoteCommand, _ action: String) {
+            command.addTarget { [weak self] _ in
+                Task { @MainActor in self?.web.evaluateJavaScript("window.immersedPlayback?.('\(action)')", completionHandler: nil) }
+                return .success
+            }
+        }
+        command(commands.playCommand, "play")
+        command(commands.pauseCommand, "pause")
+        command(commands.togglePlayPauseCommand, "toggle")
+        commands.skipForwardCommand.preferredIntervals = [15]
+        commands.skipBackwardCommand.preferredIntervals = [15]
+        for (command, offset) in [(commands.skipForwardCommand, 15), (commands.skipBackwardCommand, -15)] {
+            command.addTarget { [weak self] _ in
+                Task { @MainActor in self?.web.evaluateJavaScript("window.immersedPlayback?.('skip',\(offset))", completionHandler: nil) }
+                return .success
+            }
+        }
+        commands.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            let position = event.positionTime
+            Task { @MainActor in self?.web.evaluateJavaScript("window.immersedPlayback?.('seek',\(position))", completionHandler: nil) }
+            return .success
+        }
+    }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showStudy(); return true }
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if terminating { return .terminateNow }
+        terminating = true
+        var replied = false
+        let finish = { if !replied { replied = true; sender.reply(toApplicationShouldTerminate: true) } }
+        web.callAsyncJavaScript("return await window.flushPlayback?.()", arguments: [:], in: nil, in: .page) { _ in finish() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: finish)
+        return .terminateLater
+    }
     func applicationWillTerminate(_ notification: Notification) { if service?.isRunning == true { service?.terminate() } }
 }
 @main

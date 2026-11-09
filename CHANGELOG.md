@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.9.2 — 2026-11-10
+
+Faster audiobooks and reliable listening progress
+
+- Long audiobooks prepare one-minute subtitle sections at the current listening position, cache partial work and reuse the Apple Silicon speech model. Position, chapter and speed are saved locally. Embedded covers form the audio background, and playback continues when the Mac window is closed, with native media controls. Newly selected sections still need local recognition; speech accuracy depends on the recording. iCloud sync still requires Apple signing.
+
 ## 0.9.1 — 2026-11-10
 
 Quiet advanced-level subtitle highlighting

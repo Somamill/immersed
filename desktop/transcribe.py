@@ -80,33 +80,53 @@ def is_silent(path):
     return not samples or max(abs(x) for x in samples) <= 1
 
 
-def transcribe(path):
+def transcribe(path, start=0, span=None, emit=None):
+    if emit is None:
+        output = sys.stdout
+        emit = lambda message: print(json.dumps(message, ensure_ascii=False), file=output, flush=True)
     duration = float(subprocess.check_output(['ffprobe', '-v', 'error', '-show_entries',
         'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', path], text=True))
     if not math.isfinite(duration) or duration <= 0:
         raise ValueError('The audio duration is invalid.')
+    start = max(0, min(float(start), duration))
+    stop = min(duration, start + float(span)) if span is not None else duration
     run, cues = None, []
     with tempfile.TemporaryDirectory(prefix='immersed-mac-asr-') as folder:
-        for offset in range(0, math.ceil(duration), 30):
+        for relative in range(0, math.ceil(stop-start), 30):
+            offset = start + relative
             chunk = str(Path(folder) / 'speech.wav')
-            subprocess.run(['ffmpeg', '-v', 'error', '-ss', str(offset), '-t', str(min(30, duration-offset)),
+            subprocess.run(['ffmpeg', '-v', 'error', '-ss', str(offset), '-t', str(min(30, stop-offset)),
                             '-i', path, '-ac', '1', '-ar', '16000', '-c:a', 'pcm_s16le', '-y', chunk], check=True)
             new_cues = []
             if not is_silent(chunk):
                 with redirect_stdout(sys.stderr):
                     if run is None:
+                        emit({'status':'processing','phase':'loading','stage':'Loading the local speech model','cues':[],'append':True,'processedSeconds':relative,'duration':stop-start})
                         run = recognizer()
                     for segment in run(chunk):
                         new_cues.extend(segment_cues(segment, offset, duration))
             cues.extend(new_cues)
-            print(json.dumps({'status': 'processing', 'cues': new_cues, 'append': True,
-                              'processedSeconds': min(duration, offset+30), 'duration': duration}, ensure_ascii=False), flush=True)
+            emit({'status': 'processing', 'phase':'recognizing', 'cues': new_cues, 'append': True,
+                  'processedSeconds': min(stop, offset+30)-start, 'duration': stop-start})
     return cues
 
 
 if __name__ == '__main__':
-    try:
-        cues = transcribe(sys.argv[1])
-        print(json.dumps({'status': 'ready', 'cues': cues}, ensure_ascii=False), flush=True)
-    except Exception as error:
-        print(json.dumps({'status': 'unavailable', 'error': type(error).__name__ + ': ' + str(error)[:160]}), flush=True)
+    if len(sys.argv)>1 and sys.argv[1]=='--worker':
+        for line in sys.stdin:
+            try:
+                request=json.loads(line)
+                job_id=request['id']
+                os.environ['IMMERSED_SPEECH_QUALITY']=request.get('quality','balanced')
+                def emit(message):
+                    print(json.dumps({**message,'id':job_id},ensure_ascii=False),file=sys.__stdout__,flush=True)
+                cues=transcribe(request['audio'],request.get('start',0),request.get('duration'),emit)
+                emit({'status':'ready','cues':cues})
+            except Exception as error:
+                print(json.dumps({'id':request.get('id') if 'request' in locals() else None,'status':'unavailable','error':type(error).__name__+': '+str(error)[:160]}),flush=True)
+    else:
+        try:
+            cues=transcribe(sys.argv[1],float(sys.argv[2]) if len(sys.argv)>2 else 0,float(sys.argv[3]) if len(sys.argv)>3 else None)
+            print(json.dumps({'status':'ready','cues':cues},ensure_ascii=False),flush=True)
+        except Exception as error:
+            print(json.dumps({'status':'unavailable','error':type(error).__name__+': '+str(error)[:160]}),flush=True)
