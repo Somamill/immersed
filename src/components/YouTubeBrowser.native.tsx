@@ -12,7 +12,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
   const initial = youtubeUrl(uri);
   const [playerId, setPlayerId] = useState<string | null>(initial ? new URL(initial).searchParams.get('v') : null);
   const [hostedFallback, setHostedFallback] = useState(false);
-  const [fillPortrait, setFillPortrait] = useState(false);
+  const [fillPortrait, setFillPortrait] = useState(true);
   const web = useRef<WebView<object>>(null);
   const previewHost = Constants.expoConfig?.hostUri;
   const hostedSource = useMemo(() => {
@@ -31,7 +31,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     const canonical = youtubeUrl(url);
     const id = canonical ? new URL(canonical).searchParams.get('v') : null;
     if (!id && playerId) return;
-    if (id && id !== playerId) { setFillPortrait(false); setHostedFallback(false); setPlayerId(id); }
+    if (id && id !== playerId) { setFillPortrait(true); setHostedFallback(false); setPlayerId(id); }
     if (currentVideo.current !== id) { pendingTrack.current?.abort(); currentVideo.current = id; }
     onPage?.(url);
   };
@@ -53,11 +53,12 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
       target.searchParams.set('fmt', 'json3');
       try {
         const response = await fetch(target.toString(), { signal: controller.signal });
-        if (!response.ok) return;
+        if (!response.ok) { if (__DEV__) console.info('Immersed track fetch', videoId, 'native', response.status, 0); return; }
         const cues = parseCaptionTrack(await response.json());
+        if (__DEV__) console.info('Immersed track fetch', videoId, 'native', response.status, cues.length);
         if (!controller.signal.aborted && currentVideo.current === videoId && cues.length) onTranscript?.(cues, videoId, source);
       } finally { clearTimeout(timer); if (pendingTrack.current === controller) { pendingTrack.current = null; pendingRank.current = 0; } }
-    } catch { /* Expired or inaccessible tracks fall back to visible captions. */ }
+    } catch { if (__DEV__) console.info('Immersed track fetch', videoId, 'native', 'failed'); /* Expired or inaccessible tracks fall back to visible captions. */ }
   };
   useImperativeHandle(ref, () => ({
     back: () => { if (!playerId && canGoBack.current) web.current?.goBack(); },
@@ -113,8 +114,12 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
           if (__DEV__) console.info('Immersed playback check', v.videoId, v.status, v.reason, v.playerMessage, v.mediaError, v.readyState, v.networkState, v.hasVideo);
           return;
         }
-        if (v.type === 'captionDiagnostic' && v.videoId === currentVideo.current && [v.playerTracks, v.nativeTracks, v.visibleSegments].every(Number.isFinite) && typeof v.selectedJapanese === 'boolean') {
-          if (__DEV__) console.info('Immersed caption source', v.videoId, v.playerTracks, v.nativeTracks, v.selectedJapanese, v.visibleSegments);
+        if (v.type === 'captionDiagnostic' && v.videoId === currentVideo.current && [v.playerTracks, v.nativeTracks, v.visibleSegments].every(Number.isFinite) && Array.isArray(v.languages) && v.languages.length <= 8 && v.languages.every((language: unknown) => typeof language === 'string' && language.length <= 12) && typeof v.selectedJapanese === 'boolean') {
+          if (__DEV__) console.info('Immersed caption source', v.videoId, v.languages.join(','), v.nativeTracks, v.selectedJapanese, v.visibleSegments);
+          return;
+        }
+        if (v.type === 'trackFetchDiagnostic' && v.videoId === currentVideo.current && v.source === 'page' && Number.isFinite(v.status) && Number.isFinite(v.bytes) && typeof v.parsed === 'boolean') {
+          if (__DEV__) console.info('Immersed track fetch', v.videoId, 'page', v.status, v.bytes, v.parsed);
           return;
         }
         if (v.type === 'captionData' && v.language === 'ja' && typeof v.videoId === 'string' && v.videoId === currentVideo.current) {

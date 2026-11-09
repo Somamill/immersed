@@ -470,6 +470,32 @@ test('a verified Japanese player track exposes rendered captions without a lang 
   await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string; text?: string }[] }).messages.some(message => message.type === 'caption' && message.text === '今日は旅行です。'))).toBe(true);
 });
 
+test('a blank JSON3 response retries the original Japanese caption format', async ({ page }) => {
+  await page.route('https://m.youtube.com/watch?**', route => route.fulfill({ contentType: 'text/html', body: '<div id="movie_player"><video></video></div>' }));
+  await page.route('https://m.youtube.com/api/timedtext?**', route => route.fulfill({ contentType: 'text/xml', body: new URL(route.request().url()).searchParams.has('fmt') ? '' : '<timedtext><text start="1" dur="2">今日は旅行です。</text></timedtext>' }));
+  await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
+  await page.evaluate(() => {
+    const host = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (raw: string) => void } };
+    host.messages = []; host.ReactNativeWebView = { postMessage: raw => host.messages.push(JSON.parse(raw)) };
+    (document.getElementById('movie_player') as HTMLElement & { getPlayerResponse: () => unknown }).getPlayerResponse = () => ({ videoDetails: { videoId: 'M7lc1UVf-VE' }, captions: { playerCaptionsTracklistRenderer: { captionTracks: [{ languageCode: 'ja', baseUrl: 'https://m.youtube.com/api/timedtext?v=M7lc1UVf-VE&lang=ja' }] } } });
+  });
+  await page.addScriptTag({ content: CAPTION_BRIDGE });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string; data?: unknown }[] }).messages.find(message => message.type === 'captionData')?.data)).toBeTruthy();
+  const report = await page.evaluate(() => (window as unknown as { messages: { type: string; parsed?: boolean }[] }).messages.filter(message => message.type === 'trackFetchDiagnostic').map(message => message.parsed));
+  expect(report).toEqual([false, true]);
+});
+
+test('watch-page portrait fill enlarges the video and pinch-fit restores the full frame', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<meta name="viewport" content="width=device-width,initial-scale=1"><ytm-player><div id="movie_player"><video class="html5-main-video" style="object-fit:contain"></video></div></ytm-player>' }));
+  await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
+  await page.evaluate(() => { (window as unknown as { __immersedOptions: unknown }).__immersedOptions = { dark: true, hideShorts: true, minimumMinutes: 0, fillPortrait: true }; });
+  await page.addScriptTag({ content: CAPTION_BRIDGE });
+  await expect(page.locator('video')).toHaveCSS('object-fit', 'cover');
+  await expect(page.locator('#movie_player')).toHaveCSS('height', '844px');
+  await page.evaluate(() => { const host = window as unknown as { __immersedOptions: { fillPortrait: boolean }; __immersedApplyOptions: () => void }; host.__immersedOptions.fillPortrait = false; host.__immersedApplyOptions(); });
+  await expect(page.locator('video')).toHaveCSS('object-fit', 'contain');
+});
+
 test('YouTube browsing removes the duplicate bottom bar and its reserved space', async ({ page }) => {
   await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;padding-bottom:56px}ytm-app{display:block;padding-bottom:56px}ytm-pivot-bar-renderer{display:block;position:fixed;bottom:0;height:56px;width:100%}</style><ytm-app><main>Browse content</main><ytm-pivot-bar-renderer>Home · You</ytm-pivot-bar-renderer></ytm-app>' }));
   await page.goto('https://m.youtube.com/results?search_query=test');
@@ -1160,7 +1186,7 @@ test('the video does not resize when changing between short and long subtitle li
   await page.getByRole('button',{name:'Go',exact:true}).click();
   await expect(page.getByRole('button',{name:'Look up はい',exact:true})).toBeVisible({timeout:12000});
   const before = await page.getByTestId('video-surface').boundingBox();
-  expect(before!.height).toBeLessThan(270);
+  expect(before!.height).toBeGreaterThan(350);
   const reading = await page.getByTestId('subtitle-panel').boundingBox();
   expect(Math.abs((before!.y + before!.height) - reading!.y)).toBeLessThan(2);
   await page.getByRole('button',{name:'Next sentence',exact:true}).click();

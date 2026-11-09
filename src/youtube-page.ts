@@ -15,6 +15,7 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
   css.textContent = 'html[data-immersed-dark] { color-scheme:dark!important; background:#000!important; --yt-spec-base-background:#000!important; --yt-spec-raised-background:#171717!important; --yt-spec-menu-background:#171717!important; --yt-spec-general-background-a:#000!important; --yt-spec-general-background-b:#000!important; --yt-spec-text-primary:#eee!important; --yt-spec-text-secondary:#aaa!important; --yt-spec-brand-background-primary:#000!important; --yt-spec-brand-background-secondary:#171717!important; --yt-spec-brand-background-solid:#000!important; } html[data-immersed-dark] body, html[data-immersed-dark] ytm-app, html[data-immersed-dark] ytm-search, html[data-immersed-dark] ytm-mobile-topbar-renderer, html[data-immersed-dark] ytm-header-bar, html[data-immersed-dark] ytm-searchbox, html[data-immersed-dark] .searchbox-input, html[data-immersed-dark] .pivot-bar-renderer { background-color:#000!important; color:#eee!important; } html[data-immersed-embed] video.html5-main-video { width:100vw!important; height:100vh!important; top:0!important; left:0!important; object-fit:contain!important; background:#000!important; } html[data-immersed-embed][data-immersed-fill] video.html5-main-video { width:100vw!important; height:100vh!important; top:0!important; left:0!important; object-fit:cover!important; } html[data-immersed-browse], html[data-immersed-browse] body { margin-bottom:0!important; padding-bottom:0!important; min-height:100vh!important; } html[data-immersed-browse] ytm-app, html[data-immersed-browse] ytm-search, html[data-immersed-browse] ytm-browse { padding-bottom:0!important; min-height:100vh!important; } html[data-immersed-browse] ytm-pivot-bar-renderer, html[data-immersed-browse] .pivot-bar-renderer { display:none!important; } html[data-immersed-watch] .ytp-caption-window-container, html[data-immersed-watch] .ytp-caption-window-container *, html[data-immersed-watch] .ytp-caption-segment, html[data-immersed-watch] .captions-text { visibility:hidden!important; pointer-events:none!important; } [data-immersed-short], [data-immersed-duration] { display:none!important; }';
   css.textContent += ' html[data-immersed-watch] ytm-mobile-topbar-renderer, html[data-immersed-watch] ytm-slim-video-metadata-renderer, html[data-immersed-watch] ytm-slim-owner-renderer, html[data-immersed-watch] ytm-slim-metadata-button-renderer, html[data-immersed-watch] ytm-comment-section-renderer, html[data-immersed-watch] ytm-comments-entry-point-header-renderer, html[data-immersed-watch] ytm-watch-next-secondary-results-renderer { display:none!important; } html[data-immersed-watch], html[data-immersed-watch] body { overflow:hidden!important; }';
   css.textContent += ' html[data-immersed-watch] [data-immersed-focus-hidden] { display:none!important; }';
+  css.textContent += ' html[data-immersed-watch][data-immersed-fill] [data-immersed-player-chain] { width:100vw!important; height:100vh!important; max-height:none!important; aspect-ratio:auto!important; overflow:visible!important; } html[data-immersed-watch][data-immersed-fill] video.html5-main-video { width:100vw!important; height:100vh!important; top:0!important; left:0!important; object-fit:cover!important; background:#000!important; }';
   let preferenceDark;
   const flag = (root, name, enabled) => {
     if (enabled && !root.hasAttribute(name)) root.setAttribute(name, '');
@@ -22,16 +23,20 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
   };
   const focusWatchPlayer = () => {
     const hidden = new Set();
+    const chain = new Set();
     if (location.pathname === '/watch') {
       const visibleVideo = [...document.querySelectorAll('video')].find(video => video.getClientRects().length);
       const player = visibleVideo?.closest('#movie_player') || document.querySelector('#movie_player, ytm-player');
       for (let branch = player; branch?.parentElement && branch !== document.body; branch = branch.parentElement) {
+        chain.add(branch);
         for (const sibling of branch.parentElement.children) {
           if (sibling !== branch && !['SCRIPT', 'STYLE', 'TEMPLATE'].includes(sibling.tagName)) hidden.add(sibling);
         }
       }
     }
     document.querySelectorAll('[data-immersed-focus-hidden]').forEach(node => flag(node, 'data-immersed-focus-hidden', hidden.has(node)));
+    document.querySelectorAll('[data-immersed-player-chain]').forEach(node => flag(node, 'data-immersed-player-chain', chain.has(node)));
+    chain.forEach(node => flag(node, 'data-immersed-player-chain', true));
     hidden.forEach(node => flag(node, 'data-immersed-focus-hidden', true));
   };
   const durationSeconds = input => {
@@ -246,10 +251,18 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     try {
       // Fetch in the page session first: copying the signed URL to native fetch
       // loses cookies/origin context and can return a successful but empty body.
+      const original = url.toString();
       url.searchParams.set('fmt', 'json3');
-      const response = await fetch(url.toString(), { credentials: 'include', signal: controller.signal });
-      if (response.ok) state.ready = window.__immersedReadCaptionResponse(url.toString(), await response.text(), track.kind === 'asr' ? 'youtube-asr' : 'human');
-    } catch {} finally {
+      for (const candidate of new Set([url.toString(), original])) {
+        if (state.ready) break;
+        try {
+          const response = await fetch(candidate, { credentials: 'include', signal: controller.signal });
+          const body = response.ok ? await response.text() : '';
+          if (response.ok) state.ready = window.__immersedReadCaptionResponse(candidate, body, track.kind === 'asr' ? 'youtube-asr' : 'human');
+          send({ type: 'trackFetchDiagnostic', videoId, source: 'page', status: response.status, bytes: body.length, parsed: state.ready });
+        } catch { send({ type: 'trackFetchDiagnostic', videoId, source: 'page', status: 0, bytes: 0, parsed: false }); }
+      }
+    } catch { send({ type: 'trackFetchDiagnostic', videoId, source: 'page', status: 0, bytes: 0, parsed: false }); } finally {
       clearTimeout(timer); state.pending = false; state.next = Date.now() + state.attempts * 2000;
       if (!state.ready && !state.fallback && currentId() === videoId) { state.fallback = true; send({ type: 'captionTrack', language: 'ja', source: track.kind === 'asr' ? 'youtube-asr' : 'human', videoId, url: track.baseUrl }); }
     }
@@ -336,7 +349,7 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     if (!video) return;
     if (Date.now() - lastFrameAt > 250) emitClock(video);
     const japaneseTextTrack = [...video.textTracks].find(t => /^ja(?:-|$)/.test(t.language));
-    const diagnostic = { type: 'captionDiagnostic', videoId, playerTracks: tracks.length, nativeTracks: video.textTracks.length, selectedJapanese, visibleSegments: document.querySelectorAll('.ytp-caption-segment').length };
+    const diagnostic = { type: 'captionDiagnostic', videoId, playerTracks: tracks.length, languages: tracks.slice(0, 8).map(track => String(track.languageCode || '').slice(0, 12)), nativeTracks: video.textTracks.length, selectedJapanese, visibleSegments: document.querySelectorAll('.ytp-caption-segment').length };
     const diagnosticKey = JSON.stringify(diagnostic);
     if (videoId && diagnosticKey !== lastCaptionDiagnostic) { lastCaptionDiagnostic = diagnosticKey; send(diagnostic); }
     if (japaneseTextTrack && !observedTracks.has(japaneseTextTrack)) { observedTracks.add(japaneseTextTrack); japaneseTextTrack.addEventListener('cuechange', read); }

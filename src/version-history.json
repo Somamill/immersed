@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.7.2",
+    "date": "2026-11-09",
+    "title": "Restore large portrait player and retry Japanese caption formats",
+    "notes": [
+      "Restore the earlier tall video area and default zoomed portrait playback; pinch inward fits the complete frame and outward fills the viewing area.",
+      "Try both JSON3 and the original Japanese track format when YouTube returns an empty caption response, and log track languages and fetch outcomes for iPhone diagnosis.",
+      "Videos without an accessible Japanese track still need speech recognition. This preview cloud receives proxy 403 for YouTube audio; the on-device prototype requires an Apple-signed build and is not available in Expo Go."
+    ]
+  },
+  {
     "version": "0.7.1",
     "date": "2026-11-09",
     "title": "Recover verified Japanese caption text without DOM language tags",
