@@ -20,6 +20,8 @@ class ImmersedMac < Formula
   def caveats
     <<~EOS
       Start Immersed with: immersed-mac
+      The first launch also installs Immersed Mac.app in ~/Applications so it
+      can be opened from Finder, Spotlight, or Launchpad.
       First launch installs the local dictionary and speech model. A video must
       allow playback and local audio access for transcription to work.
     EOS

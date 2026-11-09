@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.8.2",
+    "date": "2026-11-09",
+    "title": "Add a searchable Mac app launcher",
+    "notes": [
+      "Create Immersed Mac.app in ~/Applications on first launch so the Homebrew install is visible in Finder, Spotlight, and Launchpad. The app launcher reuses the local service when it is already running.",
+      "Keep the app as an unsigned launcher for the browser-based Mac prototype; this does not add a signed native app or DMG."
+    ]
+  },
+  {
     "version": "0.8.1",
     "date": "2026-11-09",
     "title": "Show Mac subtitle chunks and iPhone–Mac artwork",

@@ -5,6 +5,9 @@ app_home="$HOME/Library/Application Support/Immersed Mac"
 mkdir -p "$app_home"
 rsync -a --exclude node_modules --exclude .git --exclude .data --exclude .venv --exclude dist --exclude test-results "$source_dir/" "$app_home/"
 cd "$app_home"
+if [ -f desktop/install-app.sh ]; then
+  /bin/sh desktop/install-app.sh "$app_home"
+fi
 version="$(node -p "require('./package.json').version")"
 if [ ! -d node_modules ] || [ ! -f .installed-version ] || [ "$(cat .installed-version)" != "$version" ]; then
   npm ci --omit=dev

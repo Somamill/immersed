@@ -93,7 +93,7 @@ The optional acoustic alignment pass uses real audio to place selected words; it
 
 ## Try the Mac transcription draft
 
-On macOS, the companion runs a local Whisper speech model and shows generated Japanese subtitles alongside video and clickable dictionary lookup. See the [Mac install and current limits](docs/MACOS.md), including the Homebrew command. The Mac build has not yet been run on physical macOS hardware.
+On macOS, the companion runs a local Whisper speech model and shows generated Japanese subtitles alongside video and clickable dictionary lookup. The first Homebrew launch creates an **Immersed Mac.app** in `~/Applications`, so you can find it in Finder, Spotlight, or Launchpad. See the [Mac install and current limits](docs/MACOS.md), including the Homebrew command. The Mac build has not yet been run on physical macOS hardware.
 
 ## Try it on your iPhone
 

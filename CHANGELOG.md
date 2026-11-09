@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.8.2 — 2026-11-09
+
+Add a searchable Mac app launcher
+
+- Create Immersed Mac.app in ~/Applications on first launch so the Homebrew install is visible in Finder, Spotlight, and Launchpad. The app launcher reuses the local service when it is already running.
+- Keep the app as an unsigned launcher for the browser-based Mac prototype; this does not add a signed native app or DMG.
+
 ## 0.8.1 — 2026-11-09
 
 Show Mac subtitle chunks and iPhone–Mac artwork
