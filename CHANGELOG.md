@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.6.7 — 2026-11-09
+
+Try HTTPS YouTube player when iPhone watch playback fails
+
+- When YouTube marks a public watch video unplayable in the iPhone WebView, try its official iframe player from the Expo preview's HTTPS origin, with a referrer and Japanese caption preferences.
+- Playback and clickable subtitles in the fallback still require verification on an iPhone. YouTube can restrict embedding, and videos without Japanese tracks still need a supported transcription source; this preview cannot guarantee every video.
+- The HTTPS fallback currently uses the live Expo preview origin and requires permanent hosting before production release.
+
 ## 0.6.6 — 2026-11-09
 
 Keep YouTube player in focus

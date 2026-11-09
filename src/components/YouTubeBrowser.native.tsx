@@ -1,5 +1,6 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { watchPlayerSource } from '../player';
+import { hostedPlayerSource, watchPlayerSource } from '../player';
+import Constants from 'expo-constants';
 import { WebView } from 'react-native-webview';
 import { japaneseCaptionUrl, parseCaptionTrack, captionSourceRank, type CaptionSource } from '../captions';
 import history from '../version-history.json';
@@ -10,9 +11,15 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
   // its props to never under TS 6 strict mode. Explicit object preserves props.
   const initial = youtubeUrl(uri);
   const [playerId, setPlayerId] = useState<string | null>(initial ? new URL(initial).searchParams.get('v') : null);
+  const [hostedFallback, setHostedFallback] = useState(false);
   const [fillPortrait, setFillPortrait] = useState(false);
   const web = useRef<WebView<object>>(null);
-  const source = useMemo(() => playerId ? watchPlayerSource(playerId) : { uri }, [playerId, uri]);
+  const previewHost = Constants.expoConfig?.hostUri;
+  const hostedSource = useMemo(() => {
+    if (!playerId || !previewHost) return null;
+    try { return hostedPlayerSource(playerId, previewHost); } catch { return null; }
+  }, [playerId, previewHost]);
+  const source = useMemo(() => playerId ? hostedFallback && hostedSource ? hostedSource : watchPlayerSource(playerId) : { uri }, [playerId, uri, hostedFallback, hostedSource]);
   const optionsScript = `window.__immersedOptions = ${JSON.stringify({ dark, hideShorts, minimumMinutes, fillPortrait })}; window.__immersedApplyOptions?.(); true;`;
   useEffect(() => { web.current?.injectJavaScript(optionsScript); }, [optionsScript]);
   const currentVideo = useRef<string | null>(playerId);
@@ -24,7 +31,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     const canonical = youtubeUrl(url);
     const id = canonical ? new URL(canonical).searchParams.get('v') : null;
     if (!id && playerId) return;
-    if (id && id !== playerId) { setFillPortrait(false); setPlayerId(id); }
+    if (id && id !== playerId) { setFillPortrait(false); setHostedFallback(false); setPlayerId(id); }
     if (currentVideo.current !== id) { pendingTrack.current?.abort(); currentVideo.current = id; }
     onPage?.(url);
   };
@@ -58,7 +65,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
       web.current?.injectJavaScript(`window.__immersedCommand?.(${JSON.stringify(command)}, ${Number.isFinite(time) ? time : 'null'}); true;`);
     },
   }));
-  return <WebView<object> key={`${history[0].version}:${playerId || 'browse'}`} ref={web} source={source} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo injectedJavaScriptBeforeContentLoaded={playerId ? undefined : optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
+  return <WebView<object> key={`${history[0].version}:${playerId || 'browse'}:${hostedFallback ? 'hosted' : 'watch'}`} ref={web} source={source} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo injectedJavaScriptBeforeContentLoaded={playerId ? undefined : optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} injectedJavaScriptForMainFrameOnly={!hostedFallback} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
     onLoadEnd={event => {
       try {
         const url = new URL(event.nativeEvent.url);
@@ -71,6 +78,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
       try {
         const u = new URL(request.url);
         if (u.protocol !== 'https:') return false;
+        if (hostedFallback && hostedSource && request.url === hostedSource.uri) return true;
         if (isYouTubeSignInUrl(u.toString())) { explainYouTubeSignIn(u.toString()); return false; }
         if (hideShorts && u.pathname.startsWith('/shorts/')) return false;
         if (!/(^|\.)youtube\.com$/.test(u.hostname)) return false;
@@ -94,6 +102,10 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
           return;
         }
         if (v.type === 'playbackDiagnostic' && v.videoId === currentVideo.current && typeof v.status === 'string' && typeof v.reason === 'string' && typeof v.playerMessage === 'string' && typeof v.hasVideo === 'boolean' && [v.mediaError, v.readyState, v.networkState].every(Number.isFinite)) {
+          if (v.status === 'UNPLAYABLE' && !hostedFallback && hostedSource) {
+            if (__DEV__) console.info('Immersed switching to HTTPS player', v.videoId);
+            setHostedFallback(true);
+          }
           onPlaybackDiagnostic?.({ videoId: v.videoId, status: v.status.slice(0, 40), reason: v.reason.slice(0, 160), playerMessage: v.playerMessage.slice(0, 160), mediaError: v.mediaError, readyState: v.readyState, networkState: v.networkState, hasVideo: v.hasVideo });
           if (__DEV__) console.info('Immersed playback check', v.videoId, v.status, v.reason, v.playerMessage, v.mediaError, v.readyState, v.networkState, v.hasVideo);
           return;

@@ -7,7 +7,7 @@ import { restorePreferences } from '../src/preferences';
 import { estimateVocabulary, sampleCaptionVocabulary } from '../src/coverage';
 import type { AnalyzedToken } from '../src/language';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
-import { watchPlayerSource, swipeAction } from '../src/player';
+import { hostedPlayerSource, watchPlayerSource, swipeAction } from '../src/player';
 import { familiarity, showFurigana } from '../src/learning';
 import { combineCaptionTracks, validCaptionCues, allowLiveCaptionFallback, readingTimeline, japaneseCaptionUrl, parseCaptionTrack, readingCue, normalizeJapaneseCaption, captionSourceRank, sentenceTarget } from '../src/captions';
 import { automaticRetryDelay } from '../src/subtitle-policy';
@@ -206,6 +206,21 @@ test('selected videos use the normal Japanese YouTube watch page', () => {
   expect(url.pathname).toBe('/watch');
   expect(url.searchParams.get('v')).toBe('M7lc1UVf-VE');
   expect(url.searchParams.get('hl')).toBe('ja');
+});
+
+test('HTTPS fallback embeds the selected video with an origin referrer', async ({ page }) => {
+  const hosted = hostedPlayerSource('M7lc1UVf-VE', 'c-preview.on.expo.app');
+  expect(hosted.uri).toBe('https://c-preview.on.expo.app/youtube-player.html?v=M7lc1UVf-VE');
+  expect(() => hostedPlayerSource('M7lc1UVf-VE', 'evil.example')).toThrow();
+  let embedReferer = '';
+  await page.route('https://www.youtube.com/embed/**', route => {
+    embedReferer = route.request().headers()['referer'] || '';
+    return route.fulfill({ contentType: 'text/html', body: '<body>video loaded</body>' });
+  });
+  await page.goto('/youtube-player.html?v=M7lc1UVf-VE');
+  await expect(page.frameLocator('iframe').locator('body')).toHaveText('video loaded');
+  expect(embedReferer).toBe('http://127.0.0.1:8082/');
+  expect(await page.locator('iframe').getAttribute('src')).toContain('cc_lang_pref=ja');
 });
 
 test('swipes reject taps/diagonals and select unambiguous player actions', () => {
