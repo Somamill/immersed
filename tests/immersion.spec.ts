@@ -7,7 +7,7 @@ import { restorePreferences } from '../src/preferences';
 import { estimateVocabulary, sampleCaptionVocabulary } from '../src/coverage';
 import type { AnalyzedToken } from '../src/language';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../src/youtube';
-import { embeddedPlayerSource, swipeAction } from '../src/player';
+import { watchPlayerSource, swipeAction } from '../src/player';
 import { familiarity, showFurigana } from '../src/learning';
 import { combineCaptionTracks, validCaptionCues, allowLiveCaptionFallback, readingTimeline, japaneseCaptionUrl, parseCaptionTrack, readingCue, normalizeJapaneseCaption, captionSourceRank, sentenceTarget } from '../src/captions';
 import { automaticRetryDelay } from '../src/subtitle-policy';
@@ -199,14 +199,13 @@ test('caption controls ignore hidden video elements without modifying player lay
   await expect(page.locator('#hidden')).not.toHaveAttribute('data-paused-by-app', 'yes');
 });
 
-test('dedicated embedded player requests Japanese captions and identifies the actual host app', () => {
-  const source = embeddedPlayerSource('M7lc1UVf-VE', 'host.exp.Exponent');
+test('selected videos use the normal Japanese YouTube watch page', () => {
+  const source = watchPlayerSource('M7lc1UVf-VE');
   const url = new URL(source.uri);
-  expect(url.pathname).toBe('/embed/M7lc1UVf-VE');
-  expect(url.searchParams.get('controls')).toBe('0');
-  expect(url.searchParams.get('cc_load_policy')).toBe('1');
-  expect(url.searchParams.get('cc_lang_pref')).toBe('ja');
-  expect(source.headers.Referer).toBe('https://host.exp.exponent');
+  expect(url.hostname).toBe('m.youtube.com');
+  expect(url.pathname).toBe('/watch');
+  expect(url.searchParams.get('v')).toBe('M7lc1UVf-VE');
+  expect(url.searchParams.get('hl')).toBe('ja');
 });
 
 test('swipes reject taps/diagonals and select unambiguous player actions', () => {
@@ -431,13 +430,13 @@ test('an explicit embedded-player error is reported without navigating to a watc
   expect(page.url()).toContain('/embed/M7lc1UVf-VE');
 });
 
-test('a normal watch page keeps only the video in view and reports a confirmed player error', async ({ page }) => {
+test('a normal watch page is left to YouTube rather than redirected on a player error', async ({ page }) => {
   await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<div id="movie_player"><div class="ytp-error-content-wrap">Playback is unavailable</div></div><div id="comments">Comments</div>' }));
   await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
   await page.evaluate(() => { const w = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (raw: string) => void } }; w.messages = []; w.ReactNativeWebView = { postMessage: raw => w.messages.push(JSON.parse(raw)) }; });
   await page.addScriptTag({ content: CAPTION_BRIDGE });
-  await expect(page.locator('#movie_player')).toHaveCSS('position', 'fixed');
-  expect(await page.evaluate(() => (window as unknown as { messages: { type: string; videoId?: string }[] }).messages.filter(m => m.type === 'playerError'))).toEqual([{ type: 'playerError', videoId: 'M7lc1UVf-VE' }]);
+  await expect(page.locator('#movie_player')).not.toHaveCSS('position', 'fixed');
+  expect(await page.evaluate(() => (window as unknown as { messages: { type: string; videoId?: string }[] }).messages.filter(m => m.type === 'playerError'))).toEqual([]);
 });
 
 test('navigation uses large labelled icons with an active state and no visible text tabs', async ({ page }) => {

@@ -1,21 +1,18 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import * as Application from 'expo-application';
-import { embeddedPlayerSource } from '../player';
+import { watchPlayerSource } from '../player';
 import { WebView } from 'react-native-webview';
 import { japaneseCaptionUrl, parseCaptionTrack, captionSourceRank, type CaptionSource } from '../captions';
 import history from '../version-history.json';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, isYouTubeSignInUrl, youtubeUrl } from '../youtube';
 import type { BrowserHandle, BrowserProps } from './YouTubeBrowser';
-export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, minimumMinutes = 0, onCaption, onError, onPlayerBlocked, onPage, onClock, onTranscript }, ref) {
+export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, minimumMinutes = 0, onCaption, onError, onPage, onClock, onTranscript }, ref) {
   // WebView 14 defaults its extra-props generic to undefined, which intersects
   // its props to never under TS 6 strict mode. Explicit object preserves props.
   const initial = youtubeUrl(uri);
   const [playerId, setPlayerId] = useState<string | null>(initial ? new URL(initial).searchParams.get('v') : null);
-  const [watchPageFallback, setWatchPageFallback] = useState(false);
-  const [embedReady, setEmbedReady] = useState(false);
   const [fillPortrait, setFillPortrait] = useState(false);
   const web = useRef<WebView<object>>(null);
-  const source = useMemo(() => playerId ? watchPageFallback ? { uri: `https://m.youtube.com/watch?v=${playerId}&hl=ja` } : embeddedPlayerSource(playerId, Application.applicationId || 'com.somamill.immersed') : { uri }, [playerId, uri, watchPageFallback]);
+  const source = useMemo(() => playerId ? watchPlayerSource(playerId) : { uri }, [playerId, uri]);
   const optionsScript = `window.__immersedOptions = ${JSON.stringify({ dark, hideShorts, minimumMinutes, fillPortrait })}; window.__immersedApplyOptions?.(); true;`;
   useEffect(() => { web.current?.injectJavaScript(optionsScript); }, [optionsScript]);
   const currentVideo = useRef<string | null>(playerId);
@@ -27,7 +24,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
     const canonical = youtubeUrl(url);
     const id = canonical ? new URL(canonical).searchParams.get('v') : null;
     if (!id && playerId) return;
-    if (id && id !== playerId) { setEmbedReady(false); setFillPortrait(false); setWatchPageFallback(false); setPlayerId(id); }
+    if (id && id !== playerId) { setFillPortrait(false); setPlayerId(id); }
     if (currentVideo.current !== id) { pendingTrack.current?.abort(); currentVideo.current = id; }
     onPage?.(url);
   };
@@ -61,8 +58,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
       web.current?.injectJavaScript(`window.__immersedCommand?.(${JSON.stringify(command)}, ${Number.isFinite(time) ? time : 'null'}); true;`);
     },
   }));
-  return <WebView<object> key={`${history[0].version}:${playerId || 'browse'}:${watchPageFallback ? 'watch' : 'embed'}`} ref={web} source={source} style={{ flex: 1, opacity: playerId && !embedReady ? 0 : 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo={false} injectedJavaScriptBeforeContentLoaded={optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
-    onLoad={event => { try { const url = new URL(event.nativeEvent.url); if (url.pathname === `/embed/${currentVideo.current}` || (watchPageFallback && url.pathname === '/watch' && url.searchParams.get('v') === currentVideo.current)) setEmbedReady(true); } catch {} }}
+  return <WebView<object> key={`${history[0].version}:${playerId || 'browse'}`} ref={web} source={source} style={{ flex: 1, backgroundColor: dark ? '#000' : '#fff' }} containerStyle={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#000' : '#fff' }} contentInsetAdjustmentBehavior="never" automaticallyAdjustContentInsets={false} contentInset={{ top: 0, left: 0, right: 0, bottom: 0 }} forceDarkOn={dark} allowsInlineMediaPlayback mediaPlaybackRequiresUserAction={false} allowsFullscreenVideo={false} injectedJavaScriptBeforeContentLoaded={optionsScript + YOUTUBE_BOOTSTRAP} injectedJavaScript={optionsScript + CAPTION_BRIDGE} allowsPictureInPictureMediaPlayback onContentProcessDidTerminate={() => web.current?.reload()}
     onNavigationStateChange={state => { canGoBack.current = state.canGoBack; if (state.url !== 'about:blank') pageChanged(state.url); }} onLoadStart={() => { onCaption(null); onError(''); }} onError={event => onError(event.nativeEvent.description)}
     onShouldStartLoadWithRequest={request => {
       if (request.url === 'about:blank' || request.isTopFrame === false) return true;
@@ -74,10 +70,10 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
         if (!/(^|\.)youtube\.com$/.test(u.hostname)) return false;
         const watch = youtubeUrl(request.url);
         const id = watch ? new URL(watch).searchParams.get('v') : null;
-        if (id && !u.pathname.startsWith('/embed/') && !(watchPageFallback && id === playerId && u.pathname === '/watch')) {
+        if (id && id !== playerId) {
           pageChanged(watch!); setPlayerId(id); return false;
         }
-        if (playerId && !u.pathname.startsWith('/embed/') && !(watchPageFallback && id === playerId && u.pathname === '/watch')) return false;
+        if (playerId && !(id === playerId && u.pathname === '/watch')) return false;
         return true;
       } catch { return false; }
     }}
@@ -89,11 +85,6 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
         if (v.type === 'page' && typeof v.url === 'string') {
           const url = new URL(v.url);
           if (url.protocol === 'https:' && ['youtube.com', 'www.youtube.com', 'm.youtube.com'].includes(url.hostname)) pageChanged(url.toString());
-          return;
-        }
-        if (v.type === 'playerError' && v.videoId === currentVideo.current) {
-          if (!watchPageFallback) { setEmbedReady(false); setWatchPageFallback(true); }
-          else onPlayerBlocked?.(v.videoId);
           return;
         }
         if (v.type === 'captionData' && v.language === 'ja' && typeof v.videoId === 'string' && v.videoId === currentVideo.current) {

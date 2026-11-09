@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.6.4 — 2026-11-09
+
+Use YouTube watch pages for playback
+
+- Open videos directly on YouTube's normal mobile watch page so creator-disabled embeds do not bounce learners back to discovery.
+- Keep the site's player layout intact, while retaining Japanese subtitle capture and study controls.
+- YouTube can still restrict private, region-limited or account-required videos; captionless transcription remains limited by source-audio access.
+
 ## 0.6.3 — 2026-11-09
 
 Restore playback for videos that block embedding
