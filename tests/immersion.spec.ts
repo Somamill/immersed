@@ -458,6 +458,18 @@ test('switching to Japanese waits for the previous English line to be replaced',
   await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { text?: string; language?: string }[] }).messages.some(m => m.text === '日本語の字幕です。' && m.language === 'ja'))).toBe(true);
 });
 
+test('a verified Japanese player track exposes rendered captions without a lang attribute', async ({ page }) => {
+  await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html; charset=utf-8', body: '<div id="movie_player"><video></video><div class="caption-window"><span class="ytp-caption-segment">今日は旅行です。</span></div></div>' }));
+  await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
+  await page.evaluate(() => {
+    const host = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (raw: string) => void } };
+    host.messages = []; host.ReactNativeWebView = { postMessage: raw => host.messages.push(JSON.parse(raw)) };
+    (document.getElementById('movie_player') as HTMLElement & { getOption: () => unknown }).getOption = () => ({ languageCode: 'ja' });
+  });
+  await page.addScriptTag({ content: CAPTION_BRIDGE });
+  await expect.poll(() => page.evaluate(() => (window as unknown as { messages: { type: string; text?: string }[] }).messages.some(message => message.type === 'caption' && message.text === '今日は旅行です。'))).toBe(true);
+});
+
 test('YouTube browsing removes the duplicate bottom bar and its reserved space', async ({ page }) => {
   await page.route('https://m.youtube.com/**', route => route.fulfill({ contentType: 'text/html', body: '<meta name="viewport" content="width=device-width, initial-scale=1"><style>body{margin:0;padding-bottom:56px}ytm-app{display:block;padding-bottom:56px}ytm-pivot-bar-renderer{display:block;position:fixed;bottom:0;height:56px;width:100%}</style><ytm-app><main>Browse content</main><ytm-pivot-bar-renderer>Home · You</ytm-pivot-bar-renderer></ytm-app>' }));
   await page.goto('https://m.youtube.com/results?search_query=test');

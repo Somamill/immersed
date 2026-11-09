@@ -176,7 +176,7 @@ export const YOUTUBE_BOOTSTRAP = String.raw`(() => {
 export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
   if (window.__immersedBridge || !/(^|\.)youtube\.com$/.test(location.hostname)) return;
   window.__immersedBridge = true;
-  let last = '', lastHref = location.href, lastVideo = null, captionText = '', captionTime = 0, clock = 0, lastModuleAttempt = 0, lastTrackChoice = 0, lastErrorVideo = null, lastPlaybackReport = '', staleCaptionText = null;
+  let last = '', lastHref = location.href, lastVideo = null, captionText = '', captionTime = 0, clock = 0, lastModuleAttempt = 0, lastTrackChoice = 0, lastErrorVideo = null, lastPlaybackReport = '', lastCaptionDiagnostic = '', staleCaptionText = null;
   const requests = new Map();
   const send = value => window.__immersedPost(value);
   window.addEventListener('message', event => {
@@ -336,6 +336,9 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     if (!video) return;
     if (Date.now() - lastFrameAt > 250) emitClock(video);
     const japaneseTextTrack = [...video.textTracks].find(t => /^ja(?:-|$)/.test(t.language));
+    const diagnostic = { type: 'captionDiagnostic', videoId, playerTracks: tracks.length, nativeTracks: video.textTracks.length, selectedJapanese, visibleSegments: document.querySelectorAll('.ytp-caption-segment').length };
+    const diagnosticKey = JSON.stringify(diagnostic);
+    if (videoId && diagnosticKey !== lastCaptionDiagnostic) { lastCaptionDiagnostic = diagnosticKey; send(diagnostic); }
     if (japaneseTextTrack && !observedTracks.has(japaneseTextTrack)) { observedTracks.add(japaneseTextTrack); japaneseTextTrack.addEventListener('cuechange', read); }
     // Native tracks stay active for cue timing, without an on-video overlay.
     // Every other track is disabled rather than allowing a preferred English CC.
@@ -347,8 +350,9 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     if (japaneseTextTrack?.activeCues) text = [...japaneseTextTrack.activeCues].map(cue => cue.text || '').join('').trim();
     if (!text && selectedJapanese) {
       const root = player || video.closest('.html5-video-player') || document;
-      // Read only a confirmed Japanese track after any old language is replaced.
-      const candidate = readCaptionText(root, true);
+      // The selected player track confirms Japanese. YouTube often omits a lang
+      // attribute on the rendered fragments, so do not discard those fragments.
+      const candidate = readCaptionText(root);
       if (staleCaptionText === null || candidate !== staleCaptionText) { text = candidate; staleCaptionText = null; }
     }
     if (text && text !== captionText) { captionText = text; captionTime = video.currentTime || 0; }

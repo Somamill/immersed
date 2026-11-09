@@ -113,6 +113,10 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
           if (__DEV__) console.info('Immersed playback check', v.videoId, v.status, v.reason, v.playerMessage, v.mediaError, v.readyState, v.networkState, v.hasVideo);
           return;
         }
+        if (v.type === 'captionDiagnostic' && v.videoId === currentVideo.current && [v.playerTracks, v.nativeTracks, v.visibleSegments].every(Number.isFinite) && typeof v.selectedJapanese === 'boolean') {
+          if (__DEV__) console.info('Immersed caption source', v.videoId, v.playerTracks, v.nativeTracks, v.selectedJapanese, v.visibleSegments);
+          return;
+        }
         if (v.type === 'captionData' && v.language === 'ja' && typeof v.videoId === 'string' && v.videoId === currentVideo.current) {
           const cues = parseCaptionTrack(v.data);
           if (cues.length) onTranscript?.(cues, v.videoId, v.source === 'human' || v.source === 'youtube-asr' ? v.source : 'unknown');

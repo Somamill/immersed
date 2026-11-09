@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.7.1",
+    "date": "2026-11-09",
+    "title": "Recover verified Japanese caption text without DOM language tags",
+    "notes": [
+      "When YouTube confirms its selected track is Japanese, use rendered caption fragments even if YouTube omits lang attributes; retain guards against English or translated track fallback.",
+      "Add source diagnostics to distinguish missing YouTube caption tracks from a blocked transcription worker on real iPhones. The earlier audio-transcription pipeline was not removed; this preview server still receives proxy 403 when it requests YouTube audio.",
+      "Captionless videos in Expo Go still need a reachable audio source; the native local-caption prototype requires a signed iPhone build."
+    ]
+  },
+  {
     "version": "0.7.0",
     "date": "2026-11-09",
     "title": "Prototype on-device Japanese captions from iPhone app audio",
