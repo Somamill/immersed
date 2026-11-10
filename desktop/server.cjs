@@ -6,6 +6,7 @@ const { execFile, spawn } = require("node:child_process");
 const { promisify } = require("node:util");
 const { createMedia } = require("./media.cjs");
 const { createSearch } = require("./search.cjs");
+const { createCaptionFrames } = require("./caption-frames.cjs");
 const { parseYouTubeCaptions } = require("./captions.cjs");
 const api = require("../server/middleware.cjs");
 const processAbort = new AbortController();
@@ -18,6 +19,7 @@ const run = (file, args, options = {}) =>
     ".data/mac-transcripts-v2",
   );
 fs.mkdirSync(cache, { recursive: true });
+const captionFrames = createCaptionFrames({ run, root: path.join(process.env.IMMERSED_DATA_ROOT || root, ".data/caption-frames") });
 const jobs = new Map(),
   validId = (id) => /^[A-Za-z0-9_-]{11}$/.test(id || "");
 const json = (res, status, value) => {
@@ -456,6 +458,12 @@ async function fallback(req, res) {
       url.searchParams.get("name") || "",
     );
     return json(res, 201, item);
+  }
+  if (url.pathname === "/api/desktop/caption-frames" && req.method === "GET") {
+    const id = url.searchParams.get("videoId"), at = Number(url.searchParams.get("at"));
+    if (!validId(id) || !Number.isFinite(at) || at < 0 || at > 86400) return json(res, 400, { error: "Invalid frame position" });
+    try { return json(res, 200, await captionFrames.sample(id, at)); }
+    catch { return json(res, 503, { error: "Video frames unavailable" }); }
   }
   if (url.pathname === "/api/desktop/download" && req.method === "POST") {
     const id = url.searchParams.get("videoId");

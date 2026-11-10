@@ -42,7 +42,7 @@
         <div class="videoFooter">
           <span class="badge" id="sourceBadge">LOCAL STUDY</span
           ><span id="status" role="status">Ready when you are</span
-          ><button id="download" hidden>Download for offline</button>
+          ><button id="download" hidden aria-label="Save video for offline playback" title="Save this video to Library to watch without internet"><span aria-hidden="true">⇩</span> <span id="downloadLabel">Save offline</span></button>
         </div>
         <div id="chapters" hidden>
           <label
@@ -71,31 +71,30 @@
             </div>
             <button id="closeLookup" aria-label="Close lookup">✕</button>
           </div>
+          <div class="lookupBody">
           <div id="grammar" class="hint"></div>
+          <div id="phraseMeaning" class="phraseMeaning" hidden></div>
           <div id="contextMeaning" class="contextMeaning" hidden aria-live="polite"></div>
           <div class="definitions" id="definitions"></div>
           <div id="alternatives" class="hint"></div>
-          <button id="known">Mark known</button
+          </div>
+          <div class="lookupActions"><button id="known">Mark known</button
           ><button id="saveWord">Save word</button
-          ><button id="speak">Pronounce</button>
+          ><button id="speak">Pronounce</button></div>
         </div>
-        <div class="controls">
-          <button class="control" id="previous" aria-label="Previous sentence">
-            ↶</button
+        <div class="controls" id="controls">
+          <button class="control" id="previous" aria-label="Previous subtitle" title="Previous subtitle · ←">
+            ‹</button
           ><button class="control play" id="play" aria-label="Play or pause">
             ▶</button
-          ><button class="control" id="next" aria-label="Next sentence">
-            ↷</button
-          ><label class="hint"
-            >Speed
-            <select id="speed">
-              <option>0.75</option>
-              <option selected>1</option>
-              <option>1.25</option>
-              <option>1.5</option>
-              <option>2</option>
-            </select></label
-          >
+          ><button class="control" id="next" aria-label="Next subtitle" title="Next subtitle · →">
+            ›</button
+          > <div class="speedControl">
+            <button id="speed" class="speedButton" aria-label="Playback speed" title="Playback speed" aria-haspopup="menu" aria-expanded="false">
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 18a9 9 0 1 1 16 0M12 12l5-5"/><circle cx="12" cy="12" r="2"/></svg><span id="speedValue">1×</span>
+            </button>
+            <div id="speedMenu" class="speedMenu" role="menu" aria-label="Playback speed" hidden></div>
+          </div>
         </div>
       </section>
     </main>

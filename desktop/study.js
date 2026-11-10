@@ -36,6 +36,7 @@ let extras = {
     blockAds: true,
     originalOnly: true,
     hoverLookup: true,
+    screenCaptionCheck: true,
     pauseOnHover: true,
     speechQuality: "balanced",
     playbackRate: 1,
@@ -52,8 +53,12 @@ let localMedia = null,
   requestGeneration = 0,
   selected = null,
   lookupEntries = [],
+  lookupMeaning = "",
   lookupPinned = false,
   resumeAfterLookup = false,
+  resumePending = false,
+  lookupAnchor = null,
+  cueSeek = null,
   hoverTimer = null,
   leaveTimer = null,
   levels = {},
@@ -67,6 +72,59 @@ if (!read("immersed.kanjiDefault", false)) {
     localStorage.setItem("immersed.mac.options", JSON.stringify(extras));
   } catch {}
 }
+const screenCaptions = read("immersed.screenCaptions", {});
+const screenFrames = new Map();
+let transcriptKind = "generated", lastScreenScan = 0;
+function screenCaptionKey(cue) { return [source?.id, extras.speechQuality, cue.start.toFixed(2), cue.end.toFixed(2)].join(":"); }
+function restoredScreenCaption(cue) {
+  const stored = screenCaptions[screenCaptionKey(cue)];
+  return stored?.original === cue.text ? { ...cue, text: stored.text, asrText: cue.text, screenVerified: true } : cue;
+}
+function scanCurrentVideoCaption(now) {
+  if (!extras.screenCaptionCheck || !document.hasFocus() || selected || !window.webkit?.messageHandlers?.immersed || source?.type !== "youtube" || !["generated", "youtube-asr"].includes(transcriptKind) || document.visibilityState === "hidden" || now - lastScreenScan < 900) return;
+  const cue = cues[cueIndex];
+  if (!cue || cue.screenVerified || (playing() && currentTime() - cue.start < 0.2)) return;
+  const key = requestGeneration + ":" + screenCaptionKey(cue);
+  let frame = screenFrames.get(key);
+  if (!frame) {
+    frame = { cue, original: cue.text, attempts: 0, confirmations: 0, pending: false, complete: false };
+    screenFrames.set(key, frame);
+  }
+  if (frame.pending || frame.complete || frame.attempts >= 4) return;
+  const rect = $("video").getBoundingClientRect();
+  if (rect.width < 100 || rect.height < 50) return;
+  frame.pending = true; frame.attempts++;
+  lastScreenScan = now;
+  window.webkit.messageHandlers.immersed.postMessage({ action: "captionFrame", key,
+    videoId: source.id, at: cue.start + Math.min(0.8, (cue.end - cue.start) * 0.4) });
+  setTimeout(() => { frame.pending = false; }, 22000);
+}
+window.immersedVideoText = async (key, lines) => {
+  const frame = screenFrames.get(key);
+  if (!frame || !Array.isArray(lines) || !key.startsWith(requestGeneration + ":")) return;
+  if (!extras.screenCaptionCheck || selected) { frame.pending = false; return; }
+  try {
+    const result = await api("immersion/screen-caption", { sentence: frame.original, lines: JSON.stringify(lines) });
+    if (!screenFrames.has(key)) return;
+    frame.responses = (frame.responses || 0) + 1;
+    if (frame.responses >= 2) frame.complete = true;
+    if (!result.match) return;
+    frame.confirmations = frame.text === result.match.text ? frame.confirmations + 1 : 1;
+    frame.text = result.match.text;
+    if (frame.confirmations < 2) return;
+    frame.complete = true;
+    const index = cues.findIndex(c => c.start === frame.cue.start && (c.text === frame.original || c.asrText === frame.original));
+    if (index < 0) return;
+    const correction = { original: frame.original, text: frame.text };
+    screenCaptions[screenCaptionKey(cues[index])] = correction;
+    const keys = Object.keys(screenCaptions);
+    for (const old of keys.slice(0, Math.max(0, keys.length - 800))) delete screenCaptions[old];
+    try { localStorage.setItem("immersed.screenCaptions", JSON.stringify(screenCaptions)); } catch {}
+    cues[index] = { ...cues[index], screenText: frame.text, asrText: frame.original, screenVerified: true };
+    if (!selected) { cues[index].text = frame.text; cueIndex = -1; void renderCue(); }
+  } catch { /* Keep acoustic subtitles when the frame cannot be matched. */ }
+  finally { frame.pending = false; }
+};
 const positions = read("immersed.positions", {});
 let lastPositionSave = 0,
   coverageTokens = [];
@@ -150,6 +208,10 @@ const familiarity = (t) =>
     prefs.level,
     prefs.knowledge,
   );
+function handleYouTubeState(event) {
+  if (event.data === 1) resumePending = false;
+  else if (event.data === 2 && resumePending && !selected) youtube?.playVideo?.();
+}
 function currentTime() {
   return localMedia?.currentTime || youtube?.getCurrentTime?.() || 0;
 }
@@ -157,6 +219,7 @@ function playing() {
   return localMedia ? !localMedia.paused : youtube?.getPlayerState?.() === 1;
 }
 function pause() {
+  resumePending = false;
   if (localMedia) localMedia.pause();
   else youtube?.pauseVideo?.();
 }
@@ -165,6 +228,12 @@ function play() {
   else youtube?.playVideo?.();
 }
 function seekTo(t) {
+  closeLookup();
+  if (source) {
+    positions[source.type + ":" + source.id] = Math.max(0, t);
+    try { localStorage.setItem("immersed.positions", JSON.stringify(positions)); } catch {}
+  }
+  cueSeek = { index: cues.findIndex(c => c.start <= t + 0.02 && t < c.end), until: performance.now() + 1600 };
   if (localMedia) localMedia.currentTime = Math.max(0, t);
   else youtube?.seekTo?.(Math.max(0, t), true);
   cueIndex = -1;
@@ -176,6 +245,8 @@ function stopMedia() {
   clearTimeout(hoverTimer);
   clearTimeout(leaveTimer);
   requestGeneration++;
+  screenFrames.clear();
+  cueSeek = null;
   renderGeneration++;
   pause();
   if (localMedia) {
@@ -203,6 +274,8 @@ function stopMedia() {
   coverageTokens = [];
   $("coverage").textContent = "";
   $("download").hidden = true;
+  restoreFullscreenStudy();
+  if (document.fullscreenElement) void document.exitFullscreen();
   $("video").replaceChildren();
   $("count").textContent = "Japanese subtitles";
   $("subtitles").textContent = "Preparing subtitles…";
@@ -239,7 +312,7 @@ function loadYouTubeAPI() {
   });
   return youtubeReady;
 }
-async function loadVideo(id, title) {
+async function loadVideo(id, title, startAt = null) {
   stopMedia();
   source = { type: "youtube", id, title: title || id };
   const generation = requestGeneration;
@@ -275,6 +348,10 @@ async function loadVideo(id, title) {
   }
   $("sourceBadge").textContent = "YOUTUBE";
   $("download").hidden = false;
+  $("download").disabled = false;
+  $("downloadLabel").textContent = "Save offline";
+  $("download").onclick = download;
+  if (idFrom($("query").value) === id) $("query").value = "";
   status("Loading YouTube…");
   const target = el("div");
   target.id = "player";
@@ -287,13 +364,18 @@ async function loadVideo(id, title) {
       playerVars: {
         playsinline: 1,
         cc_load_policy: 0,
+        fs: 0,
+        start: Math.max(0, Math.floor(startAt ?? positions["youtube:" + id] ?? 0)),
+        autoplay: 0,
         origin: location.origin,
       },
       events: {
+        onStateChange: handleYouTubeState,
+        onPlaybackRateChange: event => {
+          extras.playbackRate = event.data; updateSpeedButton(); persist();
+        },
         onReady: () => {
-          youtube.setPlaybackRate(Number($("speed").value));
-          if (positions["youtube:" + id])
-            pendingSeek = positions["youtube:" + id];
+          youtube.setPlaybackRate(Number(extras.playbackRate || 1));
           void beginTranscript();
         },
         onError: (e) =>
@@ -322,6 +404,12 @@ function updateChapter() {
   if (index >= 0) $("chapterSelect").selectedIndex = index;
 }
 async function flushPlayback() {
+  if (source?.type === "youtube") {
+    positions["youtube:" + source.id] = currentTime();
+    try { localStorage.setItem("immersed.positions", JSON.stringify(positions)); } catch {}
+    return;
+  }
+
   if (!source) return;
   const position = currentTime();
   positions[source.type + ":" + source.id] = position;
@@ -349,13 +437,21 @@ async function flushPlayback() {
 }
 window.flushPlayback = flushPlayback;
 window.immersedPlayback = (action, value) => {
+  if (["play", "pause", "toggle"].includes(action)) {
+    resumePending = false;
+    resumeAfterLookup = false;
+    closeLookup(false);
+  }
   if (action === "play") play();
   else if (action === "pause") pause();
   else if (action === "toggle") playing() ? pause() : play();
   else if (action === "seek") seekTo(value);
-  else if (action === "skip") seekTo(currentTime() + value);
+  else if (action === "skip") skip(value < 0 ? -1 : 1);
 };
 function playbackChanged(force = false) {
+  if (localMedia && extras.playbackRate !== localMedia.playbackRate) {
+    extras.playbackRate = localMedia.playbackRate; updateSpeedButton(); persist();
+  }
   updateChapter();
   window.webkit?.messageHandlers?.immersed?.postMessage({
     action: "playback",
@@ -418,8 +514,9 @@ async function openLocal(id, time = null) {
   media.controls = true;
   media.preload = "metadata";
   media.src = "/api/desktop/media?id=" + encodeURIComponent(id);
-  media.playbackRate = item.progress?.rate || Number($("speed").value);
-  $("speed").value = String(media.playbackRate);
+  media.playbackRate = item.progress?.rate || Number(extras.playbackRate || 1);
+  extras.playbackRate = media.playbackRate;
+  updateSpeedButton();
   media.onloadedmetadata = () => {
     const resume =
       time ?? item.progress?.position ?? positions["local:" + id] ?? 0;
@@ -532,7 +629,8 @@ async function pollTranscript(route, params, generation) {
     if (generation !== requestGeneration) return;
     if (Array.isArray(data.cues) && (data.cues.length || data.windowed)) {
       const previous = JSON.stringify(cues[cueIndex]);
-      cues = data.cues;
+      transcriptKind = data.source || "generated";
+      cues = data.cues.map(restoredScreenCaption);
       const active = cues.findLastIndex(
         (c) => c.start <= currentTime() && currentTime() < c.end,
       );
@@ -553,19 +651,7 @@ async function pollTranscript(route, params, generation) {
         " segments";
     }
     if (data.status === "ready") {
-      status(
-        data.windowed
-          ? "Subtitles ready for " +
-              formatDuration(data.rangeStart) +
-              "–" +
-              formatDuration(data.rangeEnd) +
-              " · generated on this Mac"
-          : data.source === "authored" || data.source === "youtube"
-            ? "Japanese captions supplied with the media"
-            : data.source === "youtube-asr"
-              ? "YouTube Japanese auto-captions"
-              : "Generated Japanese transcript · verify uncertain words against the audio",
-      );
+      status("");
 
       void sampleCoverage();
       return;
@@ -598,14 +684,19 @@ async function pollTranscript(route, params, generation) {
   }
 }
 async function renderCue() {
+  if (selected && resumeAfterLookup && (lookupPinned || extras.pauseOnHover)) return;
   if (!cues.length) {
     renderGeneration++;
     cueIndex = -1;
     if (source) $("subtitles").textContent = "";
     return;
   }
-  const t = currentTime(),
-    i = cues.findLastIndex((c) => c.start <= t && t < c.end);
+  const t = currentTime();
+  let i = cues.findLastIndex((c) => c.start <= t && t < c.end);
+  if (cueSeek) {
+    if (i === cueSeek.index || performance.now() > cueSeek.until) cueSeek = null;
+    else i = cueSeek.index;
+  }
   if (i === cueIndex) return;
   cueIndex = i;
   const generation = ++renderGeneration;
@@ -659,15 +750,16 @@ async function renderCue() {
       ruby.append(el("rt", token.reading));
       button.append(ruby);
     } else button.textContent = token.text;
-    button.onclick = () => openLookup(token, true);
+    button.onclick = () => openLookup(token, true, button);
     button.onmouseenter = () => {
       clearTimeout(leaveTimer);
+      clearTimeout(hoverTimer);
       if (extras.hoverLookup)
-        hoverTimer = setTimeout(() => openLookup(token, false), 70);
+        hoverTimer = setTimeout(() => openLookup(token, false, button), selected ? 35 : 65);
     };
     button.onmouseleave = () => {
       clearTimeout(hoverTimer);
-      if (!lookupPinned) leaveTimer = setTimeout(() => closeLookup(), 450);
+      if (!lookupPinned) leaveTimer = setTimeout(() => closeLookup(), 220);
     };
     line.append(button);
   }
@@ -677,19 +769,43 @@ async function renderCue() {
   const next = cues[i + 1]?.text;
   if (next && !pendingAnalysis.size) void analyze(next).catch(() => {});
 }
+function positionLookup() {
+  const card = $("lookup");
+  if (!card.classList.contains("show")) return;
+  const rect = (lookupAnchor?.isConnected ? lookupAnchor : $("subtitles")).getBoundingClientRect();
+  const width = Math.min(440, innerWidth - 24);
+  const below = innerHeight - rect.bottom - 20, above = rect.top - 20;
+  const placeBelow = below >= 260 || below >= above;
+  const height = Math.max(120, Math.min(480, placeBelow ? below : above));
+  card.style.width = width + "px";
+  card.style.maxHeight = height + "px";
+  card.style.left = Math.max(12, Math.min(innerWidth - width - 12, rect.left - 12)) + "px";
+  card.style.top = (placeBelow ? rect.bottom + 8 : Math.max(12, rect.top - card.getBoundingClientRect().height - 8)) + "px";
+}
+new ResizeObserver(() => positionLookup()).observe($("lookup"));
+window.addEventListener("resize", positionLookup);
+window.addEventListener("blur", () => { if (selected && !lookupPinned) closeLookup(); });
 function closeLookup(resume = true) {
   clearTimeout(hoverTimer);
   clearTimeout(leaveTimer);
   $("lookup").classList.remove("show");
   selected = null;
+  lookupAnchor = null;
   lookupPinned = false;
-  if (resume && resumeAfterLookup) play();
+  if (resume && resumeAfterLookup) {
+    resumePending = !localMedia;
+    play();
+  }
   resumeAfterLookup = false;
+  for (const cue of cues) if (cue.screenText && cue.text !== cue.screenText) { cue.text = cue.screenText; cueIndex = -1; }
 }
-async function openLookup(token, pinned = false) {
+async function openLookup(token, pinned = false, anchor = null) {
+  clearTimeout(hoverTimer);
+  lookupAnchor = anchor || lookupAnchor;
   clearTimeout(leaveTimer);
+  if (selected === token) { lookupPinned ||= pinned; positionLookup(); return; }
   if (!selected) {
-    resumeAfterLookup = playing();
+    resumeAfterLookup = resumePending || playing();
     if (pinned || extras.pauseOnHover) pause();
     else resumeAfterLookup = false;
   }
@@ -701,7 +817,12 @@ async function openLookup(token, pinned = false) {
   selected = token;
   $("saveWord").textContent = "Save word";
   lookupEntries = [];
+  lookupMeaning = "";
+  $("saveWord").disabled = true;
+  $("phraseMeaning").hidden = true;
+  $("phraseMeaning").replaceChildren();
   $("lookup").classList.add("show");
+  positionLookup();
   $("lookupWord").textContent = token.text;
   $("reading").textContent = token.reading || "";
   $("grammar").textContent = [
@@ -729,6 +850,7 @@ async function openLookup(token, pinned = false) {
     }
     if (selected !== token) return;
     lookupEntries = data.data || [];
+    $("saveWord").disabled = !lookupEntries.length;
     renderDefinitions();
     const caption = cues[cueIndex];
     if (caption && token.start != null) {
@@ -740,44 +862,19 @@ async function openLookup(token, pinned = false) {
         sentence: caption.text,
         start: String(token.start),
         end: String(token.end),
-        before: (cues[cueIndex - 1]?.text || "").slice(-240),
-        after: (cues[cueIndex + 1]?.text || "").slice(0, 240),
+        before: cues.slice(Math.max(0, cueIndex - 3), cueIndex).map(c => c.text).join(" ").slice(-240),
+        after: cues.slice(cueIndex + 1, cueIndex + 4).map(c => c.text).join(" ").slice(0, 240),
       };
-      void explainContext(token, context);
-      void api("immersion/lookup-context", {
-        word: token.text,
-        reading: token.reading || "",
-        pos: token.pos || "",
-        sentence: caption.text,
-        start: String(token.start),
-        end: String(token.end),
-        before: context.before.slice(-120),
-        after: context.after.slice(0, 120),
-      })
-        .then((data) => {
-          if (selected !== token) return;
-          const alternatives = (data.alternatives || []).filter(
-            (x) => x.likely,
-          );
-          if (alternatives.length) {
-            $("alternatives").append(
-              el("span", "Possible spelling from context (verify the audio): "),
-            );
-            for (const a of alternatives.slice(0, 3)) {
-              const b = el(
-                "button",
-                a.form || a.word || a.text || a.lemma || "Alternative",
-              );
-              b.onclick = () =>
-                openLookup(
-                  { ...token, text: b.textContent, lemma: b.textContent },
-                  true,
-                );
-              $("alternatives").append(b);
-            }
-          }
-        })
-        .catch(() => {});
+      void api("immersion/phrase-context", context).then(data => {
+        if (selected !== token || !data.phrases?.length) return;
+        const phrase = data.phrases[0], gloss = phrase.senses[0]?.english_definitions.join("; ");
+        if (!gloss) return;
+        lookupMeaning = phrase.form + ": " + gloss;
+        $("phraseMeaning").replaceChildren(el("small", "Expression", "hint"), el("strong", phrase.form), el("p", gloss));
+        $("phraseMeaning").hidden = false;
+      }).catch(() => {});
+      setTimeout(() => { if (selected === token) void explainContext(token, context); }, 160);
+
     }
   } catch (e) {
     if (selected === token) $("definitions").textContent = e.message;
@@ -795,6 +892,7 @@ async function explainContext(token, context, attempts = 0) {
         el("p", result.explanation),
       );
       box.hidden = false;
+      if (!lookupMeaning) lookupMeaning = result.gloss;
     } else if (["preparing", "busy"].includes(result.status) && attempts < 30) {
       box.textContent = result.status === "preparing"
         ? "Setting up on-device context explanations…"
@@ -894,7 +992,7 @@ function saveWord() {
     key,
     word: j.word || selected.lemma,
     reading: j.reading || selected.reading || "",
-    meaning: entry.senses?.[0]?.english_definitions?.join("; ") || "",
+    meaning: lookupMeaning || entry.senses?.[0]?.english_definitions?.join("; ") || "",
     sentence: hasContext ? cues[cueIndex]?.text || "" : "",
     title: hasContext ? source.title : "",
     url:
@@ -1198,6 +1296,7 @@ function showSettings() {
     null,
     true,
   );
+  setting(body, "Read captions from video", "Match Japanese text visible in the video. Uses small frame downloads.", "screenCaptionCheck", null, true);
   setting(
     body,
     "Speech model",
@@ -1221,7 +1320,7 @@ function showSettings() {
     el("h3", "Keyboard"),
     el(
       "p",
-      "Space: play/pause · ←/→: sentence · J/L: seek 10 seconds · K: play/pause · Esc: close lookup · ⌘L: search · ⌘O: open media",
+      "Space: play/pause · ←/→ or J/L: previous/next subtitle · F: video fullscreen · K: play/pause · Esc: close lookup · ⌘L: search · ⌘O: open media",
       "hint",
     ),
     el("h3", "Dictionary & credits"),
@@ -1434,17 +1533,22 @@ async function download() {
   if (source?.type !== "youtube") return;
   const current = { ...source };
   $("download").disabled = true;
-  status("Downloading for offline playback…");
+  $("downloadLabel").textContent = "Saving…";
+  status("");
   try {
     const item = await api(
       "desktop/download",
       { videoId: current.id, quality: extras.speechQuality },
       "POST",
     );
-    status("Saved to your local library.");
-    if (source?.id === current.id) await openLocal(item.id, currentTime());
+    if (source?.id === current.id) {
+      $("downloadLabel").textContent = "Saved offline ✓";
+      $("download").onclick = () => void showLibrary();
+      $("download").title = "Open Library to watch the saved video without internet";
+    }
   } catch (e) {
     status(e.message, true);
+    $("downloadLabel").textContent = "Retry save";
   } finally {
     $("download").disabled = false;
   }
@@ -1561,20 +1665,28 @@ async function compareTranscript() {
   }
 }
 function skip(direction) {
-  const t = currentTime(),
-    cue =
-      direction < 0
-        ? [...cues].reverse().find((c) => c.start < t - 1)
-        : cues.find((c) => c.start > t + 0.2);
-  if (cue) seekTo(cue.start);
+  if (!cues.length) return;
+  const t = currentTime();
+  const active = cueSeek?.index >= 0 ? cueSeek.index : cues.findLastIndex(c => c.start <= t && t < c.end);
+  const index = active >= 0
+    ? Math.max(0, Math.min(cues.length - 1, active + direction))
+    : direction < 0 ? cues.findLastIndex(c => c.end <= t) : cues.findIndex(c => c.start > t);
+  if (index >= 0) seekTo(cues[index].start + 0.015);
 }
+
 $("search").onsubmit = (e) => {
   e.preventDefault();
   const value = $("query").value.trim(),
     id = idFrom(value);
   if (id) {
     closePanel();
-    void loadVideo(id);
+    let startAt = null;
+    try {
+      const url = new URL(value), raw = url.searchParams.get("t") || url.searchParams.get("start");
+      const time = raw?.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/);
+      if (time) startAt = Number(time[1] || 0) * 3600 + Number(time[2] || 0) * 60 + Number(time[3] || 0);
+    } catch {}
+    void loadVideo(id, undefined, startAt);
   } else if (value) void searchYouTube(value);
 };
 async function toggleFullscreen() {
@@ -1586,9 +1698,22 @@ async function toggleFullscreen() {
     video.focus();
   }
 }
-document.addEventListener("fullscreenchange", () => {
+const fullscreenHomes = new Map();
+function restoreFullscreenStudy() {
+  for (const [node, home] of fullscreenHomes) home.replaceWith(node);
+  fullscreenHomes.clear();
+  $("fullscreenStudy")?.remove();
   $("exitVideoFullscreen")?.remove();
+}
+document.addEventListener("fullscreenchange", () => {
   if (document.fullscreenElement === $("video")) {
+    const overlay = el("div", null, "fullscreenStudy");
+    overlay.id = "fullscreenStudy";
+    for (const id of ["subtitles", "lookup", "controls"]) {
+      const node = $(id), home = document.createComment(id + " home");
+      node.replaceWith(home); fullscreenHomes.set(node, home); overlay.append(node);
+    }
+    $("video").append(overlay);
     const exit = el("button", "✕", "exitVideoFullscreen");
     exit.id = "exitVideoFullscreen";
     exit.setAttribute("aria-label", "Exit video fullscreen");
@@ -1596,27 +1721,62 @@ document.addEventListener("fullscreenchange", () => {
     exit.onclick = () => void document.exitFullscreen();
     $("video").append(exit);
     exit.focus();
-  }
+  } else restoreFullscreenStudy();
+  positionLookup();
 });
 $("fullscreen").onclick = () =>
   void toggleFullscreen().catch((e) => status(e.message, true));
 $("play").onclick = () => {
+  resumePending = false;
   resumeAfterLookup = false;
   playing() ? pause() : play();
 };
 $("previous").onclick = () => skip(-1);
 $("next").onclick = () => skip(1);
-$("speed").value = String(extras.playbackRate || 1);
-$("speed").onchange = () => {
-  extras.playbackRate = Number($("speed").value);
-  persist();
-  if (localMedia) localMedia.playbackRate = Number($("speed").value);
-  else youtube?.setPlaybackRate?.(Number($("speed").value));
+function updateSpeedButton() {
+  const rate = Number(extras.playbackRate || 1);
+  $("speedValue").textContent = rate + "×";
+  $("speed").title = "Playback speed · " + rate + "×";
+  for (const item of $("speedMenu").children) item.setAttribute("aria-checked", String(Number(item.dataset.rate) === rate));
+}
+function closeSpeedMenu() {
+  $("speedMenu").hidden = true;
+  $("speed").setAttribute("aria-expanded", "false");
+}
+for (const rate of [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]) {
+  const item = el("button", rate === 1 ? "1× · Normal" : rate + "×");
+  item.dataset.rate = rate;
+  item.setAttribute("role", "menuitemradio");
+  item.onclick = () => {
+    extras.playbackRate = rate; persist(); updateSpeedButton(); closeSpeedMenu();
+    if (localMedia) localMedia.playbackRate = rate;
+    else youtube?.setPlaybackRate?.(rate);
+    $("speed").focus();
+  };
+  $("speedMenu").append(item);
+}
+updateSpeedButton();
+$("speed").onclick = () => {
+  const open = $("speedMenu").hidden;
+  $("speedMenu").hidden = !open;
+  $("speed").setAttribute("aria-expanded", String(open));
+  if (open) $("speedMenu").querySelector('[aria-checked="true"]').focus();
 };
+$("speedMenu").onkeydown = (event) => {
+  if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+    event.preventDefault(); event.stopPropagation();
+    const items = [...$("speedMenu").children], index = items.indexOf(document.activeElement);
+    items[(index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+  }
+};
+document.addEventListener("pointerdown", event => {
+  if (!event.target.closest(".speedControl")) closeSpeedMenu();
+  if (selected && !event.target.closest("#lookup, .word")) closeLookup();
+});
 $("closeLookup").onclick = () => closeLookup();
 $("lookup").onmouseenter = () => clearTimeout(leaveTimer);
 $("lookup").onmouseleave = () => {
-  if (!lookupPinned) leaveTimer = setTimeout(() => closeLookup(), 350);
+  if (!lookupPinned) leaveTimer = setTimeout(() => closeLookup(), 180);
 };
 $("known").onclick = () => {
   if (!selected) return;
@@ -1629,8 +1789,6 @@ $("known").onclick = () => {
 $("saveWord").onclick = saveWord;
 $("speak").onclick = () => {
   if (!selected) return;
-  lookupPinned = true;
-  resumeAfterLookup = false;
   pause();
   const speech = new SpeechSynthesisUtterance(
     selected.reading || selected.text,
@@ -1709,6 +1867,8 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "Escape") {
+    if (!$("speedMenu").hidden) { closeSpeedMenu(); $("speed").focus(); return; }
+    if (selected) { closeLookup(); return; }
     if (document.fullscreenElement) {
       e.preventDefault();
       void document.exitFullscreen();
@@ -1733,8 +1893,8 @@ document.addEventListener("keydown", (e) => {
   } else if (e.key === "ArrowRight") {
     e.preventDefault();
     skip(1);
-  } else if (e.key.toLowerCase() === "j") seekTo(currentTime() - 10);
-  else if (e.key.toLowerCase() === "l") seekTo(currentTime() + 10);
+  } else if (e.key.toLowerCase() === "j") skip(-1);
+  else if (e.key.toLowerCase() === "l") skip(1);
 });
 document.addEventListener("dragover", (e) => e.preventDefault());
 document.addEventListener("drop", (e) => {
@@ -1753,6 +1913,7 @@ function tick(t) {
       } catch {}
     }
     void renderCue();
+    scanCurrentVideoCaption(t);
     $("play").textContent = playing() ? "Ⅱ" : "▶";
     if (pendingSeek && youtube?.getPlayerState) {
       seekTo(pendingSeek);

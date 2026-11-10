@@ -1,4 +1,5 @@
 const language = require('./language.cjs');
+const { matchScreenCaption } = require('./screen-captions.cjs');
 const { lookupContext } = require('./lookup-context.cjs');
 const { contextMeaning, validContext } = require('./context-meaning.cjs');
 const { key: dictionaryKey } = require('./grammar.cjs');
@@ -43,6 +44,16 @@ module.exports = function middleware(next) {
         if (!word || word.length > 120) return json(400, { error: 'Invalid word' });
         const data = await language.lookup(word, { proper: url.searchParams.get('proper') === 'true', pos: (url.searchParams.get('pos') || '').slice(0, 30), reading: (url.searchParams.get('reading') || '').slice(0, 120) });
         return json(200, data[0]?.source === 'Grammar' ? { data, source: 'Immersed grammar notes' } : { data, source: 'JMdict + JMnedict / EDRDG; Kanjium pitch accents / Uros O.', license: 'CC BY-SA 4.0' });
+      }
+      if (url.pathname.endsWith('/screen-caption')) {
+        let lines; try { lines = JSON.parse(url.searchParams.get('lines') || '[]'); } catch { return json(400, { error: 'Invalid video caption' }); }
+        return json(200, { match: await matchScreenCaption(url.searchParams.get('sentence') || '', lines) });
+      }
+      if (url.pathname.endsWith('/phrase-context')) {
+        const get = key => url.searchParams.get(key) || '';
+        const data = { word: get('word'), sentence: get('sentence'), start: Number(get('start')), end: Number(get('end')), before: '', after: '' };
+        if (!validContext(data)) return json(400, { error: 'Invalid caption context' });
+        return json(200, { phrases: await language.contextPhrases(data.sentence, data.start, data.end) });
       }
       if (url.pathname.endsWith('/context-meaning')) {
         const get = key => url.searchParams.get(key) || '';

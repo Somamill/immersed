@@ -48,3 +48,12 @@ Both models reproduced the main reported phrase closely, with differences in con
 ## Limits of this validation
 
 No Apple Developer ID was supplied, so signed iPhone/Mac iCloud synchronization was not enabled. Google account authentication in an embedded player is blocked by provider policy. Ad rules were installed in the native WebKit host, but complete removal of every YouTube advertisement is not established. Tests do not establish universal codec, DRM, restricted-video, or source-language metadata availability.
+
+## November 10: playback and caption cross-check
+
+- Chromium and WebKit cover adjacent-block navigation, rapid repeated seeks, gaps, hover layout stability, delayed YouTube pause/resume, paused-before-hover behavior, fullscreen lookup, visible lookup actions, rate persistence, clearing opened URLs and saving offline without switching playback.
+- The reported public video at 6:04 has an acoustic homophone error. A 38-second excerpt took 12.70 seconds with turbo and 22.66 seconds with large-v3. Both retained spelling errors. A Japanese-specialised Kotoba 2.0 MLX trial took 20.48 seconds and omitted speech, so it was not adopted. Supplying the visible phrase as a Whisper prompt also failed to fix the reported line reliably.
+- Direct video-frame sampling produced two JPEGs of about 56 KB each in 4.01 seconds including source resolution/network access. Apple Vision read the author-provided caption with confidence 1.0. Pronunciation matching rejects unrelated video labels; two independent frame matches are required before displaying the author-provided line. This improves that caption source without claiming perfect acoustic transcription.
+- These are bounded smoke measurements on the same M1 Pro/16 GB Mac, not whole-book or all-video accuracy guarantees. Original audio excerpts and captured frames stay in ignored local test files.
+
+Native verification also confirmed automatic replacement of the reported 6:04 line with the author-provided “紙上の教会” caption, and fullscreen lookup of 教会 with all three actions visible.

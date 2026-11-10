@@ -85,6 +85,8 @@ async function lookupUncached(word, options = {}) {
   }
   const requestedReading=hira(options.reading||'');
   const matchingReading=(entry)=>entry.kana.some(k=>k.text===requestedReading)?requestedReading:(stems.get(requestedReading)||[]).find(x=>x.entry.id===entry.id)?.lemma||'';
+  const pronounced = requestedReading ? matches.filter(x => matchingReading(x.entry)) : [];
+  if (pronounced.length) matches = pronounced;
   matches.sort((a,b)=>Number(!!matchingReading(b.entry))-Number(!!matchingReading(a.entry)));
   const seen=new Set();
   const general=matches.filter(x=>!seen.has(x.entry.id)&&seen.add(x.entry.id)).slice(0,5).map(({entry,lemma,by})=>({...dictionaryEntry(entry,tags,lemma,matchingReading(entry)),matchedBy:by,matchedForm:lemma}));

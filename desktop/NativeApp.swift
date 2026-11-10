@@ -2,6 +2,7 @@ import Cocoa
 import WebKit
 import MediaPlayer
 import UniformTypeIdentifiers
+import Vision
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
@@ -16,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     var pendingFiles: [URL] = []
     var terminating = false
     var ready = false
+    var captionScanBusy = false
     let home = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Immersed Mac")
     var blockAds: Bool { UserDefaults.standard.object(forKey: "blockAds") as? Bool ?? true }
 
@@ -144,7 +146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
               let object = message.body as? [String: Any], let action = object["action"] as? String else { return }
         if action == "blockAds", let enabled = object["enabled"] as? Bool {
             UserDefaults.standard.set(enabled, forKey: "blockAds"); updateAdRules()
-        } else if action == "fullscreen" { window.toggleFullScreen(nil)
+        } else if action == "captionFrame" { scanVideoCaption(object)
         } else if action == "playback" {
             let position = object["position"] as? Double ?? 0
             let duration = object["duration"] as? Double ?? 0
@@ -165,6 +167,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
                 catch { self?.alert("Backup failed", error.localizedDescription) }
             }
         }
+    }
+    func scanVideoCaption(_ object: [String: Any]) {
+        guard NSApp.isActive, window.isVisible, !captionScanBusy,
+              let key = object["key"] as? String, key.count <= 200,
+              let id = object["videoId"] as? String, id.range(of: "^[A-Za-z0-9_-]{11}$", options: .regularExpression) != nil,
+              let at = object["at"] as? Double, at.isFinite, at >= 0, at <= 86400 else { return }
+        captionScanBusy = true
+        var components = URLComponents(string: "http://127.0.0.1:4765/api/desktop/caption-frames")!
+        components.queryItems = [URLQueryItem(name: "videoId", value: id), URLQueryItem(name: "at", value: String(at))]
+        var query = URLRequest(url: components.url!); query.timeoutInterval = 40
+        URLSession.shared.dataTask(with: query) { [weak self] data, _, _ in
+            var observations: [[String]] = []
+            if let data, let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let frames = result["frames"] as? [String] {
+                for encoded in frames.prefix(2) {
+                    guard let imageData = Data(base64Encoded: encoded), imageData.count < 2_000_000,
+                          let image = NSImage(data: imageData), let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { continue }
+                    let request = VNRecognizeTextRequest()
+                    request.recognitionLevel = .accurate
+                    request.recognitionLanguages = ["ja-JP", "en-US"]
+                    request.usesLanguageCorrection = true
+                    request.minimumTextHeight = 0.025
+                    request.regionOfInterest = CGRect(x: 0, y: 0, width: 1, height: 0.4)
+                    do { try VNImageRequestHandler(cgImage: cg).perform([request]) } catch { }
+                    let lines = (request.results ?? []).sorted { $0.boundingBox.midY > $1.boundingBox.midY }.compactMap { observation -> String? in
+                        guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.87,
+                              candidate.string.range(of: "[ぁ-ゖァ-ヺ一-龯]", options: .regularExpression) != nil else { return nil }
+                        return String(candidate.string.prefix(300))
+                    }
+                    observations.append(lines)
+                }
+            }
+            if observations.isEmpty { observations = [[]] }
+            let captured = observations
+            Task { @MainActor in
+                guard let self else { return }
+                self.captionScanBusy = false
+                for lines in captured {
+                    guard let data = try? JSONSerialization.data(withJSONObject: [key, lines]), let json = String(data: data, encoding: .utf8) else { continue }
+                    self.web.evaluateJavaScript("window.immersedVideoText?.(...\(json))", completionHandler: nil)
+                }
+            }
+        }.resume()
     }
     @objc func browseYouTube() { openBrowser(URL(string: "https://www.youtube.com/?hl=ja&gl=JP")!) }
     func openBrowser(_ url: URL) {

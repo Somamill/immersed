@@ -605,3 +605,120 @@ test("context explanation uses neighboring captions without delaying definitions
   await expect(page.locator("#contextMeaning")).toContainText("line of reasoning");
 
 });
+
+test("subtitle navigation skips complete blocks, including rapid presses and gaps", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => (window as any).eval(`
+    window.__time=15;window.__seeks=[];
+    youtube={getCurrentTime:()=>window.__time,getPlayerState:()=>2,seekTo:t=>window.__seeks.push(t)};
+    cues=[{start:0,end:8,text:'最初。'},{start:10,end:20,text:'二つ目。'},{start:30,end:40,text:'三つ目。'}];cueIndex=-1;renderCue();
+  `));
+  await page.getByRole("button", { name: "Previous subtitle", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__seeks.at(-1))).toBeCloseTo(0.015);
+  await page.getByRole("button", { name: "Next subtitle", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__seeks.at(-1))).toBeCloseTo(10.015);
+  await page.getByRole("button", { name: "Next subtitle", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__seeks.at(-1))).toBeCloseTo(30.015);
+  await page.evaluate(() => (window as any).eval("cueSeek=null;window.__time=25;"));
+  await page.getByRole("button", { name: "Previous subtitle", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__seeks.at(-1))).toBeCloseTo(10.015);
+});
+
+test("hover card keeps subtitles stable and resumes after a delayed YouTube pause", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => (window as any).eval(`
+    window.__state=1;window.__pauses=0;window.__plays=0;
+    youtube={getCurrentTime:()=>0.3,getPlayerState:()=>window.__state,
+      pauseVideo:()=>{window.__pauses++;setTimeout(()=>{window.__state=2;handleYouTubeState({data:2})},500)},
+      playVideo:()=>{window.__plays++;if(window.__state===2){window.__state=1;handleYouTubeState({data:1})}}};
+    cues=[{start:0,end:4,text:'政治について話します。'}];cueIndex=-1;renderCue();
+  `));
+  const word = page.getByRole("button", { name: "Look up 政治", exact: true });
+  const before = await word.boundingBox();
+  await word.hover();
+  await expect(page.locator("#lookup")).toHaveClass(/show/);
+  const after = await word.boundingBox();
+  expect(after?.y).toBeCloseTo(before!.y, 0);
+  await page.getByRole("button", { name: "Save word", exact: true }).hover();
+  await expect(page.locator("#lookup")).toHaveClass(/show/);
+  const action = await page.locator(".lookupActions").boundingBox();
+  expect(action!.y + action!.height).toBeLessThanOrEqual(1000);
+  await page.mouse.move(10, 85);
+  await expect(page.locator("#lookup")).not.toHaveClass(/show/);
+  await expect.poll(() => page.evaluate(() => (window as any).__state)).toBe(1);
+  expect(await page.evaluate(() => (window as any).__pauses)).toBe(1);
+  // A paused video is never started merely because a lookup ended.
+  await page.evaluate(() => (window as any).eval("window.__state=2;resumePending=false;"));
+  await word.hover();
+  await expect(page.locator("#lookup")).toHaveClass(/show/);
+  await page.mouse.move(10,85);
+  await expect(page.locator("#lookup")).not.toHaveClass(/show/);
+  expect(await page.evaluate(() => (window as any).__state)).toBe(2);
+});
+
+test("fullscreen keeps live word lookup and speed control inside the video", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => (window as any).eval(`youtube={getCurrentTime:()=>0.3,getPlayerState:()=>2,pauseVideo:()=>{}};cues=[{start:0,end:4,text:'政治について話します。'}];cueIndex=-1;renderCue();`));
+  await expect(page.getByRole("button", { name:"Look up 政治", exact:true })).toBeVisible();
+  await page.getByRole("button", {name:"Video fullscreen",exact:true}).click();
+  await page.locator("#fullscreenStudy").getByRole("button", {name:"Look up 政治",exact:true}).hover();
+  await expect(page.locator("#video #lookup")).toHaveClass(/show/);
+  await expect(page.locator("#definitions")).toContainText(/politic|government/i);
+  await expect(page.locator("#saveWord")).toBeInViewport();
+  await page.getByRole("button", {name:"Close lookup",exact:true}).click();
+  await page.getByRole("button", {name:"Playback speed",exact:true}).click();
+  await page.getByRole("menuitemradio", {name:"1.5×",exact:true}).click();
+  await expect(page.locator("#speedValue")).toHaveText("1.5×");
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".studyCard #subtitles")).toBeVisible();
+  await expect(page.locator(".studyCard #controls")).toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem("immersed.mac.options")!).playbackRate)).toBe(1.5);
+});
+
+test("opening a video clears its URL and saving offline keeps playback in place", async ({ page }) => {
+  await page.route("**/api/desktop/video-info?*", route => route.fulfill({json:{language:"ja",duration:1000,title:"Japanese conversation"}}));
+  await page.route("**/api/desktop/transcribe?*", route => route.fulfill({json:{status:"ready",cues:[{start:0,end:5,text:"政治について話します。"}]}}));
+  await page.route("**/api/desktop/download?*", route => route.fulfill({json:{id:"saved-video"}}));
+  await page.goto("/");
+  await page.evaluate(() => (window as any).eval(`
+    loadYouTubeAPI=()=>Promise.resolve();
+    window.YT={Player:class {constructor(id,options){window.__playerOptions=options;queueMicrotask(()=>options.events.onReady());}getCurrentTime(){return 0.3;}getPlayerState(){return 2;}setPlaybackRate(){}destroy(){}}};
+  `));
+  await page.getByRole("textbox",{name:"Search YouTube or paste a video link"}).fill("https://www.youtube.com/watch?v=5C3hh2fO4mE&t=6m4s");
+  await page.locator("#search").getByRole("button").click();
+  await expect(page.locator("#query")).toHaveValue("");
+  await expect(page.locator("#count")).toContainText("1 segments");
+  await expect(page.locator("#status")).toBeEmpty();
+  await page.getByRole("button",{name:"Save video for offline playback",exact:true}).click();
+  await expect(page.locator("#downloadLabel")).toHaveText("Saved offline ✓");
+  expect(await page.evaluate(() => (window as any).eval("source.type"))).toBe("youtube");
+  expect(await page.evaluate(() => (window as any).__playerOptions.playerVars.fs)).toBe(0);
+  expect(await page.evaluate(() => (window as any).__playerOptions.playerVars.start)).toBe(364);
+});
+
+test("video text needs two matching frames before replacing an acoustic caption", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => (window as any).eval(`
+    youtube={getCurrentTime:()=>1,getPlayerState:()=>2,pauseVideo:()=>{}};
+    source={type:'youtube',id:'5C3hh2fO4mE'};
+    cues=[{start:0,end:4,text:'市場の境界という概念があるんですよ'}];cueIndex=-1;renderCue();
+    window.__frameKey=requestGeneration+':'+screenCaptionKey(cues[0]);
+    screenFrames.set(window.__frameKey,{cue:cues[0],original:cues[0].text,confirmations:0});
+  `));
+  await page.evaluate(() => (window as any).immersedVideoText((window as any).__frameKey,['「紙の教会」という概念がある']));
+  await expect(page.locator("#subtitles")).toContainText("市場");
+  await page.evaluate(() => (window as any).immersedVideoText((window as any).__frameKey,['「紙の教会」という概念がある']));
+  await expect(page.locator("#subtitles")).toContainText("紙");
+  await expect(page.locator("#subtitles")).toContainText("教会");
+  expect(await page.evaluate(() => (window as any).eval("cues[0].asrText"))).toContain("市場の境界");
+});
+
+ test("on-screen caption updates preserve the text of an open lookup", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => (window as any).eval(`youtube={getCurrentTime:()=>1,getPlayerState:()=>2,pauseVideo:()=>{}};source={type:'youtube',id:'5C3hh2fO4mE'};cues=[{start:0,end:4,text:'市場の境界という概念があるんですよ'}];cueIndex=-1;renderCue();window.__frameKey=requestGeneration+':'+screenCaptionKey(cues[0]);screenFrames.set(window.__frameKey,{cue:cues[0],original:cues[0].text,confirmations:0});`));
+  await page.getByRole("button", {name:"Look up 市場",exact:true}).click();
+  await page.evaluate(() => (window as any).immersedVideoText((window as any).__frameKey,['「紙上の教会」という概念がある']));
+  await page.evaluate(() => (window as any).immersedVideoText((window as any).__frameKey,['「紙上の教会」という概念がある']));
+  await expect(page.locator("#lookupWord")).toHaveText("市場");
+  await expect(page.locator("#subtitles")).toContainText("市場");
+});

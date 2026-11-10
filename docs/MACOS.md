@@ -28,12 +28,12 @@ Hover briefly to look up a word and pause playback; leaving the lookup resumes o
 
 - Space / K: play or pause.
 - Left / Right: previous or next sentence.
-- J / L: seek ten seconds.
+- J / L: previous or next subtitle block.
 - Command-L: focus search.
 - Command-O: native file picker.
 - Command-comma: settings.
 - Command-1 / 2 / 3: study window / library / saved words.
-- F or the Video fullscreen button: expand only the video player; Escape exits.
+- F or the Video fullscreen button: video with interactive subtitles and lookup; Escape closes lookup, then exits fullscreen.
 - Control-Command-F: standard Mac app-window fullscreen.
 - Escape: close lookup or a panel.
 
@@ -72,3 +72,11 @@ Qwen3-4B-Instruct-2507, quantized to 4 bits for MLX, runs locally. The first lau
 The model is loaded on demand, cached exact-context answers are reused, and the worker exits after two idle minutes to release memory. On unsupported hosts or if setup fails, the normal dictionary remains available. Setup diagnostics are local at `~/Library/Application Support/Immersed Mac/.context-setup.log`; restarting the app retries setup.
 
 Model: [Qwen3-4B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507), Apache 2.0. [MLX checkpoint](https://huggingface.co/mlx-community/Qwen3-4B-Instruct-2507-4bit), pinned revision `50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b`.
+
+## Subtitle navigation and on-screen captions
+
+Previous/next controls and arrow keys move to adjacent complete subtitle blocks. The current block is not restarted on Back. A floating lookup card keeps the subtitle layout stable, keeps its actions in view and resumes only playback paused by that lookup. Fullscreen includes the same subtitle words, lookup card and speed control.
+
+On the Mac, **Read captions from video** can compare generated YouTube subtitles with Japanese text burned into the source video. Apple Vision reads two small source-frame samples; matching requires sufficient Japanese text, similar pronunciation and agreement between both frames. Unrelated titles and unmatched/unclear text are ignored. Acoustic text and timing are retained, and accepted caption text is cached locally for replay. The normal dictionary and playback do not wait for this background check. Frame access can fail on restricted videos, and creator captions/OCR can also be imperfect. Videos without usable on-screen text continue to use speech recognition.
+
+Frame sampling uses short range reads, not a complete video download. The local cache is limited to 120 frame pairs. Settings can disable sampling. The separate **Save offline** button saves the complete video to Library without switching the current player.

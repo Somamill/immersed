@@ -873,3 +873,54 @@ dialog::backdrop {
   background: #000a;
   border: 1px solid #fff4;
 }
+
+/* Lookup floats independently of subtitle layout; actions stay in view. */
+.lookup {
+  position: fixed;
+  z-index: 100;
+  padding: 0;
+  min-height: 0;
+  border: 1px solid #3a5945;
+  border-radius: 18px;
+  background: #101c15;
+  box-shadow: 0 18px 60px #0008;
+  text-align: left;
+  overflow: hidden;
+}
+.lookup.show { display: flex; flex-direction: column; }
+.lookupTop { padding: 14px 16px 10px; flex: 0 0 auto; gap: 12px; }
+.lookupTop > div { min-width: 0; }
+.lookupWord { font-size: 26px; overflow-wrap: anywhere; }
+.lookupTop button { width: 36px; height: 36px; padding: 0; flex-shrink: 0; border-radius: 50%; }
+.lookupBody { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 16px 14px; }
+.lookup .definitions { max-height: none; overflow: visible; margin-top: 10px; }
+.lookup .contextMeaning { margin: 8px 0 12px; padding: 8px 10px; }
+.lookupActions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 12px; border-top: 1px solid #304637; flex: 0 0 auto; background: #15231b; }
+.lookupActions button { min-width: 0; padding: 10px 5px; font-size: 13px; white-space: normal; border-radius: 10px; }
+.lookupActions #saveWord { background: #b6e3c4; color: #11281b; }
+#status:empty { display: none; }
+#download { display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
+#download[hidden] { display: none; }
+#download > [aria-hidden] { font-size: 24px; line-height: 1; }
+.videoFooter { justify-content: space-between; gap: 12px; }
+.speedControl { position: relative; }
+.speedButton { display: flex; align-items: center; justify-content: center; gap: 7px; min-width: 85px; height: 44px; padding: 8px 10px; border-radius: 14px; background: #19261e; color: #d0e5d5; border: 1px solid #344b3a; }
+.speedMenu { position: absolute; right: 0; bottom: calc(100% + 10px); z-index: 120; background: #14231a; padding: 6px; border: 1px solid #3a5945; border-radius: 14px; width: 155px; box-shadow: 0 10px 30px #0008; }
+.speedMenu button { display: block; border: 0; width: 100%; text-align: left; padding: 9px 12px; background: none; border-radius: 8px; color: #e6f3ea; }
+.speedMenu button[aria-checked="true"] { background: #365440; color: #c6f3d3; }
+.speedMenu button:hover, .speedMenu button:focus-visible { background: #284732; }
+.fullscreenStudy { position: absolute; inset: 0; z-index: 5; pointer-events: none; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; padding: 0 5vw 18px; }
+.fullscreenStudy .subtitles { flex: none; width: min(1050px, 88vw); padding: 12px 20px; margin-bottom: 10px; min-height: 0; max-height: 30vh; border-radius: 16px; background: #000b; pointer-events: auto; }
+.fullscreenStudy .subtitles:empty { display: none; }
+.fullscreenStudy .line { font-size: clamp(23px, 2.5vw, 42px); text-shadow: 0 2px 5px #000; }
+.fullscreenStudy .controls { pointer-events: auto; background: #07100bd9; border: 1px solid #ffffff24; border-radius: 20px; padding: 8px 12px; gap: 12px; }
+.fullscreenStudy .lookup { pointer-events: auto; text-shadow: none; }
+.fullscreenStudy .control { height: 42px; width: 48px; }
+.fullscreenStudy .control.play { height: 46px; width: 54px; }
+body.light .lookup { background: #f7fff9; color: #172b1c; border-color: #a9bdae; }
+body.light .lookupActions { background: #e4f2e8; }
+body.light .lookup .definitions { color: #173120; }
+.phraseMeaning { margin: 8px 0 12px; padding: 10px; border: 1px solid #5b856a; border-radius: 10px; background: #a9dabb0b; }
+.phraseMeaning small, .phraseMeaning strong { display: block; }
+.phraseMeaning strong { margin-top: 4px; font-size: 20px; }
+.phraseMeaning p { margin: 5px 0 0; line-height: 1.45; }

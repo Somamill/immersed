@@ -18,7 +18,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: npm run test:server
       - name: Check Mac subtitle and media logic
-        run: node --test tests/search.test.cjs tests/transcript-windows.test.cjs tests/transcript-compare.test.cjs tests/mac-media.test.cjs tests/mac-server.test.cjs tests/highlighting.test.cjs
+        run: node --test tests/search.test.cjs tests/transcript-windows.test.cjs tests/transcript-compare.test.cjs tests/mac-media.test.cjs tests/mac-server.test.cjs tests/highlighting.test.cjs tests/caption-frames.test.cjs
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -29,7 +29,7 @@ jobs:
       - run: npm run language:setup
       - run: npm run context:setup
       - run: npm run test:language
-      - run: node --test tests/context-meaning.test.cjs
+      - run: node --test tests/context-meaning.test.cjs tests/screen-captions.test.cjs
       - run: npm run build:hosted
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e

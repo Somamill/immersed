@@ -22,3 +22,8 @@ test('dictionary-attested phrases disambiguate te-form stems without rewriting s
   assert.ok((await language.contextPhrases('彼の主張は筋が通っている。', 7, 12)).some(p => p.form === '筋が通る'));
   assert.deepEqual(await language.contextPhrases('窓を開く。', 2, 4), []);
 });
+test('selected pronunciation excludes unrelated readings of the same kanji', async () => {
+  const entries = await require('../server/language.cjs').lookup('筋', { reading: 'すじ', pos: 'noun' });
+  assert.ok(entries.length > 0);
+  assert.ok(entries.every(entry => entry.japanese.every(form => form.reading === 'すじ')));
+});

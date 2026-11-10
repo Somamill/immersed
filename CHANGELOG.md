@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.12.0 — 2026-11-10
+
+Smoother subtitle navigation and fullscreen study
+
+- Previous/next and arrow or J/L keys move between adjacent subtitle blocks. Floating hover lookup preserves layout, resumes only playback it paused, and keeps actions visible. Dictionary lookup uses the selected reading and shows attested expressions immediately.
+- Fullscreen includes interactive subtitles, lookup and a compact playback-speed menu. Opening a video clears its URL from search, completed transcripts have no status notice, and Save offline keeps the current player in place.
+- On Mac, Apple Vision can match two small video-frame samples to a speech block and use confirmed on-screen Japanese captions. The reported paper-church homophone error was corrected in native verification. Frame access, OCR and speech recognition can still fail; videos without usable visible captions continue to use Whisper.
+
 ## 0.11.1 — 2026-11-10
 
 Keep phrase context for inflected verbs
