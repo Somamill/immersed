@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.10.0 — 2026-11-10
+
+Faster search, instant lookup and fullscreen study
+
+- YouTube search fetches lightweight listings first and verifies original-language metadata progressively, with an in-place language toggle and redesigned video cards. Subtitle recognition prepares a short playhead-first preview before filling the rest of a minute, persists coverage across interruptions and preloads the next section earlier. Captions supplied by YouTube are fetched before downloading audio. Word definitions are prefetched with sentence analysis and cached by reading; dictionary search updates while typing and resolves additional potential and negative adjective forms. Add a fullscreen button, F key, Control-Command-F and embedded-video fullscreen. Search depends on YouTube access and language metadata; speech remains generated and unverified.
+
 ## 0.9.6 — 2026-11-10
 
 Restore kanji subtitle default

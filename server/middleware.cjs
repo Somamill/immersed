@@ -26,14 +26,16 @@ module.exports = function middleware(next) {
         const text = url.searchParams.get('text') || '';
         if (!text || text.length > 2000) return json(400, { error: 'Caption must be between 1 and 2000 characters' });
         const tokens = await language.analyze(text, true);
-        const dictionary = {};
-        if (url.searchParams.get('dictionary') === 'true') {
+        const dictionary = {},lookups={};
+        const prefetch=url.searchParams.get('dictionary')==='prefetch';
+        if (prefetch||url.searchParams.get('dictionary') === 'true') {
           for (const token of tokens.filter(t => t.word).slice(0, 24)) {
             const key = dictionaryKey(token);
-            if (!dictionary[key]) dictionary[key] = await language.lookup(token.lemma, token);
+            if(prefetch){const exact=[token.lemma,token.reading,token.pos,token.proper].join(':');if(!Object.hasOwn(lookups,exact))lookups[exact]=await language.lookup(token.lemma,token);}
+            else if (!dictionary[key]) dictionary[key] = await language.lookup(token.lemma, token);
           }
         }
-        return json(200, { tokens, dictionary });
+        return json(200, { tokens, dictionary, ...(prefetch?{lookups}:{}) });
       }
       if (url.pathname.endsWith('/dictionary')) {
         const word = url.searchParams.get('word') || '';

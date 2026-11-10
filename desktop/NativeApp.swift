@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         web = makeWebView()
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 860), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "immersed."
+        window.collectionBehavior.insert(.fullScreenPrimary)
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 800, height: 600)
         window.contentView = web
@@ -69,12 +70,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         item(view, "Study window", #selector(showStudy), "1")
         item(view, "Saved words", #selector(words), "3")
         item(view, "Browse YouTube (unfiltered)", #selector(browseYouTube), "b")
+        let fullscreen = view.addItem(withTitle: "Toggle Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
+        fullscreen.keyEquivalentModifierMask = [.control, .command]
         NSApp.mainMenu = menu
     }
     func makeWebView(configuration: WKWebViewConfiguration? = nil) -> WKWebView {
         let config = configuration ?? WKWebViewConfiguration()
         config.websiteDataStore = .default()
         config.mediaTypesRequiringUserActionForPlayback = []
+        config.preferences.isElementFullscreenEnabled = true
         config.userContentController.add(self, name: "immersed")
         if blockAds, let rules = adRules { config.userContentController.add(rules) }
         let view = WKWebView(frame: .zero, configuration: config)
@@ -140,6 +144,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
               let object = message.body as? [String: Any], let action = object["action"] as? String else { return }
         if action == "blockAds", let enabled = object["enabled"] as? Bool {
             UserDefaults.standard.set(enabled, forKey: "blockAds"); updateAdRules()
+        } else if action == "fullscreen" { window.toggleFullScreen(nil)
         } else if action == "playback" {
             let position = object["position"] as? Double ?? 0
             let duration = object["duration"] as? Double ?? 0

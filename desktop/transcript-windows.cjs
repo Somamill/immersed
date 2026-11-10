@@ -102,6 +102,43 @@ function createTranscriptWindows({ folder, get, recognize }) {
           : "Whisper large-v3-turbo / MLX",
     };
   }
+  function coverage(data, start, end) {
+    const spans = (
+      data?.covered || [[start, start + (data?.processedSeconds || 0)]]
+    )
+      .map(([a, b]) => [Math.max(start, a), Math.min(end, b)])
+      .filter(([a, b]) => Number.isFinite(a) && Number.isFinite(b) && b > a)
+      .sort((a, b) => a[0] - b[0]);
+    const merged = [];
+    for (const span of spans) {
+      const last = merged.at(-1);
+      if (last && span[0] <= last[1] + 0.001)
+        last[1] = Math.max(last[1], span[1]);
+      else merged.push(span);
+    }
+    return merged;
+  }
+  function missing(covered, start, end) {
+    const gaps = [];
+    let cursor = start;
+    for (const [a, b] of covered) {
+      if (a > cursor + 0.001) gaps.push([cursor, a]);
+      cursor = Math.max(cursor, b);
+    }
+    if (cursor < end - 0.001) gaps.push([cursor, end]);
+    return gaps;
+  }
+  function checkpoint(state, start, previous, covered, cues) {
+    const data = {
+      cues: previous.cues.concat(cues),
+      covered,
+      processedSeconds: covered.reduce((sum, [a, b]) => sum + b - a, 0),
+      pipeline: "mac-whisper-context-v3",
+    };
+    state.partial.set(start, data);
+    write(state, start, data, true);
+    return data;
+  }
   async function drain() {
     if (running) return;
     running = true;
@@ -117,52 +154,99 @@ function createTranscriptWindows({ folder, get, recognize }) {
             cues: [],
             processedSeconds: 0,
           };
-        const prepared = Math.min(end - start, previous.processedSeconds || 0);
-        state.jobs.set(start, {
-          status: "processing",
-          stage: "Loading the local speech model",
-          phase: "loading",
-        });
-        try {
-          const cues =
-            prepared >= end - start
-              ? []
-              : await recognize(
-                  path.join(folder, item.file),
-                  (progress) => {
-                    const checkpoint = {
-                      cues: previous.cues.concat(progress.cues || []),
-                      processedSeconds:
-                        prepared + (progress.processedSeconds || 0),
-                      pipeline: "mac-whisper-context-v3",
-                    };
-                    state.partial.set(start, checkpoint);
-                    write(state, start, checkpoint, true);
-                    state.jobs.set(start, {
-                      status: "processing",
-                      stage: progress.stage || "Recognizing this minute",
-                      phase: progress.phase,
-                    });
-                  },
-                  quality,
-                  {
-                    start: start + prepared,
-                    duration: end - start - prepared,
-                    priority: 10,
-                  },
-                );
-          const final = {
-            cues: previous.cues.concat(cues),
-            processedSeconds: end - start,
-            pipeline: "mac-whisper-context-v3",
-          };
-          state.complete.set(start, final);
-          write(state, start, final);
+        const covered = coverage(previous, start, end),
+          gaps = missing(covered, start, end);
+        if (!gaps.length) {
+          state.complete.set(start, previous);
+          write(state, start, previous);
           state.partial.delete(start);
+          state.jobs.delete(start);
           fs.rmSync(path.join(state.dir, start + ".partial.json"), {
             force: true,
           });
-          state.jobs.delete(start);
+          continue;
+        }
+        const focus = Math.max(
+          start,
+          Math.min(end - 0.001, task.focus ?? start),
+        );
+        const gap =
+          gaps.find(([a, b]) => a <= focus && focus < b) ||
+          gaps.find(([a]) => a > focus) ||
+          gaps[0];
+        const size = task.first ? 12 : 26;
+        const left = task.first
+          ? Math.max(
+              gap[0],
+              Math.min(focus - 2, gap[1] - Math.min(size, gap[1] - gap[0])),
+            )
+          : gap[0];
+        const right = Math.min(gap[1], left + size);
+        state.jobs.set(start, {
+          status: "processing",
+          stage: "Preparing subtitles at your position",
+          phase: "loading",
+        });
+        try {
+          const cues = await recognize(
+            path.join(folder, item.file),
+            (progress) => {
+              const prepared = Math.max(
+                0,
+                Math.min(right - left, progress.processedSeconds || 0),
+              );
+              if (prepared > 0)
+                checkpoint(
+                  state,
+                  start,
+                  previous,
+                  coverage(
+                    { covered: [...covered, [left, left + prepared]] },
+                    start,
+                    end,
+                  ),
+                  progress.cues || [],
+                );
+              state.jobs.set(start, {
+                status: "processing",
+                stage: progress.stage || "Preparing subtitles ahead",
+                phase: progress.phase,
+              });
+            },
+            quality,
+            {
+              start: left,
+              duration: right - left,
+              priority: task.first ? 20 : 5,
+            },
+          );
+          const data = checkpoint(
+            state,
+            start,
+            previous,
+            coverage({ covered: [...covered, [left, right]] }, start, end),
+            cues,
+          );
+          if (!missing(data.covered, start, end).length) {
+            state.complete.set(start, data);
+            write(state, start, data);
+            state.partial.delete(start);
+            state.jobs.delete(start);
+            fs.rmSync(path.join(state.dir, start + ".partial.json"), {
+              force: true,
+            });
+          } else {
+            if (Math.abs((state.focusStart ?? start) - start) > WINDOW * 2) {
+              state.jobs.delete(start);
+              continue;
+            }
+            task.first = false;
+            state.jobs.set(start, {
+              status: "queued",
+              stage: "Preparing subtitles ahead",
+            });
+            queue.push(task);
+          }
         } catch (error) {
           state.jobs.set(start, {
             status: "unavailable",
@@ -180,6 +264,7 @@ function createTranscriptWindows({ folder, get, recognize }) {
     if (!item) throw Error("Media not found");
     const state = context(id, quality),
       range = bounds(item, at);
+    state.focusStart = range.start;
     if (state.complete.has(range.start) && !retry)
       return result(id, quality, at);
     if (retry && state.jobs.get(range.start)?.status === "processing")
@@ -208,13 +293,23 @@ function createTranscriptWindows({ folder, get, recognize }) {
         status: "queued",
         stage: "Preparing the minute at your listening position",
       });
-      queue.unshift({ id, quality, start: range.start });
+      queue.unshift({
+        id,
+        quality,
+        start: range.start,
+        focus: Number(at) || 0,
+        first: true,
+      });
       void drain();
     } else if (job.status === "queued") {
       const index = queue.findIndex(
         (t) => t.id === id && t.quality === quality && t.start === range.start,
       );
-      if (index > 0) queue.unshift(...queue.splice(index, 1));
+      if (index >= 0) {
+        queue[index].focus = Number(at) || 0;
+        queue[index].first = true;
+        if (index > 0) queue.unshift(...queue.splice(index, 1));
+      }
     }
     return result(id, quality, at);
   }

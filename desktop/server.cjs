@@ -5,6 +5,7 @@ const http = require("node:http"),
 const { execFile, spawn } = require("node:child_process");
 const { promisify } = require("node:util");
 const { createMedia } = require("./media.cjs");
+const { createSearch } = require("./search.cjs");
 const { parseYouTubeCaptions } = require("./captions.cjs");
 const api = require("../server/middleware.cjs");
 const processAbort = new AbortController();
@@ -239,36 +240,68 @@ async function transcribe(id, quality = "balanced") {
   let folder;
   try {
     folder = fs.mkdtempSync(path.join(os.tmpdir(), "immersed-asr-"));
-    await run(
-      "yt-dlp",
-      [
-        "--no-playlist",
-        "--no-progress",
-        "--ignore-errors",
-        "--max-filesize",
-        "1G",
-        "--write-subs",
-        "--sub-langs",
-        "ja,ja-JP",
-        "--sub-format",
-        "json3",
-        "-f",
-        "bestaudio/best",
-        "-o",
-        path.join(folder, "audio.%(ext)s"),
-        "https://www.youtube.com/watch?v=" + id,
-      ],
-      { timeout: 10 * 60_000, maxBuffer: 1024 * 1024 },
-    );
-    const subtitle = fs
+    try {
+      await run(
+        "yt-dlp",
+        [
+          "--no-playlist",
+          "--no-progress",
+          "--socket-timeout",
+          "8",
+          "--retries",
+          "1",
+          "--extractor-retries",
+          "1",
+          "--ignore-errors",
+          "--skip-download",
+          "--write-auto-subs",
+          "--write-info-json",
+          "--max-filesize",
+          "1G",
+          "--write-subs",
+          "--sub-langs",
+          "ja,ja-JP,ja-orig",
+          "--sub-format",
+          "json3",
+          "-f",
+          "bestaudio/best",
+          "-o",
+          path.join(folder, "audio.%(ext)s"),
+          "https://www.youtube.com/watch?v=" + id,
+        ],
+        { timeout: 45000, maxBuffer: 1024 * 1024 },
+      );
+    } catch {
+      /* Audio recognition remains available when caption fetch fails. */
+    }
+    let info = {};
+    try {
+      info = JSON.parse(
+        fs.readFileSync(path.join(folder, "audio.info.json"), "utf8"),
+      );
+    } catch {}
+    const files = fs
       .readdirSync(folder)
-      .find((name) => /^audio\.ja(?:-JP)?\.json3$/.test(name));
-    if (subtitle) {
+      .filter((name) => /^audio\.ja(?:-JP|-orig)?\.json3$/.test(name));
+    const subtitle =
+      files.find((name) =>
+        Object.keys(info.subtitles || {}).some(
+          (lang) => name === "audio." + lang + ".json3",
+        ),
+      ) ||
+      files.find((name) => name.includes("ja-orig")) ||
+      files[0];
+    const authored =
+      subtitle &&
+      Object.keys(info.subtitles || {}).some(
+        (lang) => subtitle === "audio." + lang + ".json3",
+      );
+    if (subtitle && (authored || originalLanguage(info) === "ja")) {
       const cues = parseYouTubeCaptions(
         JSON.parse(fs.readFileSync(path.join(folder, subtitle), "utf8")),
       );
       if (cues.length) {
-        const result = { cues, source: "youtube" };
+        const result = { cues, source: authored ? "youtube" : "youtube-asr" };
         fs.writeFileSync(
           path.join(cache, id + "-" + quality + ".json"),
           JSON.stringify(result),
@@ -277,13 +310,30 @@ async function transcribe(id, quality = "balanced") {
         return;
       }
     }
+    jobs.set(key, { status: "processing", stage: "Preparing video audio" });
+    await run(
+      "yt-dlp",
+      [
+        "--no-playlist",
+        "--no-progress",
+        "--max-filesize",
+        "1G",
+        "-f",
+        "bestaudio/best",
+        "-o",
+        path.join(folder, "audio.%(ext)s"),
+        "https://www.youtube.com/watch?v=" + id,
+      ],
+      { timeout: 10 * 60_000, maxBuffer: 1024 * 1024 },
+    );
     const file = fs
       .readdirSync(folder)
       .find(
         (f) =>
           f.startsWith("audio.") &&
           !f.endsWith(".part") &&
-          !f.endsWith(".json3"),
+          !f.endsWith(".json3") &&
+          !f.endsWith(".json"),
       );
     if (!file) throw Error("Video audio could not be accessed.");
     jobs.set(key, { status: "queued", stage: "Waiting for the speech worker" });
@@ -312,9 +362,9 @@ async function transcribe(id, quality = "balanced") {
     if (folder) fs.rmSync(folder, { recursive: true, force: true });
   }
 }
-const searchCache = new Map();
+const videoInfoPending = new Map();
 const videoInfoCache = new Map();
-let searching = false;
+
 function originalLanguage(info) {
   if (info.original_language) return info.original_language.split("-")[0];
   const orig = Object.keys(info.automatic_captions || {}).find((k) =>
@@ -341,55 +391,39 @@ function publicInfo(e) {
 }
 async function videoInfo(id) {
   if (videoInfoCache.has(id)) return videoInfoCache.get(id);
-  const { stdout } = await run(
-    "yt-dlp",
-    [
-      "--skip-download",
-      "--no-warnings",
-      "--dump-single-json",
-      "https://www.youtube.com/watch?v=" + id,
-    ],
-    { timeout: 90000, maxBuffer: 16 * 1024 * 1024 },
-  );
-  const result = publicInfo(JSON.parse(stdout));
-  videoInfoCache.set(id, result);
-  if (videoInfoCache.size > 100)
-    videoInfoCache.delete(videoInfoCache.keys().next().value);
-  return result;
-}
-async function search(query) {
-  const cached = searchCache.get(query);
-  if (cached && Date.now() - cached.time < 300000) return cached.data;
-  if (searching) throw Error("A search is already running.");
-  searching = true;
-  try {
+  if (videoInfoPending.has(id)) return videoInfoPending.get(id);
+  const task = (async () => {
     const { stdout } = await run(
       "yt-dlp",
       [
         "--skip-download",
         "--no-warnings",
-        "--ignore-errors",
+        "--socket-timeout",
+        "8",
+        "--retries",
+        "1",
+        "--extractor-retries",
+        "1",
         "--dump-single-json",
-        "ytsearch6:" + query,
+        "https://www.youtube.com/watch?v=" + id,
       ],
-      { timeout: 120000, maxBuffer: 32 * 1024 * 1024 },
+      { timeout: 25000, maxBuffer: 16 * 1024 * 1024 },
     );
-    const raw = JSON.parse(stdout);
-    const data = (raw.entries || [])
-      .filter((e) => e && validId(e.id))
-      .map((e) => {
-        const info = publicInfo(e);
-        videoInfoCache.set(e.id, info);
-        return info;
-      });
-    searchCache.set(query, { time: Date.now(), data });
-    if (searchCache.size > 30)
-      searchCache.delete(searchCache.keys().next().value);
-    return data;
-  } finally {
-    searching = false;
-  }
+    const result = publicInfo(JSON.parse(stdout));
+    videoInfoCache.set(id, result);
+    if (videoInfoCache.size > 100)
+      videoInfoCache.delete(videoInfoCache.keys().next().value);
+    return result;
+  })().finally(() => videoInfoPending.delete(id));
+  videoInfoPending.set(id, task);
+  return task;
 }
+const searches = createSearch({
+  run,
+  videoInfo,
+  peek: (id) => videoInfoCache.get(id),
+});
+
 async function fallback(req, res) {
   const url = new URL(req.url, "http://127.0.0.1");
   const quality =
@@ -495,7 +529,7 @@ async function fallback(req, res) {
     const query = (url.searchParams.get("query") || "").trim();
     if (!query || query.length > 120)
       return json(res, 400, { error: "Enter up to 120 characters" });
-    return json(res, 200, { items: await search(query) });
+    return json(res, 200, await searches.search(query));
   }
   if (
     url.pathname === "/api/desktop/transcribe" &&

@@ -661,3 +661,132 @@ dialog::backdrop {
 .dictionaryEntry details {
   margin: 8px 0;
 }
+
+.searchPanel {
+  width: min(1120px, 94vw);
+  max-width: 1120px;
+}
+.searchSummary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+}
+.searchSummary h3 {
+  margin: 0;
+  font-size: 23px;
+}
+.searchFilters {
+  display: flex;
+  margin: 16px 0 22px;
+}
+.searchToggle {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 14px;
+}
+.searchResults {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 24px 20px;
+}
+.searchVideo {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 0 0 12px;
+  border: 0;
+  background: transparent;
+  border-radius: 12px;
+  overflow: hidden;
+}
+.searchVideo:hover {
+  background: #799b7d14;
+}
+.searchArtwork {
+  position: relative;
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #7d948122;
+}
+.searchArtwork img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.searchDuration {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  color: white;
+  background: #000c;
+  border-radius: 4px;
+  padding: 2px 5px;
+  font-size: 12px;
+}
+.searchVideo h3 {
+  font-size: 16px;
+  line-height: 1.45;
+  margin: 10px 4px 4px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.searchVideo p {
+  font-size: 13px;
+  margin: 0 4px 5px;
+}
+.searchLanguage {
+  margin: 0 4px;
+  font-size: 11px;
+  color: #88a991;
+}
+.searchResults.loading:empty::before {
+  content: "";
+  display: block;
+  aspect-ratio: 16/9;
+  border-radius: 12px;
+  background: linear-gradient(
+    110deg,
+    #718a7614 30%,
+    #718a762e 50%,
+    #718a7614 70%
+  );
+  background-size: 200% 100%;
+  animation: searchShimmer 1.4s linear infinite;
+}
+@keyframes searchShimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .searchResults.loading:empty::before {
+    animation: none;
+  }
+}
+
+.dictionaryResult {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin: 6px 0;
+}
+.dictionaryResult strong,
+.dictionaryResult small {
+  display: block;
+}
+
+.searchRefine {
+  display: flex;
+  gap: 10px;
+  margin: 0 0 22px;
+}
+.searchRefine input {
+  flex: 1;
+  min-width: 0;
+}

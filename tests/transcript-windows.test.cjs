@@ -18,15 +18,14 @@ function setup(t, recognize) {
   return { folder, get, recognize };
 }
 test("15-hour book recognizes only the requested minute and restores cached global timestamps", async (t) => {
-  let calls = 0;
+  const ranges = [];
   const options = setup(t, async (file, progress, quality, range) => {
-    calls++;
-    assert.equal(range.start, 30000);
-    assert.equal(range.duration, 60);
-    assert.equal(range.priority, 10);
-    const cues = [{ start: 30001, end: 30005, text: "日本語" }];
-    progress({ processedSeconds: 30, cues });
-    return cues;
+    ranges.push(range);
+    assert.ok(range.duration <= 26);
+    assert.ok(range.start >= 30000 && range.start + range.duration <= 30060);
+    return [
+      { start: range.start + 0.1, end: range.start + 0.5, text: "日本語" },
+    ];
   });
   const windows = createTranscriptWindows(options);
   windows.start("book", "balanced", 30015);
@@ -39,8 +38,14 @@ test("15-hour book recognizes only the requested minute and restores cached glob
     30015,
   );
   assert.equal(restored.rangeStart, 30000);
-  assert.equal(restored.cues[0].start, 30001);
-  assert.equal(calls, 1);
+  assert.equal(restored.cues[0].start, 30000.1);
+  assert.equal(ranges[0].start, 30013);
+  assert.equal(ranges[0].duration, 12);
+  assert.equal(ranges[0].priority, 20);
+  assert.equal(
+    ranges.reduce((sum, r) => sum + r.duration, 0),
+    60,
+  );
   assert.equal(restored.preparedMinutes, 1);
 });
 test("interrupted minute resumes its checkpoint and silent sections finish successfully", async (t) => {
@@ -48,13 +53,12 @@ test("interrupted minute resumes its checkpoint and silent sections finish succe
   const options = setup(t, async (file, progress, quality, range) => {
     if (++calls === 1) {
       progress({
-        processedSeconds: 30,
+        processedSeconds: 8,
         cues: [{ start: 121, end: 125, text: "日本語" }],
       });
       throw Error("interrupted");
     }
-    assert.equal(range.start, 150);
-    assert.equal(range.duration, 30);
+    if (calls === 2) assert.equal(range.start, 128);
     return [];
   });
   let windows = createTranscriptWindows(options);
@@ -89,10 +93,13 @@ test("existing full-book partial work migrates without retranscribing completed 
 });
 
 test("retry during an active minute keeps its saved checkpoint", async (t) => {
-  let finish;
+  let finish,
+    first = true;
   const options = setup(t, async (_file, progress) => {
+    if (!first) return [];
+    first = false;
     progress({
-      processedSeconds: 26,
+      processedSeconds: 8,
       cues: [{ start: 1, end: 2, text: "日本語" }],
     });
     await new Promise((r) => (finish = r));
@@ -100,9 +107,9 @@ test("retry during an active minute keeps its saved checkpoint", async (t) => {
   });
   const windows = createTranscriptWindows(options);
   windows.start("book", "balanced", 0);
-  assert.equal(windows.result("book", "balanced", 0).processedSeconds, 26);
+  assert.equal(windows.result("book", "balanced", 0).processedSeconds, 8);
   windows.start("book", "balanced", 0, true);
-  assert.equal(windows.result("book", "balanced", 0).processedSeconds, 26);
+  assert.equal(windows.result("book", "balanced", 0).processedSeconds, 8);
   assert.ok(
     fs.existsSync(
       path.join(options.folder, "windows/book/balanced/0.partial.json"),
@@ -125,12 +132,15 @@ test("retry of a legacy full-book cache exposes current-window progress", async 
     path.join(folder, "book-balanced.json"),
     JSON.stringify({ cues: [{ start: 0, end: 1, text: "old" }] }),
   );
-  let finish;
+  let finish,
+    first = true;
   const { createMedia } = require("../desktop/media.cjs");
   const media = createMedia({
     root,
     run: async () => ({}),
     recognize: async () => {
+      if (!first) return [];
+      first = false;
       await new Promise((r) => (finish = r));
       return [{ start: 30001, end: 30002, text: "new" }];
     },
@@ -141,10 +151,54 @@ test("retry of a legacy full-book cache exposes current-window progress", async 
     media.transcript("book", "balanced", 30000).status,
     "processing",
   );
-  assert.equal(media.transcript("book","balanced",30000).phase,"loading");
+  assert.equal(media.transcript("book", "balanced", 30000).phase, "loading");
   finish();
   await wait(
     () => media.transcript("book", "balanced", 30000).status === "ready",
   );
   assert.equal(media.transcript("book", "balanced", 30000).cues[0].text, "new");
+});
+
+test("the playhead preview is readable before the rest of the minute completes", async (t) => {
+  let calls = 0,
+    finish;
+  const windows = createTranscriptWindows(
+    setup(t, async (file, progress, quality, range) => {
+      if (++calls === 1) {
+        assert.equal(range.start, 48);
+        assert.equal(range.duration, 12);
+        return [{ start: 49, end: 52, text: "今の字幕" }];
+      }
+      if (calls === 2) await new Promise((r) => (finish = r));
+      return [];
+    }),
+  );
+  windows.start("book", "balanced", 50);
+  await wait(() => !!finish);
+  const partial = windows.result("book", "balanced", 50);
+  assert.notEqual(partial.status, "ready");
+  assert.equal(partial.processedSeconds, 12);
+  assert.equal(partial.cues[0].text, "今の字幕");
+  finish();
+  await wait(() => windows.result("book", "balanced", 50).status === "ready");
+});
+
+test("seeking far ahead yields after the current preview and retains the old checkpoint", async (t) => {
+  let release;
+  const starts = [];
+  const windows = createTranscriptWindows(
+    setup(t, async (file, progress, quality, range) => {
+      starts.push(range.start);
+      if (starts.length === 1) await new Promise((r) => (release = r));
+      return [];
+    }),
+  );
+  windows.start("book", "balanced", 0);
+  windows.start("book", "balanced", 1250);
+  release();
+  await wait(() => windows.result("book", "balanced", 1250).status === "ready");
+  assert.equal(starts[0], 0);
+  assert.equal(starts[1], 1248);
+  assert.equal(starts.filter((s) => s < 60).length, 1);
+  assert.equal(windows.result("book", "balanced", 0).processedSeconds, 12);
 });

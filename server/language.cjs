@@ -50,7 +50,23 @@ function dictionaryEntry(entry, tags, preferred = '', preferredReading = '') {
     senses:entry.sense.filter(s=>allowed(s.appliesToKanji,kanji)&&allowed(s.appliesToKana,preferredReading)).map(s=>({english_definitions:s.gloss.filter(g=>g.lang==='eng').map(g=>g.text),parts_of_speech:s.partOfSpeech.map(tag=>tags[tag]||tag)})),
   };
 }
-async function lookup(word, options = {}) {
+const lookupCache=new Map(),analysisCache=new Map();
+function remember(cache,key,run,max=600){
+  if(cache.has(key)){const value=cache.get(key);cache.delete(key);cache.set(key,value);return value;}
+  const value=Promise.resolve().then(run).catch(error=>{cache.delete(key);throw error;});cache.set(key,value);if(cache.size>max)cache.delete(cache.keys().next().value);return value;
+}
+function lookup(word,options={}){return remember(lookupCache,JSON.stringify([word.normalize('NFKC').trim(),options.pos,options.proper,options.reading]),()=>lookupUncached(word,options));}
+function verbBase(lemma,index){
+  if(index.has(lemma))return null;
+  const rows={え:'う',け:'く',げ:'ぐ',せ:'す',て:'つ',ね:'ぬ',べ:'ぶ',め:'む',れ:'る'};
+  const aRows={わ:'う',か:'く',が:'ぐ',さ:'す',た:'つ',な:'ぬ',ば:'ぶ',ま:'む',ら:'る'};
+  const candidates=[];
+  for(const [suffix,label] of [['れる','passive'],['せる','causative']])if(lemma.endsWith(suffix)&&aRows[lemma.at(-suffix.length-1)])candidates.push([lemma.slice(0,-suffix.length-1)+aRows[lemma.at(-suffix.length-1)],label,/^v5/]);
+  for(const [suffix,label] of [['られる','passive / potential'],['させる','causative']])if(lemma.endsWith(suffix))candidates.push([lemma.slice(0,-suffix.length)+'る',label,/^v1/]);
+  if(lemma.endsWith('る')&&rows[lemma.at(-2)])candidates.push([lemma.slice(0,-2)+rows[lemma.at(-2)],'potential',/^v5/]);
+  return candidates.find(([base,,pos])=>(index.get(base)||[]).some(entry=>entry.sense.some(s=>s.partOfSpeech.some(p=>pos.test(p)))))||null;
+}
+async function lookupUncached(word, options = {}) {
   word=word.normalize('NFKC').trim();
   const grammatical = grammarEntry(word, options);
   if (grammatical) return [grammatical];
@@ -127,21 +143,24 @@ async function search(query) {
 }
 const auxiliaries = { ます: 'polite', た: 'past', ない: 'negative', ぬ: 'negative', ん: 'negative', たい: 'desire', れる: 'passive / potential', られる: 'passive / potential', せる: 'causative', させる: 'causative', う: 'volitional', です: 'polite copula', だ: 'copula' };
 const patterns = [ ['について', 'about / concerning'], ['として', 'as / in the role of'], ['なければならない', 'must / have to'], ['かもしれない', 'might / may'], ['わけではない', 'does not necessarily mean'], ['ことができる', 'can / be able to'] ];
-async function analyze(text, grouped = true) {
+function analyze(text,grouped=true){return remember(analysisCache,JSON.stringify([text,grouped]),()=>analyzeUncached(text,grouped));}
+async function analyzeUncached(text, grouped = true) {
   const { index, tokenizer, stems } = await initialize();
   const raw = tokenizer.tokenize(text);
   let offset = 0;
   const tokens = raw.map(t => {
     const start = text.indexOf(t.surface_form, offset);
     offset = start + t.surface_form.length;
-    return { text: t.surface_form, start, end: offset, lemma: t.basic_form === '*' ? t.surface_form : t.basic_form, reading: hira(t.reading === '*' ? '' : t.reading), pos: posLabels[t.pos] || t.pos, detail: t.pos_detail_1, proper: t.pos_detail_1 === '固有名詞', word: t.pos !== '記号' && !/^\s+$/.test(t.surface_form), grammar: [] };
+    const lemma=t.basic_form==='*'?t.surface_form:t.basic_form;
+    const base=t.pos==='動詞'?verbBase(lemma,index):null;
+    return { text: t.surface_form, start, end: offset, lemma:base?.[0]||lemma, reading: hira(t.reading === '*' ? '' : t.reading), pos: posLabels[t.pos] || t.pos, detail: t.pos_detail_1, proper: t.pos_detail_1 === '固有名詞', word: t.pos !== '記号' && !/^\s+$/.test(t.surface_form), grammar: base?[base[1]]:[] };
   });
   if (!grouped) return tokens;
   const result = [];
   for (let i = 0; i < tokens.length;) {
     const head = tokens[i];
     let end = i + 1;
-    const grammar = [];
+    const grammar = [...head.grammar];
     const remaining = text.slice(head.start);
     // Longest dictionary-backed expression, including an inflected final verb.
     // Require an internal particle so ordinary noun grouping keeps its rules.
@@ -194,7 +213,8 @@ async function analyze(text, grouped = true) {
     if (!pattern && (suruVerb || ['verb', 'adjective'].includes(expression?.pos || head.pos))) {
       while (end < tokens.length && tokens[end].start === tokens[end - 1].end) {
         const t = tokens[end];
-        if (t.pos === 'auxiliary') { if (auxiliaries[t.lemma]) grammar.push(auxiliaries[t.lemma]); end++; }
+        if(t.pos==='verb'&&t.detail==='接尾'&&['せる','させる','れる','られる'].includes(t.lemma)){grammar.push(auxiliaries[t.lemma]);end++;}
+        else if (t.pos === 'auxiliary' || (t.pos==='adjective'&&t.lemma==='ない'&&t.detail==='非自立')) { if (auxiliaries[t.lemma]) grammar.push(auxiliaries[t.lemma]); end++; }
         else if (['て', 'で'].includes(t.text) && tokens[end + 1]?.pos === 'verb' && tokens[end + 1].detail === '非自立') { grammar.push('て-form construction'); end += 2; }
         else if (['て', 'で'].includes(t.text)) { grammar.push('て-form'); end++; }
         else break;

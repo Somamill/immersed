@@ -179,3 +179,13 @@ test('dictionary lookup normalizes kana and respects the requested reading',asyn
  const entries=await lookup('今日',{reading:'こんにち'});
  assert.ok(entries.length);assert.ok(entries[0].japanese.every(j=>j.reading==='こんにち'));
 });
+
+test('potential and negative adjective lookups retain the dictionary base and grammar',async()=>{
+ const potential=(await analyze('吸い取れなかった'))[0];assert.equal(potential.lemma,'吸い取る');assert.ok(potential.grammar.includes('potential'));assert.ok(potential.grammar.includes('negative'));assert.ok(potential.grammar.includes('past'));
+ assert.ok((await lookup('吸い取れなかった')).some(e=>e.senses.some(s=>s.english_definitions.includes('to absorb'))));
+ const adjective=(await analyze('美しくなかった'))[0];assert.equal(adjective.lemma,'美しい');assert.equal(adjective.text,'美しくなかった');assert.ok((await lookup(adjective.text)).length);
+});
+
+test('causative endings are not mislabelled as potential forms of another verb',async()=>{
+ const token=(await analyze('読ませなかった'))[0];assert.equal(token.lemma,'読む');assert.ok(token.grammar.includes('causative'));assert.ok(token.grammar.includes('negative'));
+});

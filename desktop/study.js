@@ -116,9 +116,26 @@ function cacheSet(cache, key, value, max = 250) {
 function analyze(text) {
   if (analysisCache.has(text)) return Promise.resolve(analysisCache.get(text));
   if (pendingAnalysis.has(text)) return pendingAnalysis.get(text);
-  const task = api("immersion/analyze", { text })
+  const task = api("immersion/analyze", { text, dictionary: "prefetch" })
     .then((data) => {
       cacheSet(analysisCache, text, data.tokens);
+      for (const token of data.tokens) {
+        const key = ["particle", "auxiliary"].includes(token.pos)
+          ? "grammar:" + token.pos + ":" + token.lemma
+          : token.proper
+            ? token.lemma + ":name:" + token.reading
+            : token.lemma;
+        const exact = [
+          token.lemma,
+          token.reading,
+          token.pos,
+          token.proper,
+        ].join(":");
+        if (data.lookups && Object.hasOwn(data.lookups, exact))
+          cacheSet(dictionaryCache, exact, { data: data.lookups[exact] });
+        else if (data.dictionary && Object.hasOwn(data.dictionary, key))
+          cacheSet(dictionaryCache, exact, { data: data.dictionary[key] });
+      }
       return data.tokens;
     })
     .finally(() => pendingAnalysis.delete(text));
@@ -365,7 +382,7 @@ function playbackChanged(force = false) {
       void beginTranscript();
     } else if (
       playing() &&
-      currentTime() % 60 > 30 &&
+      currentTime() % 60 > 10 &&
       prefetchedWindow !== minute + 1 &&
       (minute + 1) * 60 < source.duration
     ) {
@@ -545,7 +562,9 @@ async function pollTranscript(route, params, generation) {
               " · generated on this Mac"
           : data.source === "authored" || data.source === "youtube"
             ? "Japanese captions supplied with the media"
-            : "Generated Japanese transcript · verify uncertain words against the audio",
+            : data.source === "youtube-asr"
+              ? "YouTube Japanese auto-captions"
+              : "Generated Japanese transcript · verify uncertain words against the audio",
       );
 
       void sampleCoverage();
@@ -567,7 +586,9 @@ async function pollTranscript(route, params, generation) {
     );
     pollTimer = setTimeout(
       () => pollTranscript(route, params, generation),
-      1500,
+      cues.some((c) => c.start <= currentTime() && currentTime() < c.end)
+        ? 1500
+        : 650,
     );
   } catch (e) {
     if (generation === requestGeneration) {
@@ -642,7 +663,7 @@ async function renderCue() {
     button.onmouseenter = () => {
       clearTimeout(leaveTimer);
       if (extras.hoverLookup)
-        hoverTimer = setTimeout(() => openLookup(token, false), 160);
+        hoverTimer = setTimeout(() => openLookup(token, false), 70);
     };
     button.onmouseleave = () => {
       clearTimeout(hoverTimer);
@@ -851,6 +872,7 @@ function saveWord() {
   $("saveWord").textContent = "Saved";
 }
 function showPanel(title) {
+  $("panel").classList.remove("searchPanel");
   pause();
   $("panelTitle").textContent = title;
   $("panelBody").replaceChildren();
@@ -858,6 +880,7 @@ function showPanel(title) {
   return $("panelBody");
 }
 function closePanel() {
+  $("panel").classList.remove("searchPanel");
   $("panel").close();
 }
 function button(text, action) {
@@ -930,33 +953,68 @@ function showWords() {
   input.setAttribute("aria-label", "Search dictionary");
   form.append(input, el("button", "Search"));
   const results = el("div");
-  form.onsubmit = async (e) => {
-    e.preventDefault();
+  let dictionaryTimer,
+    searchId = 0;
+  async function searchDictionary() {
+    const query = input.value.trim(),
+      generation = ++searchId;
+    if (!query) {
+      results.replaceChildren();
+      return;
+    }
     results.textContent = "Searching…";
     try {
-      const data = await api("immersion/search", { query: input.value });
+      const data = await api("immersion/search", { query });
+      if (
+        generation !== searchId ||
+        !$("panel").open ||
+        $("panelTitle").textContent !== "Words"
+      )
+        return;
       results.replaceChildren();
       for (const entry of (data.data || []).slice(0, 12)) {
-        const j = entry.japanese?.[0] || {};
-        results.append(
-          button([j.word, j.reading].filter(Boolean).join(" · "), () => {
-            closePanel();
-            openLookup(
-              {
-                text: j.word || j.reading,
-                lemma: j.word || j.reading,
-                reading: j.reading || "",
-                grammar: [],
-                pos: "",
-              },
-              true,
-            );
-          }),
+        const j = entry.japanese?.[0] || {},
+          title = [j.word, j.reading].filter(Boolean).join(" · ");
+        const result = button("", () => {
+          closePanel();
+          void openLookup(
+            {
+              text: j.word || j.reading,
+              lemma: j.word || j.reading,
+              reading: j.reading || "",
+              grammar: [],
+              pos: "",
+            },
+            true,
+          );
+        });
+        result.className = "dictionaryResult";
+        result.setAttribute("aria-label", title);
+        result.append(
+          el("strong", title),
+          el(
+            "small",
+            entry.senses?.[0]?.english_definitions?.slice(0, 2).join("; ") ||
+              "",
+            "hint",
+          ),
         );
+        results.append(result);
       }
-    } catch (e) {
-      results.textContent = e.message;
+      if (!data.data?.length) results.textContent = "No matching entries.";
+    } catch (error) {
+      if (generation === searchId) results.textContent = error.message;
     }
+  }
+  form.onsubmit = (e) => {
+    e.preventDefault();
+    clearTimeout(dictionaryTimer);
+    void searchDictionary();
+  };
+  input.oninput = () => {
+    searchId++;
+    clearTimeout(dictionaryTimer);
+    dictionaryTimer = setTimeout(() => void searchDictionary(), 180);
   };
   body.append(form, results, el("h3", "Saved words"));
   if (!saved.length)
@@ -1175,60 +1233,152 @@ function exportBackup() {
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   }
 }
+let searchGeneration = 0;
 async function searchYouTube(query) {
-  const body = showPanel("YouTube search");
-  body.textContent = "Searching YouTube and checking source-language metadata…";
-  try {
-    const data = await api("desktop/search", { query });
-    if (!$("panel").open || $("panelTitle").textContent !== "YouTube search")
-      return;
-    const filtered = data.items.filter(
-      (x) =>
-        (!extras.originalOnly || x.language === "ja") &&
-        (!prefs.hideShorts || !x.isShort) &&
-        x.duration >= prefs.minimumMinutes * 60,
-    );
-    body.replaceChildren();
-    if (!filtered.length) {
-      body.append(
-        el(
-          "p",
-          "No results matched your language and length filters. Unknown-language videos are hidden while “Original Japanese only” is enabled. You can change this in Settings.",
-        ),
-      );
-      return;
+  const generation = ++searchGeneration,
+    body = showPanel("YouTube search");
+  $("panel").classList.add("searchPanel");
+  const heading = el("div", null, "searchSummary"),
+    title = el("h3", query),
+    progress = el("span", "Finding videos…", "hint");
+  heading.append(title, progress);
+  const controls = el("div", null, "searchFilters");
+  const original = el("label", null, "searchToggle"),
+    toggle = el("input");
+  toggle.type = "checkbox";
+  toggle.checked = extras.originalOnly;
+  toggle.setAttribute("aria-label", "Original Japanese only");
+  original.append(toggle, document.createTextNode("Original Japanese only"));
+  controls.append(original);
+  const cards = el("div", null, "searchResults"),
+    message = el("p", "", "hint");
+  const refine = el("form", null, "searchRefine"),
+    input = el("input");
+  input.type = "search";
+  input.value = query;
+  input.setAttribute("aria-label", "Search within YouTube");
+  const submit = el("button", "Search", "primary");
+  refine.append(input, submit);
+  refine.onsubmit = (e) => {
+    e.preventDefault();
+    if (input.value.trim()) {
+      $("query").value = input.value.trim();
+      void searchYouTube(input.value.trim());
     }
-    const cards = el("div", null, "cards");
-    for (const item of filtered) {
-      const card = el("article", null, "entry");
-      if (/^https:\/\/i\.ytimg\.com\//.test(item.thumbnail || "")) {
-        const image = el("img");
-        image.src = item.thumbnail;
-        image.alt = "";
-        card.append(image);
+  };
+  body.append(refine, heading, controls, cards, message);
+  const rendered = new Map();
+  let latest = { items: [], status: "loading" };
+  function paint() {
+    const data = latest,
+      filtered = data.items.filter(
+        (x) =>
+          (!extras.originalOnly || x.language === "ja") &&
+          (!prefs.hideShorts || !x.isShort) &&
+          x.duration >= prefs.minimumMinutes * 60,
+      ),
+      ids = new Set(filtered.map((x) => x.id));
+    for (const [id, node] of rendered)
+      if (!ids.has(id)) {
+        node.remove();
+        rendered.delete(id);
       }
-      card.append(
-        el("h3", item.title),
-        el(
-          "p",
-          item.channel +
-            " · " +
-            Math.round(item.duration / 60) +
-            " min · " +
-            (item.language || "language unknown"),
-        ),
-        button("Watch", () => {
-          closePanel();
-          loadVideo(item.id, item.title);
-        }),
+    for (const item of filtered) {
+      if (rendered.has(item.id)) {
+        const card = rendered.get(item.id);
+        card.style.order = String(filtered.indexOf(item));
+        card.querySelector("h3").textContent = item.title;
+        card.querySelector("p").textContent = item.channel;
+        card.querySelector(".searchDuration").textContent = formatDuration(
+          item.duration,
+        );
+        card.querySelector(".searchLanguage").textContent =
+          item.language === "ja"
+            ? "Japanese original"
+            : item.language || "Language unverified";
+        continue;
+      }
+      const card = el("button", null, "searchVideo");
+      card.type = "button";
+      card.style.order = String(filtered.indexOf(item));
+      card.setAttribute("aria-label", "Watch " + item.title);
+      const art = el("div", null, "searchArtwork"),
+        image = el("img");
+      image.alt = "";
+      image.loading = "lazy";
+      if (/^https:\/\/i\.ytimg\.com\//.test(item.thumbnail || ""))
+        image.src = item.thumbnail;
+      art.append(
+        image,
+        el("span", formatDuration(item.duration), "searchDuration"),
       );
+      card.append(
+        art,
+        el("h3", item.title),
+        el("p", item.channel, "hint"),
+        el(
+          "small",
+          item.language === "ja"
+            ? "Japanese original"
+            : item.language || "Language unverified",
+          "searchLanguage",
+        ),
+      );
+      card.onclick = () => {
+        closePanel();
+        void loadVideo(item.id, item.title);
+      };
       cards.append(card);
+      rendered.set(item.id, card);
     }
-    body.append(cards);
-  } catch (e) {
-    body.textContent = e.message;
+    progress.textContent =
+      data.status === "checking"
+        ? "Checking originals · " +
+          (data.checked || 0) +
+          "/" +
+          (data.total || data.items.length)
+        : filtered.length + " videos";
+    message.textContent = !filtered.length
+      ? data.status === "checking"
+        ? "Results will appear as their original language is confirmed."
+        : data.status === "loading"
+          ? ""
+          : "No matches with these filters. Try a different query or turn off “Original Japanese only”."
+      : "";
+    cards.classList.toggle(
+      "loading",
+      !filtered.length && data.status !== "ready",
+    );
+  }
+  toggle.onchange = () => {
+    extras.originalOnly = toggle.checked;
+    persist();
+    paint();
+  };
+  paint();
+  try {
+    do {
+      const data = await api("desktop/search", { query });
+      if (
+        generation !== searchGeneration ||
+        !$("panel").open ||
+        $("panelTitle").textContent !== "YouTube search"
+      )
+        return;
+      latest = data;
+      paint();
+      if (data.status !== "checking") break;
+      await new Promise((r) => setTimeout(r, 650));
+    } while (generation === searchGeneration && $("panel").open);
+  } catch (error) {
+    if (generation === searchGeneration) {
+      progress.textContent = "Search unavailable";
+      message.textContent = error.message;
+      cards.classList.remove("loading");
+    }
   }
 }
+
 async function importMedia(file) {
   if (!file) return;
   status("Importing " + file.name + "…");
@@ -1390,6 +1540,18 @@ $("search").onsubmit = (e) => {
     void loadVideo(id);
   } else if (value) void searchYouTube(value);
 };
+async function toggleFullscreen() {
+  if (window.webkit?.messageHandlers?.immersed) {
+    window.webkit.messageHandlers.immersed.postMessage({
+      action: "fullscreen",
+    });
+    return;
+  }
+  if (document.fullscreenElement) await document.exitFullscreen();
+  else await document.documentElement.requestFullscreen();
+}
+$("fullscreen").onclick = () =>
+  void toggleFullscreen().catch((e) => status(e.message, true));
 $("play").onclick = () => {
   resumeAfterLookup = false;
   playing() ? pause() : play();
@@ -1487,6 +1649,17 @@ $("settingsInput").onchange = async () => {
   }
 };
 document.addEventListener("keydown", (e) => {
+  if (
+    e.key.toLowerCase() === "f" &&
+    !e.metaKey &&
+    !e.ctrlKey &&
+    !e.altKey &&
+    !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)
+  ) {
+    e.preventDefault();
+    void toggleFullscreen().catch(() => {});
+    return;
+  }
   if (e.key === "Escape") {
     closeLookup();
     return;

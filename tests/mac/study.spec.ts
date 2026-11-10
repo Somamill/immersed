@@ -489,3 +489,113 @@ test("repairs the forced large-v3 default and preserves kanji, reading preferenc
     "accurate",
   );
 });
+
+test("search presents confirmed results progressively and has an immediate language toggle", async ({
+  page,
+}) => {
+  let ready = false;
+  const first = {
+    id: "aaaaaaaaaaa",
+    title: "First Japanese interview",
+    duration: 800,
+    channel: "Interview channel",
+    language: "ja",
+    checked: true,
+  };
+  const second = {
+    id: "bbbbbbbbbbb",
+    title: "Second Japanese interview",
+    duration: 900,
+    channel: "Books",
+    language: ready ? "ja" : null,
+    checked: ready,
+  };
+  await page.route("**/api/desktop/search?**", (route) =>
+    route.fulfill({
+      json: {
+        status: ready ? "ready" : "checking",
+        checked: ready ? 2 : 1,
+        total: 2,
+        items: [first, { ...second, language: ready ? "ja" : null }],
+      },
+    }),
+  );
+  await page.goto("/");
+  await page.locator("#query").fill("読書");
+  await page.locator("#search").getByRole("button").click();
+  await expect(
+    page.getByRole("button", {
+      name: "Watch First Japanese interview",
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", {
+      name: "Watch Second Japanese interview",
+      exact: true,
+    }),
+  ).toHaveCount(0);
+  await expect(page.locator(".searchSummary")).toContainText("1/2");
+  await page.getByLabel("Original Japanese only", { exact: true }).uncheck();
+  await expect(
+    page.getByRole("button", {
+      name: "Watch Second Japanese interview",
+      exact: true,
+    }),
+  ).toBeVisible();
+  ready = true;
+  await expect(page.locator(".searchSummary")).toContainText("2 videos");
+});
+
+test("word definitions are ready with sentence analysis before the first lookup", async ({
+  page,
+}) => {
+  let requests = 0;
+  await page.route("**/api/immersion/dictionary?**", (route) => {
+    requests++;
+    return route.abort();
+  });
+  await page.goto("/");
+  await page.evaluate(() =>
+    (window as any).eval(
+      "source={type:'youtube',id:'abcdefghijk'};youtube={getCurrentTime:()=>1,getPlayerState:()=>2};cues=[{start:0,end:5,text:'水を吸い取りました。'}];cueIndex=-1;void renderCue();",
+    ),
+  );
+  await page
+    .getByRole("button", { name: "Look up 吸い取りました", exact: true })
+    .click();
+  await expect(page.locator("#definitions")).toContainText("to absorb");
+  expect(requests).toBe(0);
+});
+
+test("fullscreen button and F key invoke the native fullscreen action", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    (window as any).__nativeActions = [];
+    Object.defineProperty(window, "webkit", {
+      configurable: true,
+      value: {
+        messageHandlers: {
+          immersed: {
+            postMessage: (message: any) =>
+              (window as any).__nativeActions.push(message),
+          },
+        },
+      },
+    });
+  });
+  await page
+    .getByRole("button", { name: "Toggle fullscreen", exact: true })
+    .click();
+  await page.keyboard.press("f");
+  expect(
+    await page.evaluate(
+      () =>
+        (window as any).__nativeActions.filter(
+          (m: any) => m.action === "fullscreen",
+        ).length,
+    ),
+  ).toBe(2);
+});
