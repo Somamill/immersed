@@ -33,6 +33,8 @@ Hover briefly to look up a word and pause playback; leaving the lookup resumes o
 - Command-O: native file picker.
 - Command-comma: settings.
 - Command-1 / 2 / 3: study window / library / saved words.
+- F or the Video fullscreen button: expand only the video player; Escape exits.
+- Control-Command-F: standard Mac app-window fullscreen.
 - Escape: close lookup or a panel.
 
 Settings and saved words persist locally. Export/import provides a JSON backup through a native Mac save dialog; a backup can be saved to iCloud Drive. Automatic iPhone/Mac iCloud synchronization remains deferred until Apple signing configuration is available. Exporting a file is not automatic cross-device synchronization.
@@ -49,7 +51,7 @@ Google blocks account authentication in embedded web views. The app does not spo
 
 Video-supplied Japanese captions are preferred when available. Otherwise the app recognizes accessible audio locally. Fast mode uses MLX Whisper large-v3-turbo; accuracy mode uses the larger MLX Whisper large-v3 checkpoint. Both retain word timing and reuse the loaded model across bounded 30-second audio chunks. Only one speech worker runs at a time. Digital near-silence is skipped; low-confidence segments are marked, and the text is never automatically replaced with a context-model guess.
 
-**Check transcript** runs the second speech model and lists passages whose text or boundaries differ, with a replay control. Agreement does not prove accuracy. The supplied example “どんどんなさっているんですよね” was reproduced closely by both models with surrounding audio; it should not be replaced simply because it looks unusual out of context.
+The study screen automatically prepares subtitles around the playhead. Speech output remains an estimate, and agreement between models does not prove accuracy. The supplied example “どんどんなさっているんですよね” was reproduced closely by both models with surrounding audio; it should not be replaced simply because it looks unusual out of context.
 
 A 35-second natural-speech excerpt from the reported video took 10.30 seconds in fast mode and 13.57 seconds in accuracy mode on an M1 Pro with 16 GB memory, after model downloads. These measurements include worker startup and exclude network/download time. They are a short smoke benchmark, not a guarantee for every file or every M1 configuration.
 
@@ -60,3 +62,13 @@ Private, restricted, region-blocked, DRM-protected, unavailable or embedding-dis
 Media, transcripts, startup logs and dependencies live under `~/Library/Application Support/Immersed Mac`; the local HTTP service binds only to `127.0.0.1:4765`. Imported media and speech audio are not uploaded to a remote transcription service. First-time model and dictionary downloads need internet access.
 
 JMdict/JMnedict: EDRDG, CC BY-SA 4.0. Pitch accents: Kanjium / Uros O., CC BY-SA 4.0. Context counts: Tatoeba contributors, CC BY 2.0 FR. Kuromoji/IPADIC provides morphology. See THIRD_PARTY.md and the source metadata under src/data for credits and pinned sources.
+
+## Contextual dictionary on Apple Silicon
+
+Definitions are prefetched with sentence analysis and appear immediately. A separate **In this sentence** suggestion uses the selected word, its dictionary senses, dictionary-attested surrounding phrases, and the preceding/following captions. It explains literal or figurative usage without changing the subtitle. Dictionary senses remain available below it.
+
+Qwen3-4B-Instruct-2507, quantized to 4 bits for MLX, runs locally. The first launch prepares a separate Python runtime and downloads approximately 2.2 GB of public model weights in the background. Playback and dictionary lookup continue during setup. Passages are never sent to a remote AI service. Context suggestions can be mistaken or ambiguous; they are not verified translations or transcription corrections.
+
+The model is loaded on demand, cached exact-context answers are reused, and the worker exits after two idle minutes to release memory. On unsupported hosts or if setup fails, the normal dictionary remains available. Setup diagnostics are local at `~/Library/Application Support/Immersed Mac/.context-setup.log`; restarting the app retries setup.
+
+Model: [Qwen3-4B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507), Apache 2.0. [MLX checkpoint](https://huggingface.co/mlx-community/Qwen3-4B-Instruct-2507-4bit), pinned revision `50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b`.

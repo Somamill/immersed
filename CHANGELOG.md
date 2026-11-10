@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.11.0 — 2026-11-10
+
+Video fullscreen and contextual dictionary
+
+- Expand only the embedded video with F or the player fullscreen button. Add local sentence-aware dictionary explanations with surrounding captions and dictionary-attested phrases; preserve instant definitions.
+- Apple Silicon prepares a 2.2 GB Qwen3 MLX model in the background. Context explanations are generated suggestions and can be mistaken; normal lookup remains available during setup or failure.
+
 ## 0.10.1 — 2026-11-10
 
 Refine progressive search layout

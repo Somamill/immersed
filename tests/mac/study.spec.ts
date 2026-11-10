@@ -568,34 +568,40 @@ test("word definitions are ready with sentence analysis before the first lookup"
   expect(requests).toBe(0);
 });
 
-test("fullscreen button and F key invoke the native fullscreen action", async ({
-  page,
-}) => {
+test("video fullscreen button and F key expand only the player", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Video fullscreen", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement?.id)).toBe("video");
+  await page.keyboard.press("f");
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+  await page.getByRole("button", { name: "Video fullscreen", exact: true }).click();
+  await page.getByRole("button", { name: "Exit video fullscreen", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+  await page.getByRole("button", { name: "Video fullscreen", exact: true }).click();
+  await page.keyboard.press("Escape");
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+});
+
+
+test("context explanation uses neighboring captions without delaying definitions", async ({ page }) => {
+  let received: Record<string, string> = {};
+  let finish: () => void = () => {};
+  const gate = new Promise<void>(resolve => { finish = resolve; });
+  await page.route("**/api/immersion/context-meaning?*", async route => {
+    received = Object.fromEntries(new URL(route.request().url()).searchParams);
+    await gate;
+    await route.fulfill({ json: { status: "ready", gloss: "line of reasoning", explanation: "Here 筋 refers to the logic of his argument, in 筋が通る." } });
+  });
   await page.goto("/");
   await page.evaluate(() => {
-    (window as any).__nativeActions = [];
-    Object.defineProperty(window, "webkit", {
-      configurable: true,
-      value: {
-        messageHandlers: {
-          immersed: {
-            postMessage: (message: any) =>
-              (window as any).__nativeActions.push(message),
-          },
-        },
-      },
-    });
+    (window as any).eval(`youtube={getCurrentTime:()=>4.2,getPlayerState:()=>2,pauseVideo:()=>{}}; cues=[{start:0,end:4,text:'彼の意見を聞いた。'},{start:4,end:8,text:'彼の主張は筋が通っている。'},{start:8,end:12,text:'だから納得した。'}]; cueIndex=-1; renderCue();`);
   });
-  await page
-    .getByRole("button", { name: "Toggle fullscreen", exact: true })
-    .click();
-  await page.keyboard.press("f");
-  expect(
-    await page.evaluate(
-      () =>
-        (window as any).__nativeActions.filter(
-          (m: any) => m.action === "fullscreen",
-        ).length,
-    ),
-  ).toBe(2);
+  await page.locator(".word").filter({ hasText: "筋" }).click();
+  await expect(page.locator("#definitions")).not.toHaveText("Looking up…");
+  await expect.poll(() => received.before).toBe("彼の意見を聞いた。");
+  expect(received.after).toBe("だから納得した。");
+  expect(received.sentence.slice(Number(received.start), Number(received.end))).toBe("筋");
+  finish();
+  await expect(page.locator("#contextMeaning")).toContainText("line of reasoning");
+
 });

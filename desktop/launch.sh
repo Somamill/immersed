@@ -8,7 +8,7 @@ if [ "${2:-}" != "--service" ]; then
   exit 0
 fi
 mkdir -p "$app_home"
-rsync -a --exclude node_modules --exclude .git --exclude .data --exclude .venv --exclude dist --exclude test-results "$source_dir/" "$app_home/"
+rsync -a --exclude node_modules --exclude .git --exclude .data --exclude .venv --exclude .venv-context --exclude work --exclude dist --exclude test-results "$source_dir/" "$app_home/"
 cd "$app_home"
 dependency_hash="$(node -e "const fs=require('fs'),c=require('crypto'),p=JSON.parse(fs.readFileSync('package-lock.json')); delete p.version;delete p.packages[''].version;console.log(c.createHash('sha256').update(JSON.stringify(p)).digest('hex'))")"
 if [ ! -d node_modules ] || [ ! -f .dependencies-sha ] || [ "$(cat .dependencies-sha)" != "$dependency_hash" ]; then
@@ -25,4 +25,8 @@ if [ ! -x .venv/bin/python ]; then
 fi
 export IMMERSED_PYTHON="$app_home/.venv/bin/python"
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+if [ "$(uname -m)" = arm64 ]; then
+ export IMMERSED_CONTEXT_PYTHON="$app_home/.venv-context/bin/python"
+ /bin/sh scripts/setup-context-meaning.sh > "$app_home/.context-setup.log" 2>&1 &
+fi
 exec node desktop/server.cjs

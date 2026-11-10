@@ -93,3 +93,11 @@ Tatoeba Japanese sentences © their contributors, CC BY 2.0 France: https://tato
 - `qwen-asr` 0.0.6 (Apache-2.0): https://github.com/QwenLM/Qwen3-ASR. The optional isolated runtime installs inference dependencies without its unused demo services. Transformers 4.57.6 and Accelerate 1.12.0 are Apache-2.0; Nagisa is MIT; SoyNLP is GPL-3.0 and SoX's Python wrapper is BSD-3-Clause. See each distribution's included license; these server dependencies are separate from the MIT app.
 - Optional benchmark models Qwen3 ASR 0.6B/1.7B are Apache-2.0; exact revisions and measured limitations are in [the upgrade report](docs/RECOGNITION_UPGRADE.md). They are not enabled as production recognizers.
 - FLEURS, Google and contributors: https://huggingface.co/datasets/google/fleurs. Used only for local diagnostic evaluation; no recordings or transcripts are redistributed in this update.
+
+### On-device contextual dictionary
+
+Qwen3-4B-Instruct-2507 by the Qwen team, Apache License 2.0.
+Source/model card: https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507
+MLX community 4-bit checkpoint: https://huggingface.co/mlx-community/Qwen3-4B-Instruct-2507-4bit
+Pinned revision: `50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b`. Weights are downloaded locally, not bundled in this repository.
+MLX LM: https://github.com/ml-explore/mlx-lm, MIT License. Context explanations are generated suggestions; original dictionary entries retain their source attribution.

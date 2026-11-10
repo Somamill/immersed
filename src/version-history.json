@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.11.0",
+    "date": "2026-11-10",
+    "title": "Video fullscreen and contextual dictionary",
+    "notes": [
+      "Expand only the embedded video with F or the player fullscreen button. Add local sentence-aware dictionary explanations with surrounding captions and dictionary-attested phrases; preserve instant definitions.",
+      "Apple Silicon prepares a 2.2 GB Qwen3 MLX model in the background. Context explanations are generated suggestions and can be mistaken; normal lookup remains available during setup or failure."
+    ]
+  },
+  {
     "version": "0.10.1",
     "date": "2026-11-10",
     "title": "Refine progressive search layout",

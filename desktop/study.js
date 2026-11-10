@@ -712,6 +712,8 @@ async function openLookup(token, pinned = false) {
     .join(" · ");
   $("definitions").textContent = "Looking up…";
   $("alternatives").replaceChildren();
+  $("contextMeaning").hidden = true;
+  $("contextMeaning").replaceChildren();
   updateKnown();
   const key = [token.lemma, token.reading, token.pos, token.proper].join(":");
   try {
@@ -730,6 +732,18 @@ async function openLookup(token, pinned = false) {
     renderDefinitions();
     const caption = cues[cueIndex];
     if (caption && token.start != null) {
+      const context = {
+        word: token.text,
+        lemma: token.lemma,
+        reading: token.reading || "",
+        pos: token.pos || "",
+        sentence: caption.text,
+        start: String(token.start),
+        end: String(token.end),
+        before: (cues[cueIndex - 1]?.text || "").slice(-240),
+        after: (cues[cueIndex + 1]?.text || "").slice(0, 240),
+      };
+      void explainContext(token, context);
       void api("immersion/lookup-context", {
         word: token.text,
         reading: token.reading || "",
@@ -737,8 +751,8 @@ async function openLookup(token, pinned = false) {
         sentence: caption.text,
         start: String(token.start),
         end: String(token.end),
-        before: "",
-        after: "",
+        before: context.before.slice(-120),
+        after: context.after.slice(0, 120),
       })
         .then((data) => {
           if (selected !== token) return;
@@ -768,6 +782,29 @@ async function openLookup(token, pinned = false) {
   } catch (e) {
     if (selected === token) $("definitions").textContent = e.message;
   }
+}
+async function explainContext(token, context, attempts = 0) {
+  try {
+    const result = await api("immersion/context-meaning", context);
+    if (selected !== token) return;
+    const box = $("contextMeaning");
+    if (result.status === "ready") {
+      box.replaceChildren(
+        el("small", "In this sentence · on-device suggestion", "hint"),
+        el("strong", result.gloss),
+        el("p", result.explanation),
+      );
+      box.hidden = false;
+    } else if (["preparing", "busy"].includes(result.status) && attempts < 30) {
+      box.textContent = result.status === "preparing"
+        ? "Setting up on-device context explanations…"
+        : "Reading the sentence…";
+      box.hidden = false;
+      setTimeout(() => {
+        if (selected === token) void explainContext(token, context, attempts + 1);
+      }, 2000);
+    } else box.hidden = true;
+  } catch { /* Definitions remain available when the optional model is offline. */ }
 }
 function renderDefinitions() {
   $("definitions").replaceChildren();
@@ -1190,7 +1227,7 @@ function showSettings() {
     el("h3", "Dictionary & credits"),
     el(
       "p",
-      "JMdict and JMnedict © EDRDG; Kanjium pitch accents © Uros O., CC BY-SA 4.0. Kuromoji/IPADIC supplies Japanese morphology. Tatoeba contributors supply context counts, CC BY 2.0 FR. Context plausibility is not audio verification. JLPT levels are community estimates. Speech transcripts are generated estimates; verify uncertain words with the audio.",
+      "JMdict and JMnedict © EDRDG; Kanjium pitch accents © Uros O., CC BY-SA 4.0. Kuromoji/IPADIC supplies Japanese morphology. Tatoeba contributors supply context counts, CC BY 2.0 FR. On Apple Silicon, Qwen3-4B-Instruct-2507 (MLX, Apache 2.0) generates suggested contextual meanings locally; these can be mistaken. Context plausibility is not audio verification. JLPT levels are community estimates. Speech transcripts are generated estimates; verify uncertain words with the audio.",
       "hint",
     ),
   );
@@ -1541,15 +1578,26 @@ $("search").onsubmit = (e) => {
   } else if (value) void searchYouTube(value);
 };
 async function toggleFullscreen() {
-  if (window.webkit?.messageHandlers?.immersed) {
-    window.webkit.messageHandlers.immersed.postMessage({
-      action: "fullscreen",
-    });
-    return;
-  }
   if (document.fullscreenElement) await document.exitFullscreen();
-  else await document.documentElement.requestFullscreen();
+  else {
+    const video = $("video");
+    video.tabIndex = -1;
+    await video.requestFullscreen();
+    video.focus();
+  }
 }
+document.addEventListener("fullscreenchange", () => {
+  $("exitVideoFullscreen")?.remove();
+  if (document.fullscreenElement === $("video")) {
+    const exit = el("button", "✕", "exitVideoFullscreen");
+    exit.id = "exitVideoFullscreen";
+    exit.setAttribute("aria-label", "Exit video fullscreen");
+    exit.title = "Exit fullscreen · Escape";
+    exit.onclick = () => void document.exitFullscreen();
+    $("video").append(exit);
+    exit.focus();
+  }
+});
 $("fullscreen").onclick = () =>
   void toggleFullscreen().catch((e) => status(e.message, true));
 $("play").onclick = () => {
@@ -1661,6 +1709,11 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (e.key === "Escape") {
+    if (document.fullscreenElement) {
+      e.preventDefault();
+      void document.exitFullscreen();
+      return;
+    }
     closeLookup();
     return;
   }

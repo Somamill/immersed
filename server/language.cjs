@@ -241,4 +241,38 @@ async function homophones(word, reading) {
   }
   return found.sort((a, b) => Number(b.common) - Number(a.common)).filter((c, i, all) => all.findIndex(other => other.form === c.form) === i).slice(0, 8);
 }
-module.exports = { initialize, lookup, search, analyze, homophones };
+// Exact dictionary-attested expressions around a selected span, including
+// ambiguous te-form stems (通っ may be 通る, 通う, or 通つ). Never alter captions.
+async function contextPhrases(sentence, start, end) {
+  const { index, tags, tokenizer } = await initialize();
+  const raw = tokenizer.tokenize(sentence);
+  let offset = 0;
+  const tokens = raw.map(t => {
+    const begin = sentence.indexOf(t.surface_form, offset);
+    offset = begin + t.surface_form.length;
+    return { ...t, start: begin, end: offset };
+  });
+  const results = new Map();
+  for (let i = 0; i < tokens.length; i++) {
+    if (tokens[i].start > start || start - tokens[i].start > 24) continue;
+    for (let j = i; j < Math.min(tokens.length, i + 9); j++) {
+      const last = tokens[j];
+      if (last.pos === '記号') break;
+      if (last.end < end || last.end - tokens[i].start <= end - start) continue;
+      const prefix = sentence.slice(tokens[i].start, last.start);
+      const forms = [sentence.slice(tokens[i].start, last.end), prefix + last.basic_form];
+      if (last.pos === '動詞') {
+        const ending = last.surface_form.at(-1);
+        const replacements = { 'っ': ['う', 'つ', 'る'], 'ん': ['む', 'ぶ', 'ぬ'], 'い': ['く', 'ぐ'] }[ending] || [];
+        for (const suffix of replacements) forms.push(prefix + last.surface_form.slice(0, -1) + suffix);
+      }
+      for (const form of forms) {
+        if (form.length <= end - start || !index.has(form) || results.has(form)) continue;
+        const entries = index.get(form);
+        results.set(form, { form, senses: entries.slice(0, 2).flatMap(e => dictionaryEntry(e, tags, form).senses).slice(0, 4) });
+      }
+    }
+  }
+  return [...results.values()].sort((a, b) => b.form.length - a.form.length).slice(0, 3);
+}
+module.exports = { initialize, lookup, search, analyze, homophones, contextPhrases };

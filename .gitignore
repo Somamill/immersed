@@ -47,6 +47,9 @@ playwright-report/
 # Downloaded open-source dictionaries, transcription models/cache, Python runtime
 .data/
 .venv/
+.venv-context/
+.context-setup-lock/
+.context-setup.log
 __pycache__/
 
 # Deployment-local domain configuration
