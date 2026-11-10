@@ -37,7 +37,7 @@ let extras = {
     originalOnly: true,
     hoverLookup: true,
     pauseOnHover: true,
-    speechQuality: "balanced",
+    speechQuality: "accurate",
     playbackRate: 1,
     ...read("immersed.mac.options", {}),
   },
@@ -59,6 +59,14 @@ let localMedia = null,
   levels = {},
   library = [],
   youtubeReady = null;
+// Upgrade the earlier speed-first default once. Later explicit choices remain.
+if (!read("immersed.accuracyDefault", false)) {
+  extras.speechQuality = "accurate";
+  try {
+    localStorage.setItem("immersed.accuracyDefault", "true");
+    localStorage.setItem("immersed.mac.options", JSON.stringify(extras));
+  } catch {}
+}
 const positions = read("immersed.positions", {});
 let lastPositionSave = 0,
   coverageTokens = [];
@@ -174,8 +182,7 @@ function stopMedia() {
   cueIndex = -1;
   closeLookup(false);
   $("chapters").hidden = true;
-  $("retry").hidden = true;
-  $("compare").hidden = true;
+
   coverageTokens = [];
   $("coverage").textContent = "";
   $("download").hidden = true;
@@ -461,6 +468,23 @@ async function openLocal(id, time = null) {
 window.openLocalMedia = (id, time = null) =>
   openLocal(id, time).catch((e) => status(e.message, true));
 window.loadVideo = loadVideo;
+const subtitleRetries = new Map();
+function recoverSubtitles(generation) {
+  if (!source || generation !== requestGeneration) return;
+  const key = [
+    source.type,
+    source.id,
+    extras.speechQuality,
+    source.type === "local" ? Math.floor(currentTime() / 60) : "track",
+  ].join(":");
+  const attempt = subtitleRetries.get(key) || 0;
+  if (attempt >= 2) return;
+  subtitleRetries.set(key, attempt + 1);
+  clearTimeout(pollTimer);
+  pollTimer = setTimeout(() => {
+    if (generation === requestGeneration) void beginTranscript(true);
+  }, [2000, 5000][attempt]);
+}
 async function beginTranscript(retry = false) {
   if (!source) return;
   const generation = requestGeneration;
@@ -471,7 +495,7 @@ async function beginTranscript(retry = false) {
   if (retry) params.retry = "true";
   const route =
     source.type === "local" ? "desktop/local-transcript" : "desktop/transcribe";
-  $("retry").hidden = true;
+
   status("Preparing Japanese subtitles…");
   try {
     await api(route, params, "POST");
@@ -480,7 +504,7 @@ async function beginTranscript(retry = false) {
   } catch (e) {
     if (generation === requestGeneration) {
       status(e.message, true);
-      $("retry").hidden = false;
+      recoverSubtitles(generation);
     }
   }
 }
@@ -499,7 +523,7 @@ async function pollTranscript(route, params, generation) {
         cueIndex = -1;
         renderGeneration++;
       } else cueIndex = active;
-      if (!cues.length) $("subtitles").textContent = "Listening…";
+      if (!cues.length) $("subtitles").textContent = "";
 
       void renderCue();
       $("count").textContent =
@@ -512,11 +536,6 @@ async function pollTranscript(route, params, generation) {
         " segments";
     }
     if (data.status === "ready") {
-      $("retry").textContent = data.windowed
-        ? "Regenerate section"
-        : data.source === "youtube" || data.source === "authored"
-          ? "Reload subtitles"
-          : "Regenerate subtitles";
       status(
         data.windowed
           ? "Subtitles ready for " +
@@ -528,20 +547,19 @@ async function pollTranscript(route, params, generation) {
             ? "Japanese captions supplied with the media"
             : "Generated Japanese transcript · verify uncertain words against the audio",
       );
-      $("retry").hidden = false;
-      $("compare").hidden =
-        data.source === "youtube" || data.source === "authored";
+
       void sampleCoverage();
       return;
     }
     if (data.status === "unavailable") {
       status(data.message || "Speech recognition failed.", true);
-      $("retry").hidden = false;
+      if (data.canRetry !== false) recoverSubtitles(generation);
+
       return;
     }
     status(
       (data.stage || "Preparing subtitles") +
-        (data.duration
+        (data.duration && data.phase !== "loading"
           ? " · " +
             Math.round((100 * (data.processedSeconds || 0)) / data.duration) +
             "%"
@@ -554,7 +572,7 @@ async function pollTranscript(route, params, generation) {
   } catch (e) {
     if (generation === requestGeneration) {
       status(e.message, true);
-      $("retry").hidden = false;
+      recoverSubtitles(generation);
     }
   }
 }
@@ -562,7 +580,7 @@ async function renderCue() {
   if (!cues.length) {
     renderGeneration++;
     cueIndex = -1;
-    if (source) $("subtitles").textContent = "Listening…";
+    if (source) $("subtitles").textContent = "";
     return;
   }
   const t = currentTime(),
@@ -571,7 +589,7 @@ async function renderCue() {
   cueIndex = i;
   const generation = ++renderGeneration;
   if (i < 0) {
-    $("subtitles").textContent = "Listening…";
+    $("subtitles").textContent = "";
     return;
   }
   const text = cues[i].text;
@@ -737,7 +755,24 @@ function renderDefinitions() {
     return;
   }
   for (const entry of lookupEntries.slice(0, 4)) {
-    const box = el("div");
+    const box = el("div", null, "dictionaryEntry");
+    const form =
+      entry.japanese?.find((j) => j.word === entry.matchedForm) ||
+      entry.japanese?.[0];
+    if (form)
+      box.append(
+        el("strong", [form.word, form.reading].filter(Boolean).join(" · ")),
+      );
+    if (entry.matchedBy === "reading")
+      box.append(
+        el(
+          "small",
+          "Matched by reading · verify the subtitle spelling",
+          "hint",
+        ),
+      );
+    else if (entry.matchedBy === "inflection")
+      box.append(el("small", "Dictionary form: " + entry.matchedForm, "hint"));
     if (prefs.pitchAccent && entry.pitch?.length) {
       const accents = el("div", null, "pitch");
       for (const a of entry.pitch.slice(0, 5)) {
@@ -763,8 +798,22 @@ function renderDefinitions() {
       }
       box.append(accents);
     }
-    for (const sense of (entry.senses || []).slice(0, 2))
-      box.append(el("p", sense.english_definitions.join("; ")));
+    const senses = entry.senses || [];
+    const meaning = (sense) => {
+      const row = el("div", null, "dictionarySense");
+      if (sense.parts_of_speech?.length)
+        row.append(el("small", sense.parts_of_speech.join(" · "), "hint"));
+      row.append(el("p", sense.english_definitions.join("; ")));
+      return row;
+    };
+    for (const sense of senses.slice(0, 3)) box.append(meaning(sense));
+    if (senses.length > 3) {
+      const more = el("details");
+      more.append(el("summary", "More meanings (" + (senses.length - 3) + ")"));
+      for (const sense of senses.slice(3)) more.append(meaning(sense));
+      box.append(more);
+    }
+    if (entry.source) box.append(el("small", entry.source, "hint"));
     $("definitions").append(box);
   }
 }
@@ -987,6 +1036,8 @@ function setting(body, label, description, key, options, isExtra = false) {
 function showSettings() {
   const body = showPanel("Settings");
   body.append(button("Version history", showHistory));
+  if (source && cues.length)
+    body.append(button("Compare speech models", compareTranscript));
   setting(body, "Dark mode", "", "dark");
   setting(
     body,
@@ -1299,7 +1350,7 @@ async function compareTranscript() {
               "p",
               "Second model: " + (passage.other || "No speech recognized"),
             ),
-            button("Listen at " + formatDuration(passage.start), () => {
+            button("Play at " + formatDuration(passage.start), () => {
               closePanel();
               seekTo(passage.start);
               play();
@@ -1311,7 +1362,7 @@ async function compareTranscript() {
       }
       progress.textContent =
         (data.stage || "Comparing…") +
-        (data.duration
+        (data.duration && data.phase !== "loading"
           ? " · " +
             Math.round((100 * (data.processedSeconds || 0)) / data.duration) +
             "%"
@@ -1393,8 +1444,7 @@ window.showLibrary = showLibrary;
 window.showWords = showWords;
 $("closePanel").onclick = closePanel;
 $("download").onclick = download;
-$("retry").onclick = () => beginTranscript(true);
-$("compare").onclick = compareTranscript;
+
 $("settingsInput").onchange = async () => {
   try {
     const file = $("settingsInput").files[0];

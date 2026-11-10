@@ -320,7 +320,7 @@ test("switching Whisper models immediately refreshes captions and confidence fla
   await page.goto("/");
   await page.evaluate(() =>
     (window as any).eval(
-      "source={type:'youtube',id:'abcdefghijk'};youtube={getCurrentTime:()=>1,getPlayerState:()=>2};void beginTranscript();",
+      "extras.speechQuality='balanced';source={type:'youtube',id:'abcdefghijk'};youtube={getCurrentTime:()=>1,getPlayerState:()=>2};void beginTranscript();",
     ),
   );
   await expect(page.locator("#subtitles .line")).toHaveCount(1);
@@ -335,7 +335,7 @@ test("switching Whisper models immediately refreshes captions and confidence fla
   await page.evaluate(() =>
     (window as any).eval("youtube.getCurrentTime=()=>10;void renderCue();"),
   );
-  await expect(page.locator("#subtitles")).toHaveText("Listening…");
+  await expect(page.locator("#subtitles")).toHaveText("");
 });
 
 test("model comparison aligns wording across cue boundaries and reports missing speech", async ({
@@ -365,4 +365,70 @@ test("model comparison aligns wording across cue boundaries and reports missing 
   await expect(page.locator("#panelBody .entry")).toContainText(
     "Second model: 追加です。",
   );
+});
+
+test("inflected dictionary lookup, compound hover and quiet gaps work without maintenance buttons", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.evaluate(() =>
+    (window as any).eval(
+      "source={type:'youtube',id:'abcdefghijk'};youtube={getCurrentTime:()=>1,getPlayerState:()=>2};cues=[{start:0,end:4,text:'水を吸い取り、すくい取り'}];cueIndex=-1;void renderCue();",
+    ),
+  );
+  await expect(
+    page.getByRole("button", { name: "Look up 吸い取り", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Look up すくい取り", exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Look up 吸い取り", exact: true })
+    .click();
+  await expect(page.locator("#definitions")).toContainText("to absorb");
+  await expect(page.locator("#definitions")).toContainText("吸い取る");
+  await expect(page.locator("#definitions")).toContainText("transitive verb");
+  await page.locator("#closeLookup").click();
+  await expect(page.locator("#retry,#compare")).toHaveCount(0);
+  await page.evaluate(() =>
+    (window as any).eval("youtube.getCurrentTime=()=>10;void renderCue();"),
+  );
+  await expect(page.locator("#subtitles")).toHaveText("");
+  await page.getByRole("button", { name: "Words", exact: true }).click();
+  await page.getByLabel("Search dictionary", { exact: true }).fill("吸い取り");
+  await page.getByLabel("Search dictionary", { exact: true }).press("Enter");
+  await expect(page.locator("#panelBody")).toContainText("吸い取る");
+});
+
+test("temporary subtitle failures recover automatically with no regenerate control", async ({
+  page,
+}) => {
+  let attempts = 0;
+  await page.route("**/api/desktop/transcribe?**", (route) => {
+    if (route.request().method() === "POST") attempts++;
+    return route.fulfill({
+      json:
+        attempts < 2
+          ? {
+              status: "unavailable",
+              canRetry: true,
+              message: "Temporary interruption",
+            }
+          : {
+              status: "ready",
+              cues: [{ start: 0, end: 4, text: "回復しました。" }],
+            },
+    });
+  });
+  await page.goto("/");
+  await page.evaluate(() =>
+    (window as any).eval(
+      "source={type:'youtube',id:'abcdefghijk'};youtube={getCurrentTime:()=>1,getPlayerState:()=>2};void beginTranscript();",
+    ),
+  );
+  await expect(
+    page.getByRole("button", { name: "Look up 回復しました", exact: true }),
+  ).toBeVisible();
+  expect(attempts).toBe(2);
+  await expect(page.locator("#retry")).toHaveCount(0);
 });

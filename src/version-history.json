@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.9.5",
+    "date": "2026-11-10",
+    "title": "Cleaner subtitles and Japanese dictionary lookup",
+    "notes": [
+      "Remove Listening filler and regeneration controls from the study view. Temporary subtitle failures recover automatically with bounded retries, and large-v3 becomes the default once while later model choices remain available. Dictionary lookup resolves inflected and continuative forms such as 吸い取り, keeps attested compound verbs together, respects readings and labels reading-only matches. Lookup now shows headwords, parts of speech, dictionary sources and expandable meanings. Speech recognition can still make mistakes; dictionary readings never silently replace subtitle wording."
+    ]
+  },
+  {
     "version": "0.9.4",
     "date": "2026-11-10",
     "title": "Subtitle loading status and release verification",

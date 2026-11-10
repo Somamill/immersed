@@ -642,3 +642,22 @@ dialog::backdrop {
 .audioBook audio {
   width: min(100%, 600px);
 }
+.dictionaryEntry + .dictionaryEntry {
+  border-top: 1px solid #53685a55;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.dictionaryEntry > strong,
+.dictionaryEntry > small,
+.dictionarySense > small {
+  display: block;
+}
+.dictionaryEntry > strong {
+  margin-bottom: 4px;
+}
+.dictionarySense p {
+  margin-top: 3px;
+}
+.dictionaryEntry details {
+  margin: 8px 0;
+}

@@ -158,3 +158,24 @@ test('corpus ranking generalizes to word sequences and preserves a correct or un
   assert.equal(rankSpellings({ sentence: 'これが二なのです', start: 3, end: 4 }, [{ form: '荷' }], tokenizer, scorer).status, 'protected-word');
   scorer.close();
 });
+
+test('dictionary resolves Japanese continuative forms and inflections without dropping compounds',async()=>{
+ for(const text of ['吸い取り','吸い取った','吸い取らなかった','吸い取っています']){
+  const entries=await lookup(text);
+  assert.ok(entries.some(e=>e.japanese.some(j=>j.word==='吸い取る')),'must resolve '+text);
+  assert.ok(entries.some(e=>e.senses.some(s=>s.english_definitions.includes('to absorb'))));
+ }
+ const tokens=await analyze('そこにある少女の心の震えをすくい取り');
+ const compound=tokens.find(t=>t.text==='すくい取り');assert.ok(compound);assert.equal(compound.lemma,'すくい取る');
+ assert.equal(tokens.map(t=>t.text).join(''),'そこにある少女の心の震えをすくい取り');
+ assert.ok((await lookup(compound.lemma))[0].senses[0].english_definitions.includes('to scoop up'));
+ const variants=await lookup('救い取り',{reading:'すくいとり'});
+ assert.equal(variants[0].matchedBy,'reading');
+ assert.ok(!JSON.stringify(variants).includes('to absorb'),'すくい and すい must not be conflated');
+});
+
+test('dictionary lookup normalizes kana and respects the requested reading',async()=>{
+ assert.ok((await lookup('ｽｲﾄﾘ')).some(e=>e.senses.some(s=>s.english_definitions.includes('to absorb'))));
+ const entries=await lookup('今日',{reading:'こんにち'});
+ assert.ok(entries.length);assert.ok(entries[0].japanese.every(j=>j.reading==='こんにち'));
+});

@@ -20,25 +20,58 @@ async function initialize() {
         matches.push(entry); index.set(form, matches);
       }
     }
+    const stems = new Map();
+    const godan = {う:'い',く:'き',ぐ:'ぎ',す:'し',つ:'ち',ぬ:'に',ぶ:'び',む:'み',る:'り'};
+    for(const entry of dictionary.words){
+      const pos=entry.sense.flatMap(s=>s.partOfSpeech);
+      const ichidan=pos.some(p=>p==='v1'||p==='v1-s');
+      const five=pos.some(p=>/^v5/.test(p));
+      if(!ichidan&&!five)continue;
+      for(const form of [...entry.kanji,...entry.kana]){
+        const text=form.text, ending=text.at(-1);
+        const stem=ichidan&&ending==='る'?text.slice(0,-1):five&&godan[ending]?text.slice(0,-1)+godan[ending]:'';
+        if(stem){const values=stems.get(stem)||[];if(!values.some(x=>x.entry.id===entry.id))values.push({entry,lemma:text});stems.set(stem,values);}
+      }
+    }
     const tokenizer = await new Promise((resolve, reject) => kuromoji.builder({ dicPath: path.join(path.dirname(require.resolve('kuromoji/package.json')), 'dict') }).build((error, value) => error ? reject(error) : resolve(value)));
-    return { index, forms: [...index.keys()].sort(), words: dictionary.words, tokenizer, tags: dictionary.tags };
+    return { index, forms: [...index.keys()].sort(), words: dictionary.words, tokenizer, stems, tags: dictionary.tags };
   })().catch(error => { ready = null; throw error; });
   return ready;
 }
-function dictionaryEntry(entry, tags) {
+function dictionaryEntry(entry, tags, preferred = '', preferredReading = '') {
+  const kanji=entry.kanji.find(k=>k.text===preferred)?.text;
+  const kana=entry.kana.filter(k=>(!preferredReading||k.text===preferredReading)&&(!kanji||!k.appliesToKanji||k.appliesToKanji.includes('*')||k.appliesToKanji.includes(kanji)));
+  const readings=kana.length?kana:entry.kana;
+  const allowed=(list,form)=>!form||!list?.length||list.includes('*')||list.includes(form);
   return {
-    slug: `jmdict-${entry.id}`,
-    source: 'JMdict',
-    pitch: entry.kana.flatMap(k => [...entry.kanji.map(w => w.text), k.text].flatMap(form => pitch.lookup(form, k.text))).filter((v, i, all) => all.findIndex(o => o.reading === v.reading && o.downstep === v.downstep) === i),
-    japanese: entry.kana.map(k => ({ word: entry.kanji.find(w => !k.appliesToKanji || k.appliesToKanji.includes('*') || k.appliesToKanji.includes(w.text))?.text, reading: k.text })),
-    senses: entry.sense.map(s => ({ english_definitions: s.gloss.filter(g => g.lang === 'eng').map(g => g.text), parts_of_speech: s.partOfSpeech.map(tag => tags[tag] || tag) })),
+    slug: `jmdict-${entry.id}`, source:'JMdict',
+    pitch:readings.flatMap(k=>[...entry.kanji.map(w=>w.text),k.text].flatMap(form=>pitch.lookup(form,k.text))).filter((v,i,all)=>all.findIndex(o=>o.reading===v.reading&&o.downstep===v.downstep)===i),
+    japanese:readings.map(k=>({word:entry.kanji.filter(w=>allowed(k.appliesToKanji,w.text)).sort((a,b)=>Number(b.text===preferred)-Number(a.text===preferred))[0]?.text,reading:k.text})),
+    senses:entry.sense.filter(s=>allowed(s.appliesToKanji,kanji)&&allowed(s.appliesToKana,preferredReading)).map(s=>({english_definitions:s.gloss.filter(g=>g.lang==='eng').map(g=>g.text),parts_of_speech:s.partOfSpeech.map(tag=>tags[tag]||tag)})),
   };
 }
 async function lookup(word, options = {}) {
+  word=word.normalize('NFKC').trim();
   const grammatical = grammarEntry(word, options);
   if (grammatical) return [grammatical];
-  const { index, tags } = await initialize();
-  const general = (index.get(word) || []).slice(0, 5).map(entry => dictionaryEntry(entry, tags));
+  const { index, tags, stems, tokenizer } = await initialize();
+  let matches=(index.get(word)||index.get(hira(word))||[]).map(entry=>({entry,lemma:word,by:'exact'}));
+  if(!matches.length)matches=(stems.get(word)||stems.get(hira(word))||[]).map(x=>({...x,by:'inflection'}));
+  if(!matches.length){
+    const tokens=await analyze(word);
+    if(tokens.length===1&&tokens[0].text===word&&tokens[0].lemma!==word)
+      matches=(index.get(tokens[0].lemma)||[]).map(entry=>({entry,lemma:tokens[0].lemma,by:tokens[0].match==='reading'?'reading':'inflection'}));
+  }
+  if(!matches.length&&!options.proper){
+    const reading=hira(options.reading||tokenizer.tokenize(word).map(t=>t.reading==='*'?t.surface_form:t.reading||t.surface_form).join(''));
+    if(reading&&reading!==word)matches=(index.get(reading)||[]).map(entry=>({entry,lemma:entry.kanji[0]?.text||reading,by:'reading'}));
+    if(!matches.length&&reading)matches=(stems.get(reading)||[]).map(x=>({...x,by:'reading'}));
+  }
+  const requestedReading=hira(options.reading||'');
+  const matchingReading=(entry)=>entry.kana.some(k=>k.text===requestedReading)?requestedReading:(stems.get(requestedReading)||[]).find(x=>x.entry.id===entry.id)?.lemma||'';
+  matches.sort((a,b)=>Number(!!matchingReading(b.entry))-Number(!!matchingReading(a.entry)));
+  const seen=new Set();
+  const general=matches.filter(x=>!seen.has(x.entry.id)&&seen.add(x.entry.id)).slice(0,5).map(({entry,lemma,by})=>({...dictionaryEntry(entry,tags,lemma,matchingReading(entry)),matchedBy:by,matchedForm:lemma}));
   const named = options.proper || !general.length ? names.lookup(word, options.reading) : [];
   return options.proper ? [...named, ...general] : [...general, ...named];
 }
@@ -95,7 +128,7 @@ async function search(query) {
 const auxiliaries = { ます: 'polite', た: 'past', ない: 'negative', ぬ: 'negative', ん: 'negative', たい: 'desire', れる: 'passive / potential', られる: 'passive / potential', せる: 'causative', させる: 'causative', う: 'volitional', です: 'polite copula', だ: 'copula' };
 const patterns = [ ['について', 'about / concerning'], ['として', 'as / in the role of'], ['なければならない', 'must / have to'], ['かもしれない', 'might / may'], ['わけではない', 'does not necessarily mean'], ['ことができる', 'can / be able to'] ];
 async function analyze(text, grouped = true) {
-  const { index, tokenizer } = await initialize();
+  const { index, tokenizer, stems } = await initialize();
   const raw = tokenizer.tokenize(text);
   let offset = 0;
   const tokens = raw.map(t => {
@@ -122,6 +155,15 @@ async function analyze(text, grouped = true) {
       const normalized = text.slice(head.start, last.start) + last.lemma;
       const lemma = index.has(surface) ? surface : index.has(normalized) ? normalized : '';
       if (lemma) expression = { lemma, end: j + 1, pos: last.pos };
+    }
+    // Continuative compound verbs can be split into a verb plus nominal suffix
+    // (すくい + 取り). Join only dictionary-attested stems; keep surface glyphs.
+    for(let j=i+1;j<Math.min(tokens.length,i+5);j++){
+      const part=tokens.slice(i,j+1);
+      if(part.some(t=>!t.word||!['verb','noun','prefix'].includes(t.pos))||part.some((t,n)=>n&&t.start!==part[n-1].end))break;
+      const surface=text.slice(head.start,tokens[j].end);
+      const hit=stems.get(surface)?.[0];
+      if(hit)expression={lemma:hit.lemma,end:j+1,pos:'verb'};
     }
     const conjectural = head.pos === 'auxiliary' && ['だ', 'です'].includes(head.lemma) &&
       /^(だろう|でしょう)(?:(?:な|ね)?(?:って|と)|な|ね)?/.exec(remaining);
