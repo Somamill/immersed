@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.10.1",
+    "date": "2026-11-10",
+    "title": "Refine progressive search layout",
+    "notes": [
+      "Keep the language toggle compact and align video thumbnails, titles and metadata in a responsive three-column search layout."
+    ]
+  },
+  {
     "version": "0.10.0",
     "date": "2026-11-10",
     "title": "Faster search, instant lookup and fullscreen study",

@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.10.1 — 2026-11-10
+
+Refine progressive search layout
+
+- Keep the language toggle compact and align video thumbnails, titles and metadata in a responsive three-column search layout.
+
 ## 0.10.0 — 2026-11-10
 
 Faster search, instant lookup and fullscreen study

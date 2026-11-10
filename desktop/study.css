@@ -790,3 +790,46 @@ dialog::backdrop {
   flex: 1;
   min-width: 0;
 }
+.searchToggle {
+  width: fit-content;
+  white-space: nowrap;
+}
+.searchToggle input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #b6e3c4;
+  padding:0;
+  flex: none;
+}
+.searchResults {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.searchVideo {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+.searchArtwork {
+  flex: none;
+}
+.searchVideo h3 {
+  min-height: 46px;
+}
+@media (max-width: 950px) {
+  .searchResults {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 620px) {
+  .searchResults {
+    grid-template-columns: 1fr;
+  }
+  .searchSummary {
+    align-items: flex-start;
+  }
+  .searchSummary h3 {
+    font-size: 18px;
+  }
+}
