@@ -24,14 +24,15 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
   useEffect(() => { web.current?.injectJavaScript(optionsScript); }, [optionsScript]);
   const currentVideo = useRef<string | null>(playerId);
   const pendingTrack = useRef<AbortController | null>(null);
+  const fallbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingRank = useRef(0);
   const canGoBack = useRef(false);
-  useEffect(() => () => pendingTrack.current?.abort(), []);
+  useEffect(() => () => { pendingTrack.current?.abort(); if (fallbackTimer.current) clearTimeout(fallbackTimer.current); }, []);
   const pageChanged = (url: string) => {
     const canonical = youtubeUrl(url);
     const id = canonical ? new URL(canonical).searchParams.get('v') : null;
     if (!id && playerId) return;
-    if (id && id !== playerId) { setFillPortrait(true); setHostedFallback(false); setPlayerId(id); }
+    if (id && id !== playerId) { if (fallbackTimer.current) clearTimeout(fallbackTimer.current); fallbackTimer.current = null; setFillPortrait(true); setHostedFallback(false); setPlayerId(id); }
     if (currentVideo.current !== id) { pendingTrack.current?.abort(); currentVideo.current = id; }
     onPage?.(url);
   };
@@ -106,10 +107,13 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
           return;
         }
         if (v.type === 'playbackDiagnostic' && v.videoId === currentVideo.current && typeof v.status === 'string' && typeof v.reason === 'string' && typeof v.playerMessage === 'string' && typeof v.hasVideo === 'boolean' && [v.mediaError, v.readyState, v.networkState].every(Number.isFinite)) {
-          if (v.status === 'UNPLAYABLE' && !hostedFallback && hostedSource) {
-            if (__DEV__) console.info('Immersed switching to HTTPS player', v.videoId);
-            setHostedFallback(true);
-          }
+          if (v.status === 'UNPLAYABLE' && !hostedFallback && hostedSource && !fallbackTimer.current) {
+            const blockedVideo = v.videoId;
+            fallbackTimer.current = setTimeout(() => {
+              fallbackTimer.current = null;
+              if (currentVideo.current === blockedVideo) { if (__DEV__) console.info('Immersed switching to HTTPS player', blockedVideo); setHostedFallback(true); }
+            }, 3000);
+          } else if (v.status === 'OK' && fallbackTimer.current) { clearTimeout(fallbackTimer.current); fallbackTimer.current = null; }
           onPlaybackDiagnostic?.({ videoId: v.videoId, status: v.status.slice(0, 40), reason: v.reason.slice(0, 160), playerMessage: v.playerMessage.slice(0, 160), mediaError: v.mediaError, readyState: v.readyState, networkState: v.networkState, hasVideo: v.hasVideo });
           if (__DEV__) console.info('Immersed playback check', v.videoId, v.status, v.reason, v.playerMessage, v.mediaError, v.readyState, v.networkState, v.hasVideo);
           return;

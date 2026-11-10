@@ -171,7 +171,8 @@ export default function App() {
     setClock(old => old.paused === paused && readingCue(timeline, old.time) === readingCue(timeline, time) ? old : { time, paused });
   }, [timeline]);
   const hasSourceCaption = !!(nativeCaption?.text && nativeCaption.language === 'ja');
-  const timelineCue = readingCue(timeline, clock.time);
+  const playbackBlocked = playbackDiagnostic?.videoId === videoId && playbackDiagnostic.status === 'UNPLAYABLE';
+  const timelineCue = readingCue(timeline, clock.time) || (playbackBlocked ? timeline[0] : undefined);
   const observedCaption = hasSourceCaption && allowLiveCaptionFallback(timeline, clock.time, nativeCaption?.time ?? 0, transcriptRank.current >= 3 ? 0 : generatedThrough) ? nativeCaption : null;
   const caption: Caption | null = timelineCue ? { text: timelineCue.text, tokens: [], time: timelineCue.start, title: nativeCaption?.title || 'YouTube video', url: pageUrl, language: 'ja', paused: clock.paused } : observedCaption ? { ...observedCaption, paused: clock.paused } : null;
   const sentence = normalizeJapaneseCaption(caption?.text || '');
@@ -486,7 +487,7 @@ export default function App() {
         {settings ? settingsPanel : library ? libraryPanel : <>
           <View style={{ height: coverageHeight, justifyContent: 'center' }}><VideoCoverage cues={rawTimeline} level={level} knowledge={knowledge} dark={dark} /></View>
           <ScrollView ref={captionScroll} testID="caption-scroll" style={s.captionScroll} contentContainerStyle={{ paddingVertical: 8, flexGrow: 1, justifyContent: 'center' }}>
-            {sentence ? <><StudySubtitles tokens={tokens} tail={unparsedTail} dark={dark} level={level} knowledge={knowledge} readings={readings} onWord={tapWord} />{!!analysisError && <Text style={s.hint}>{analysisError}</Text>}</> : <Text style={s.captionEmpty}>{subtitleStatus ? 'Captions could not be generated for this video' : '—'}</Text>}
+            {sentence ? <><StudySubtitles tokens={tokens} tail={unparsedTail} dark={dark} level={level} knowledge={knowledge} readings={readings} onWord={tapWord} />{playbackBlocked && <Text style={s.hint}>YouTube cannot play this video here. The Japanese transcript is available to read.</Text>}{!!analysisError && <Text style={s.hint}>{analysisError}</Text>}</> : <Text style={s.captionEmpty}>{playbackBlocked ? 'YouTube cannot play this video here' : subtitleStatus ? 'Captions could not be generated for this video' : '—'}</Text>}
           </ScrollView>
           <SentenceControls dark={dark} paused={clock.paused} onTogglePlayback={togglePlayback} previous={previousSentence === undefined ? undefined : () => skipSentence(-1)} next={nextSentence === undefined ? undefined : () => skipSentence(1)} />
         </>}

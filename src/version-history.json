@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.12.2",
+    "date": "2026-11-11",
+    "title": "Preserve Japanese captions when playback is blocked",
+    "notes": [
+      "Keep a retrieved Japanese transcript readable when YouTube blocks embedded playback, and distinguish that playback restriction from failed subtitle generation. Wait for a sustained watch-page failure before switching players.",
+      "This cannot override videos unavailable in both YouTube players. Fresh captions for videos without a usable Japanese track still require an audio source, unavailable in the Expo Go preview."
+    ]
+  },
+  {
     "version": "0.12.1",
     "date": "2026-11-10",
     "title": "Ground context lookup in dictionary meanings",
