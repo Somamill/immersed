@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.11.1",
+    "date": "2026-11-10",
+    "title": "Keep phrase context for inflected verbs",
+    "notes": [
+      "Recognize dictionary phrases around a selected verb even when its inflected form is longer than the phrase's dictionary form."
+    ]
+  },
+  {
     "version": "0.11.0",
     "date": "2026-11-10",
     "title": "Video fullscreen and contextual dictionary",

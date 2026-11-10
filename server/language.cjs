@@ -258,7 +258,18 @@ async function contextPhrases(sentence, start, end) {
     for (let j = i; j < Math.min(tokens.length, i + 9); j++) {
       const last = tokens[j];
       if (last.pos === '記号') break;
-      if (last.end < end || last.end - tokens[i].start <= end - start) continue;
+      let coverageEnd = last.end;
+      if (last.pos === '動詞') {
+        for (let k = j + 1; k < tokens.length && coverageEnd < end; k++) {
+          const tail = tokens[k];
+          const auxiliary = tail.pos === '助動詞' ||
+            (tail.pos === '助詞' && ['て', 'で'].includes(tail.surface_form)) ||
+            (tail.pos === '動詞' && tail.pos_detail_1 === '非自立' && ['いる', 'おる', 'ある'].includes(tail.basic_form));
+          if (tail.start !== coverageEnd || !auxiliary) break;
+          coverageEnd = tail.end;
+        }
+      }
+      if (coverageEnd < end || coverageEnd - tokens[i].start <= end - start) continue;
       const prefix = sentence.slice(tokens[i].start, last.start);
       const forms = [sentence.slice(tokens[i].start, last.end), prefix + last.basic_form];
       if (last.pos === '動詞') {
@@ -267,7 +278,7 @@ async function contextPhrases(sentence, start, end) {
         for (const suffix of replacements) forms.push(prefix + last.surface_form.slice(0, -1) + suffix);
       }
       for (const form of forms) {
-        if (form.length <= end - start || !index.has(form) || results.has(form)) continue;
+        if (!index.has(form) || results.has(form)) continue;
         const entries = index.get(form);
         results.set(form, { form, senses: entries.slice(0, 2).flatMap(e => dictionaryEntry(e, tags, form).senses).slice(0, 4) });
       }

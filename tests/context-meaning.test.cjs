@@ -19,5 +19,6 @@ test('dictionary-attested phrases disambiguate te-form stems without rewriting s
   const language = require('../server/language.cjs');
   const phrases = await language.contextPhrases('彼の主張は筋が通っている。', 5, 6);
   assert.ok(phrases.some(p => p.form === '筋が通る' && p.senses.some(s => s.english_definitions.includes('to be logical'))));
+  assert.ok((await language.contextPhrases('彼の主張は筋が通っている。', 7, 12)).some(p => p.form === '筋が通る'));
   assert.deepEqual(await language.contextPhrases('窓を開く。', 2, 4), []);
 });

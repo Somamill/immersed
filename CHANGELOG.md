@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.11.1 — 2026-11-10
+
+Keep phrase context for inflected verbs
+
+- Recognize dictionary phrases around a selected verb even when its inflected form is longer than the phrase's dictionary form.
+
 ## 0.11.0 — 2026-11-10
 
 Video fullscreen and contextual dictionary
