@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.12.1 — 2026-11-10
+
+Ground context lookup in dictionary meanings
+
+- The local model now selects an existing dictionary definition and quotes the actual subtitle phrase. Free-form definitions are no longer displayed. A wider caption context supports the ranking, and uncertain results are cached. The model can still choose an incorrect sense.
+
 ## 0.12.0 — 2026-11-10
 
 Smoother subtitle navigation and fullscreen study

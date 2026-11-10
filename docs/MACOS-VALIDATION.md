@@ -57,3 +57,5 @@ No Apple Developer ID was supplied, so signed iPhone/Mac iCloud synchronization 
 - These are bounded smoke measurements on the same M1 Pro/16 GB Mac, not whole-book or all-video accuracy guarantees. Original audio excerpts and captured frames stay in ignored local test files.
 
 Native verification also confirmed automatic replacement of the reported 6:04 line with the author-provided “紙上の教会” caption, and fullscreen lookup of 教会 with all three actions visible.
+
+A final contextual-dictionary check found unsupported free-form explanations for the rare paper-church term. Context output is now restricted to supplied dictionary definitions and an exact source phrase. Native-model checks selected congregation, reason, opening an account and opening a window in their respective contexts. Unclear rankings keep the ordinary dictionary available, and uncertain results are cached to avoid repeated work.

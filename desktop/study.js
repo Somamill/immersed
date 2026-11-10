@@ -863,7 +863,7 @@ async function openLookup(token, pinned = false, anchor = null) {
         start: String(token.start),
         end: String(token.end),
         before: cues.slice(Math.max(0, cueIndex - 3), cueIndex).map(c => c.text).join(" ").slice(-240),
-        after: cues.slice(cueIndex + 1, cueIndex + 4).map(c => c.text).join(" ").slice(0, 240),
+        after: cues.slice(cueIndex + 1, cueIndex + 9).map(c => c.text).join(" ").slice(0, 240),
       };
       void api("immersion/phrase-context", context).then(data => {
         if (selected !== token || !data.phrases?.length) return;
@@ -887,9 +887,9 @@ async function explainContext(token, context, attempts = 0) {
     const box = $("contextMeaning");
     if (result.status === "ready") {
       box.replaceChildren(
-        el("small", "In this sentence · on-device suggestion", "hint"),
+        el("small", "Meaning in context", "hint"),
         el("strong", result.gloss),
-        el("p", result.explanation),
+        ...(result.phrase ? [el("p", result.phrase, "contextQuote")] : []),
       );
       box.hidden = false;
       if (!lookupMeaning) lookupMeaning = result.gloss;
@@ -900,7 +900,7 @@ async function explainContext(token, context, attempts = 0) {
       box.hidden = false;
       setTimeout(() => {
         if (selected === token) void explainContext(token, context, attempts + 1);
-      }, 2000);
+      }, result.status === "busy" ? 500 : 2000);
     } else box.hidden = true;
   } catch { /* Definitions remain available when the optional model is offline. */ }
 }
@@ -1326,7 +1326,7 @@ function showSettings() {
     el("h3", "Dictionary & credits"),
     el(
       "p",
-      "JMdict and JMnedict © EDRDG; Kanjium pitch accents © Uros O., CC BY-SA 4.0. Kuromoji/IPADIC supplies Japanese morphology. Tatoeba contributors supply context counts, CC BY 2.0 FR. On Apple Silicon, Qwen3-4B-Instruct-2507 (MLX, Apache 2.0) generates suggested contextual meanings locally; these can be mistaken. Context plausibility is not audio verification. JLPT levels are community estimates. Speech transcripts are generated estimates; verify uncertain words with the audio.",
+      "JMdict and JMnedict © EDRDG; Kanjium pitch accents © Uros O., CC BY-SA 4.0. Kuromoji/IPADIC supplies Japanese morphology. Tatoeba contributors supply context counts, CC BY 2.0 FR. On Apple Silicon, Qwen3-4B-Instruct-2507 (MLX, Apache 2.0) ranks dictionary meanings locally; it can select an incorrect sense. Context plausibility is not audio verification. JLPT levels are community estimates. Speech transcripts are generated estimates; verify uncertain words with the audio.",
       "hint",
     ),
   );

@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.12.1",
+    "date": "2026-11-10",
+    "title": "Ground context lookup in dictionary meanings",
+    "notes": [
+      "The local model now selects an existing dictionary definition and quotes the actual subtitle phrase. Free-form definitions are no longer displayed. A wider caption context supports the ranking, and uncertain results are cached. The model can still choose an incorrect sense."
+    ]
+  },
+  {
     "version": "0.12.0",
     "date": "2026-11-10",
     "title": "Smoother subtitle navigation and fullscreen study",

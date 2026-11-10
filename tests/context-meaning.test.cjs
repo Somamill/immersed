@@ -27,3 +27,14 @@ test('selected pronunciation excludes unrelated readings of the same kanji', asy
   assert.ok(entries.length > 0);
   assert.ok(entries.every(entry => entry.japanese.every(form => form.reading === 'すじ')));
 });
+test('context results can only display supplied meanings and literal caption evidence', () => {
+  const { selectedMeaning } = require('../server/context-meaning.cjs');
+  const data = { word: '教会', sentence: '「紙上の教会」という概念がある', start: 4, end: 6 };
+  const choices = [{ form: '教会', gloss: 'church' }, { form: '教会', gloss: 'congregation' }];
+  const result = selectedMeaning({ status: 'ready', choice: 1, gloss: 'invented religious institution', phrase: '紙上の教会' }, choices, data);
+  assert.equal(result.gloss, 'congregation');
+  assert.equal(result.phrase, data.sentence);
+  assert.equal(result.explanation, undefined);
+  assert.deepEqual(selectedMeaning({ status: 'ready', choice: 100 }, choices, data), { status: 'unclear' });
+  assert.equal(selectedMeaning({ status: 'ready', choice: 0, phrase: 'not present' }, choices, data).phrase, data.sentence);
+});

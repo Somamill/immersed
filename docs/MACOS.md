@@ -65,11 +65,11 @@ JMdict/JMnedict: EDRDG, CC BY-SA 4.0. Pitch accents: Kanjium / Uros O., CC BY-SA
 
 ## Contextual dictionary on Apple Silicon
 
-Definitions are prefetched with sentence analysis and appear immediately. A separate **In this sentence** suggestion uses the selected word, its dictionary senses, dictionary-attested surrounding phrases, and the preceding/following captions. It explains literal or figurative usage without changing the subtitle. Dictionary senses remain available below it.
+Definitions are prefetched with sentence analysis and appear immediately. A separate **Meaning in context** suggestion uses the selected word, its dictionary senses, dictionary-attested surrounding phrases, and the preceding/following captions. It selects an existing dictionary meaning and quotes the source phrase, without creating new definitions. Other dictionary senses remain available below it.
 
-Qwen3-4B-Instruct-2507, quantized to 4 bits for MLX, runs locally. The first launch prepares a separate Python runtime and downloads approximately 2.2 GB of public model weights in the background. Playback and dictionary lookup continue during setup. Passages are never sent to a remote AI service. Context suggestions can be mistaken or ambiguous; they are not verified translations or transcription corrections.
+Qwen3-4B-Instruct-2507, quantized to 4 bits for MLX, runs locally. The first launch prepares a separate Python runtime and downloads approximately 2.2 GB of public model weights in the background. Playback and dictionary lookup continue during setup. Passages are never sent to a remote AI service. A context ranking can still select an incorrect dictionary sense; it is not a verified translation or transcription correction.
 
-The model is loaded on demand, cached exact-context answers are reused, and the worker exits after two idle minutes to release memory. On unsupported hosts or if setup fails, the normal dictionary remains available. Setup diagnostics are local at `~/Library/Application Support/Immersed Mac/.context-setup.log`; restarting the app retries setup.
+The model is loaded on demand, cached exact-context rankings are reused, and the worker exits after two idle minutes to release memory. On unsupported hosts or if setup fails, the normal dictionary remains available. Setup diagnostics are local at `~/Library/Application Support/Immersed Mac/.context-setup.log`; restarting the app retries setup.
 
 Model: [Qwen3-4B-Instruct-2507](https://huggingface.co/Qwen/Qwen3-4B-Instruct-2507), Apache 2.0. [MLX checkpoint](https://huggingface.co/mlx-community/Qwen3-4B-Instruct-2507-4bit), pinned revision `50d427756c6b1b2fe0c0a10f67fbda1fc8e82c1b`.
 
