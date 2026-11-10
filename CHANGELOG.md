@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.9.6 — 2026-11-10
+
+Restore kanji subtitle default
+
+- Revert the 0.9.5 forced large-v3 default, which produced kana-only text in the reported audiobook section. Restore turbo and its existing kanji transcript on upgrade; preserve listening position, learned words and reading settings. Later explicit model choices remain available. The alternate model is no longer labelled as a guaranteed accuracy upgrade. Subtitle wording is preserved rather than guessing kanji from kana.
+
 ## 0.9.5 — 2026-11-10
 
 Cleaner subtitles and Japanese dictionary lookup

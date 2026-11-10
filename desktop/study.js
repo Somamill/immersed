@@ -37,7 +37,7 @@ let extras = {
     originalOnly: true,
     hoverLookup: true,
     pauseOnHover: true,
-    speechQuality: "accurate",
+    speechQuality: "balanced",
     playbackRate: 1,
     ...read("immersed.mac.options", {}),
   },
@@ -59,11 +59,11 @@ let localMedia = null,
   levels = {},
   library = [],
   youtubeReady = null;
-// Upgrade the earlier speed-first default once. Later explicit choices remain.
-if (!read("immersed.accuracyDefault", false)) {
-  extras.speechQuality = "accurate";
+// Repair the 0.9.5 forced model switch. Later explicit model choices persist.
+if (!read("immersed.kanjiDefault", false)) {
+  extras.speechQuality = "balanced";
   try {
-    localStorage.setItem("immersed.accuracyDefault", "true");
+    localStorage.setItem("immersed.kanjiDefault", "true");
     localStorage.setItem("immersed.mac.options", JSON.stringify(extras));
   } catch {}
 }
@@ -1106,11 +1106,11 @@ function showSettings() {
   setting(
     body,
     "Speech model",
-    "Fast mode uses MLX Whisper turbo. Accuracy mode uses the larger large-v3 model and can be slower; its first use downloads model weights.",
+    "Turbo is the default. The alternate large-v3 model can produce different spelling or more kana and is not always more accurate. Its first use downloads model weights.",
     "speechQuality",
     [
       ["balanced", "Fast — turbo"],
-      ["accurate", "Accuracy — large-v3"],
+      ["accurate", "Alternate — large-v3"],
     ],
     true,
   );

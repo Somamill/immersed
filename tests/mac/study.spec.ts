@@ -432,3 +432,60 @@ test("temporary subtitle failures recover automatically with no regenerate contr
   expect(attempts).toBe(2);
   await expect(page.locator("#retry")).toHaveCount(0);
 });
+
+test("repairs the forced large-v3 default and preserves kanji, reading preferences and later model choices", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    if (!localStorage.getItem("test.kanjiSeeded")) {
+      localStorage.setItem("test.kanjiSeeded", "true");
+      localStorage.setItem("immersed.accuracyDefault", "true");
+      localStorage.setItem(
+        "immersed.mac.options",
+        JSON.stringify({ speechQuality: "accurate" }),
+      );
+      localStorage.setItem(
+        "immersed.preferences",
+        JSON.stringify({
+          level: 2,
+          readings: false,
+          knowledge: { 体験: true },
+        }),
+      );
+    }
+  });
+  const qualities: string[] = [];
+  await page.route("**/api/desktop/transcribe?**", (route) => {
+    qualities.push(
+      new URL(route.request().url()).searchParams.get("quality") || "",
+    );
+    return route.fulfill({
+      json: {
+        status: "ready",
+        cues: [{ start: 0, end: 4, text: "体は深い眠りを求める。" }],
+      },
+    });
+  });
+  await page.goto("/");
+  await page.evaluate(() =>
+    (window as any).eval(
+      "source={type:'youtube',id:'abcdefghijk'};youtube={getCurrentTime:()=>1,getPlayerState:()=>2};void beginTranscript();",
+    ),
+  );
+  await expect(page.locator("#subtitles")).toHaveText("体は深い眠りを求める。");
+  expect(qualities.every((q) => q === "balanced")).toBe(true);
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByLabel("Speech model", { exact: true })).toHaveValue(
+    "balanced",
+  );
+  await expect(page.getByLabel("Completed Japanese level")).toHaveValue("2");
+  await expect(page.getByLabel("Furigana", { exact: true })).not.toBeChecked();
+  await page
+    .getByLabel("Speech model", { exact: true })
+    .selectOption("accurate");
+  await page.reload();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.getByLabel("Speech model", { exact: true })).toHaveValue(
+    "accurate",
+  );
+});
