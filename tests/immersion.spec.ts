@@ -209,7 +209,7 @@ test('selected videos use the normal Japanese YouTube watch page', () => {
   expect(url.searchParams.get('hl')).toBe('ja');
 });
 
-test('HTTPS fallback embeds the selected video with an origin referrer', async ({ page }) => {
+test('HTTPS fallback embeds the selected video with an origin referrer', async ({ page, baseURL }) => {
   const hosted = hostedPlayerSource('M7lc1UVf-VE', 'c-preview.on.expo.app');
   expect(hosted.uri).toBe('https://c-preview.on.expo.app/youtube-player.html?v=M7lc1UVf-VE');
   expect(() => hostedPlayerSource('M7lc1UVf-VE', 'evil.example')).toThrow();
@@ -220,7 +220,7 @@ test('HTTPS fallback embeds the selected video with an origin referrer', async (
   });
   await page.goto('/youtube-player.html?v=M7lc1UVf-VE');
   await expect(page.frameLocator('iframe').locator('body')).toHaveText('video loaded');
-  expect(embedReferer).toBe('http://127.0.0.1:8082/');
+  expect(embedReferer).toBe(new URL('/', baseURL).href);
   expect(await page.locator('iframe').getAttribute('src')).toContain('cc_lang_pref=ja');
 });
 
@@ -920,12 +920,12 @@ test('split source words are joined into a dictionary-backed cue automatically',
   await expect(page.getByTestId('dictionary-sheet').getByText(/Japanese \(language\)/).first()).toBeVisible();
 });
 
-test('long-track boundary processing carries split words between batches and preserves all source text', async () => {
+test('long-track boundary processing carries split words between batches and preserves all source text', async ({baseURL}) => {
   const raw = Array.from({ length: 47 }, (_, i) => ({ start: i, end: i + 1, text: 'はい。' }));
   raw.push({ start: 47, end: 48, text: '日' }, { start: 48, end: 49, text: '本語' });
   let result = raw;
   let updates = 0;
-  await refineCaptionTrack(raw, 'http://127.0.0.1:8082/api/immersion/reflow', new AbortController().signal, cues => { result = cues; updates++; });
+  await refineCaptionTrack(raw, new URL('/api/immersion/reflow',baseURL).href, new AbortController().signal, cues => { result = cues; updates++; });
   expect(updates).toBeGreaterThan(1);
   expect(result).toHaveLength(48);
   expect(result.at(-1)).toEqual({ start: 47, end: 49, text: '日本語' });
