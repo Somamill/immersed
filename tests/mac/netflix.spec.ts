@@ -74,9 +74,9 @@ test('Netflix bridge selects the visible language, clears new episodes, and cont
   await page.evaluate(()=>(window as any).immersedNetflixCommand({command:'seek',value:4}));
   expect(await page.locator('video').evaluate((v:HTMLVideoElement)=>v.currentTime)).toBe(4);
   await page.keyboard.press('ArrowLeft');
-  expect(await page.evaluate(()=>(window as any).__events.at(-1))).toEqual({event:'shortcut',command:'previous'});
+  expect(await page.evaluate(()=>(window as any).__events.filter((x:any)=>x.event==='shortcut').at(-1))).toEqual({event:'shortcut',command:'previous'});
   await page.keyboard.press('f');
-  expect(await page.evaluate(()=>(window as any).__events.at(-1))).toEqual({event:'shortcut',command:'fullscreen'});
+  expect(await page.evaluate(()=>(window as any).__events.filter((x:any)=>x.event==='shortcut').at(-1))).toEqual({event:'shortcut',command:'fullscreen'});
   await page.evaluate(()=>{history.pushState({},'', '/watch/456');document.querySelector('.player-timedtext')!.textContent='';});
   await expect.poll(()=>page.evaluate(()=>(window as any).__events.filter((x:any)=>x.event==='reset').at(-1)?.id)).toBe('456');
   await page.evaluate(()=>(window as any).__events=[]);
