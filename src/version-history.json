@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.18.0",
+    "date": "2026-11-12",
+    "title": "Add Netflix original-subtitle study",
+    "notes": [
+      "Add an in-app Netflix pane using original subtitle text, shared word lookup and saved words, hover pause/resume, subtitle navigation, speed and side-by-side fullscreen. No speech generation or offline Netflix downloads. Netflix may reject embedded playback; authenticated subscription playback is not yet verified."
+    ]
+  },
+  {
     "version": "0.17.1",
     "date": "2026-11-11",
     "title": "Refine Japanese subtitle typography",

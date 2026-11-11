@@ -1051,3 +1051,28 @@ body.light .recentMeaning { color: #365945; }
 .fullscreenStudy .line { font-size: clamp(24px, 2.4vw, 40px); line-height: 1.75; text-shadow: 0 2px 5px #000; }
 body.light .word rt { color: #476b54; }
 .wordUnit { display: inline-block; white-space: nowrap; vertical-align: baseline; line-height: inherit; max-width: 100%; }
+
+/* Netflix owns playback in the adjacent native pane; this web view owns study. */
+body.netflixMode { min-width: 0; }
+.netflixMode header { position: static; margin: 12px; padding: 8px; width: auto; min-width: 0; }
+.netflixMode header .brand, .netflixMode #search, .netflixMode #discoverButton,
+.netflixMode #watchButton, .netflixMode #netflixButton, .netflixMode #openFile,
+.netflixMode #libraryButton, .netflixMode .videoCard { display: none; }
+.netflixMode header nav { width: 100%; justify-content: flex-end; }
+.netflixMode #watchPage { display: block; margin: 12px; padding: 0; }
+.netflixMode .studyCard { width: 100%; min-width: 0; min-height: calc(100dvh - 110px); }
+.netflixMode .subtitles { padding: 22px; min-height: 200px; }
+.netflixMode .line { font-size: clamp(23px, 4vw, 32px); }
+.netflixMode .studyHead { padding: 18px 22px; flex-wrap: wrap; gap: 8px; }
+.netflixMode .studyHead small { font-size: 12px; }
+#netflixOptions { padding: 18px 22px; border-bottom: 1px solid #b7dfc326; }
+#netflixOptions[hidden] { display: none; }
+.netflixTools { display: flex; align-items: center; gap: 12px; }
+.netflixTools strong { flex: 1; }
+#netflixOptions p { font-size: 13px; line-height: 1.55; color: #adc5b6; }
+#netflixOptions label { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 12px; }
+#netflixOptions input[type="checkbox"] { width: 16px; min-width: 16px; flex: none; margin: 0; }
+#netflixTrack { max-width: 65%; }
+.netflixMode .controls { gap: 8px; padding: 10px; }
+.netflixMode .control { min-width: 48px; width: 48px; height: 48px; }
+.netflixMode dialog { max-width: calc(100vw - 24px); }

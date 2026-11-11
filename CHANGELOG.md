@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.18.0 — 2026-11-12
+
+Add Netflix original-subtitle study
+
+- Add an in-app Netflix pane using original subtitle text, shared word lookup and saved words, hover pause/resume, subtitle navigation, speed and side-by-side fullscreen. No speech generation or offline Netflix downloads. Netflix may reject embedded playback; authenticated subscription playback is not yet verified.
+
 ## 0.17.1 — 2026-11-11
 
 Refine Japanese subtitle typography

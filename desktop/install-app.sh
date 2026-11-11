@@ -17,6 +17,7 @@ mkdir -p "$applications_dir" "$staged_bundle/Contents/MacOS" "$staged_bundle/Con
 cp "$source_dir/desktop/macos-app/Info.plist" "$staged_bundle/Contents/Info.plist"
 xcrun swiftc -parse-as-library -O -target arm64-apple-macos13.0 -framework Cocoa -framework WebKit -framework MediaPlayer -framework Vision "$source_dir/desktop/NativeApp.swift" -o "$staged_bundle/Contents/MacOS/ImmersedMac"
 cp "$source_dir/desktop/macos-app/ImmersedMac.icns" "$staged_bundle/Contents/Resources/ImmersedMac.icns"
+cp "$source_dir/desktop/netflix.js" "$source_dir/desktop/netflix-bridge.js" "$staged_bundle/Contents/Resources/"
 chmod 755 "$staged_bundle/Contents/MacOS/ImmersedMac"
 
 version="$(node -p "require('$source_dir/package.json').version")"

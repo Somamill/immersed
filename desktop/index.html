@@ -21,6 +21,7 @@
       <nav aria-label="Navigation">
         <button id="discoverButton" aria-pressed="false">Discover</button>
         <button id="watchButton" aria-pressed="true">Watch</button>
+<button id="netflixButton">Netflix</button>
         <button
           id="fullscreen"
           aria-label="Video fullscreen"
@@ -60,6 +61,12 @@
         </div>
       </section>
       <section class="studyCard">
+<div id="netflixOptions" hidden>
+<div class="netflixTools"><button id="leaveNetflix" aria-label="Back to immersed" title="Back to immersed">←</button><strong>Netflix</strong><button id="netflixBrowse" title="Browse Netflix">Browse</button></div>
+<p id="netflixStatus" role="status">Sign in to Netflix and choose a title. Select subtitles in Netflix’s Audio &amp; Subtitles menu.</p>
+<label>Subtitle track <select id="netflixTrack"><option value="">Choose in Netflix</option></select></label>
+<label><input id="netflixOriginal" type="checkbox" checked /> Also show subtitles on the video</label>
+</div>
         <div class="studyHead">
           <strong>Watch & read</strong>
           <div>
@@ -131,6 +138,7 @@
     <script src="/discovery.js"></script>
     <script src="/word-history.js"></script>
     <script src="/reading-cues.js"></script>
+    <script src="/netflix.js"></script>
     <script src="/study.js"></script>
   </body>
 </html>

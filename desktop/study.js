@@ -7,6 +7,7 @@ const $ = (id) => document.getElementById(id),
     return e;
   };
 const iconPaths = {
+  netflix: '<path d="M7 20V4l10 16V4"/>',
   discover: '<circle cx="12" cy="12" r="9"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5Z"/>',
   play: '<path d="m9 5 11 7-11 7Z"/>', watch: '<rect x="3" y="4" width="18" height="14" rx="4"/><path d="m10 8 5 3-5 3M8 21h8"/>',
   search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
@@ -63,6 +64,7 @@ let extras = {
     hoverLookup: true,
     screenCaptionCheck: true,
     pauseOnHover: true,
+    netflixOriginal: true,
     speechQuality: "balanced",
     playbackRate: 1,
     ...read("immersed.mac.options", {}),
@@ -71,6 +73,7 @@ let extras = {
 let recentWords = read("immersed.recentWords", []);
 if (!Array.isArray(recentWords)) recentWords = [];
 let localMedia = null,
+  netflix = null,
   youtube = null,
   source = null,
   cues = [],
@@ -266,23 +269,28 @@ function handleYouTubeState(event) {
   }
 }
 function playbackWasRunning() {
+  if (netflix) return !netflix.paused || resumePending;
   if (localMedia) return !localMedia.paused;
   const state = youtube?.getPlayerState?.();
   return state === 1 || (state === 3 && youtubePlaybackIntent);
 }
 
 function currentTime() {
+  if (netflix) return netflix.time;
   return localMedia?.currentTime || youtube?.getCurrentTime?.() || 0;
 }
 function playing() {
+  if (netflix) return !netflix.paused;
   return localMedia ? !localMedia.paused : youtube?.getPlayerState?.() === 1;
 }
 function pause() {
   resumePending = false;
+  if (netflix) { netflix.paused = true; netflixCommand("pause"); return; }
   if (localMedia) localMedia.pause();
   else youtube?.pauseVideo?.();
 }
 function play() {
+  if (netflix) { netflix.paused = false; netflixCommand("play"); return; }
   if (!localMedia) youtubePlaybackIntent = true;
   if (localMedia) localMedia.play().catch((e) => status(e.message, true));
   else youtube?.playVideo?.();
@@ -294,7 +302,8 @@ function seekTo(t) {
     try { localStorage.setItem("immersed.positions", JSON.stringify(positions)); } catch {}
   }
   cueSeek = { index: cues.findIndex(c => c.start <= t + 0.02 && t < c.end), until: performance.now() + 1600 };
-  if (localMedia) localMedia.currentTime = Math.max(0, t);
+  if (netflix) { netflix.time = Math.max(0, t); netflixCommand("seek", netflix.time); }
+  else if (localMedia) localMedia.currentTime = Math.max(0, t);
   else youtube?.seekTo?.(Math.max(0, t), true);
   cueIndex = -1;
   void renderCue();
@@ -310,6 +319,10 @@ function stopMedia() {
   cueSeek = null;
   renderGeneration++;
   pause();
+  if (netflix) {
+    window.webkit?.messageHandlers?.immersed?.postMessage({ action: "closeNetflix" });
+    netflix = null; document.body.classList.remove("netflixMode"); $("netflixOptions").hidden = true;
+  }
   if (localMedia) {
     for (const event of [
       "timeupdate",
@@ -357,6 +370,84 @@ function idFrom(input) {
     return null;
   }
 }
+function netflixCommand(command, value) {
+  window.webkit?.messageHandlers?.immersed?.postMessage({ action: "netflixCommand", command, value: value ?? null });
+}
+function openNetflix(url = null) {
+  if (!window.webkit?.messageHandlers?.immersed) {
+    const body = showPanel("Netflix");
+    body.append(el("p", "Open the immersed Mac app to use Netflix. Netflix needs an account and may restrict playback in embedded players."));
+    return;
+  }
+  stopMedia(); closePanel(); showWatch();
+  netflix = { time: 0, paused: true, duration: 0, id: "", language: "", fullTrack: false, liveCue: null };
+  document.body.classList.add("netflixMode"); $("netflixOptions").hidden = false;
+  $("netflixOriginal").checked = extras.netflixOriginal !== false;
+  $("netflixTrack").replaceChildren(new Option("Choose in Netflix", ""));
+  $("netflixStatus").textContent = "Sign in and choose a title. Select subtitles in Netflix’s Audio & Subtitles menu. Playback depends on Netflix’s embedded-player support.";
+  $("count").textContent = "Original subtitles"; $("subtitles").textContent = "Choose subtitles in Netflix to begin.";
+  window.webkit.messageHandlers.immersed.postMessage({ action: "openNetflix", url: ImmersedNetflix.netflixURL(url) });
+}
+window.openNetflix = openNetflix;
+window.immersedNetflixEvent = data => {
+  if (!netflix || !data || typeof data !== "object") return;
+  if (data.event === "reset") {
+    closeLookup(false); cues = []; cueIndex = -1; renderGeneration++;
+    netflix.id = String(data.id || ""); netflix.fullTrack = false; netflix.liveCue = null; netflix.originalSent = false;
+    source = null; $("subtitles").textContent = "Choose subtitles in Netflix to begin.";
+    $("count").textContent = "Original subtitles"; $("coverage").textContent = "";
+  } else if (data.event === "state" && Number.isFinite(data.time)) {
+    netflix.time = Math.max(0, data.time); netflix.paused = Boolean(data.paused); netflix.duration = Number(data.duration) || 0;
+    netflix.id = String(data.id || netflix.id);
+    source = { type: "netflix", id: netflix.id, title: String(data.title || "Netflix") };
+    if (!netflix.originalSent) { netflix.originalSent = true; netflixCommand("original", extras.netflixOriginal !== false); }
+    // A delayed pause acknowledgement must not undo a hover-resume command.
+    if (resumePending && !selected && netflix.paused) netflixCommand("play");
+    if (!netflix.paused) { resumePending = false; if (selected && resumeAfterLookup && extras.pauseOnHover) netflixCommand("pause"); }
+    void renderCue(); playbackChanged();
+  } else if (data.event === "cues" && Array.isArray(data.cues)) {
+    closeLookup();
+    cues = data.cues.slice(0, 30000).filter(c => typeof c.text === "string" && c.text.length <= 4000 && Number.isFinite(c.start) && c.start >= 0 && Number.isFinite(c.end) && c.end > c.start)
+      .map(c => ({ start: c.start, end: c.end, text: c.text })).sort((a,b) => a.start-b.start || a.end-b.end);
+    netflix.fullTrack = cues.length > 0; netflix.liveCue = null; netflix.language = String(data.language || "");
+    transcriptKind = "netflix-original"; cueIndex = -1; renderGeneration++;
+    $("count").textContent = "Original subtitles · " + cues.length + " segments";
+    $("netflixStatus").textContent = data.label || (netflix.language ? "Original subtitles · " + netflix.language : "Original Netflix subtitles");
+    void renderCue();
+  } else if (data.event === "line" && typeof data.text === "string" && Number.isFinite(data.time) && !netflix.fullTrack) {
+    // If the player exposes only its current line, retain encountered blocks for
+    // backward navigation. Never invent future words or transcribe its audio.
+    const text = data.text.slice(0,4000).trim(), at = Math.max(0, data.time);
+    if (netflix.liveCue) netflix.liveCue.end = Math.max(netflix.liveCue.start + .05, at);
+    netflix.liveCue = null;
+    if (text) {
+      let cue = cues.find(c => c.text === text && c.start <= at && at < c.end);
+      if (!cue) { cue = { start: at, end: at + 86400, text }; cues.push(cue); cues.sort((a,b)=>a.start-b.start); }
+      netflix.liveCue = cue;
+      $("netflixStatus").textContent = "Original Netflix subtitles · current lines";
+    }
+    cueIndex = -1; void renderCue();
+  } else if (data.event === "tracks" && Array.isArray(data.tracks)) {
+    const tracks = data.tracks.filter(t => typeof t.language === "string" && typeof t.label === "string");
+    const key = JSON.stringify(tracks);
+    if ($("netflixTrack").dataset.tracks !== key) {
+      $("netflixTrack").dataset.tracks = key;
+      $("netflixTrack").replaceChildren(new Option("Choose in Netflix", ""), ...tracks.map(t => new Option(t.label || t.language, t.language, false, Boolean(t.selected))));
+    }
+  } else if (data.event === "error") {
+    resumePending = false; netflix.paused = true;
+    $("netflixStatus").textContent = String(data.message || "Netflix playback is unavailable.");
+  }
+};
+$("netflixButton").onclick = () => openNetflix();
+$("netflixBrowse").onclick = () => openNetflix();
+$("leaveNetflix").onclick = () => {
+  stopMedia(); $("subtitles").textContent = "Choose a video or audiobook to begin.";
+  $("video").append(el("div", "Open a YouTube video, local video or audiobook to begin.", "placeholder"));
+  $("sourceBadge").textContent = "LOCAL STUDY"; status("Ready when you are");
+};
+$("netflixOriginal").onchange = () => { extras.netflixOriginal = $("netflixOriginal").checked; persist(); netflixCommand("original", extras.netflixOriginal); };
+$("netflixTrack").onchange = () => { if ($("netflixTrack").value) { closeLookup(); cues=[]; cueIndex=-1; netflix.fullTrack=false; netflix.liveCue=null; netflixCommand("language", $("netflixTrack").value); } };
 function loadYouTubeAPI() {
   if (window.YT?.Player) return Promise.resolve();
   if (youtubeReady) return youtubeReady;
@@ -520,7 +611,7 @@ function playbackChanged(force = false) {
     action: "playback",
     title: source?.title || "",
     position: currentTime(),
-    duration: localMedia?.duration || 0,
+    duration: netflix?.duration || localMedia?.duration || 0,
     rate: localMedia?.playbackRate || 1,
     playing: playing(),
   });
@@ -757,6 +848,7 @@ async function pollTranscript(route, params, generation) {
 }
 const readingJoins = new Map(), readingPending = new Set(), readingWindows = new Map();
 function refineNearCue(index) {
+  if (netflix) return; // Preserve the original service subtitle boundaries/text.
   const batch=cues.slice(Math.max(0,index-3),Math.min(cues.length,index+4));
   if(batch.length<2)return;
   const windowKey=ImmersedReadingCues.groupKey(batch),generation=requestGeneration;
@@ -932,7 +1024,8 @@ function closeLookup(resume = true) {
     play();
   }
   resumeAfterLookup = false;
-  cues = ImmersedReadingCues.apply(cues, readingJoins); cueIndex = -1;
+  if (!netflix) cues = ImmersedReadingCues.apply(cues, readingJoins);
+  cueIndex = -1;
   for (const cue of cues) if (cue.screenText && cue.text !== cue.screenText) { cue.text = cue.screenText; cueIndex = -1; }
 }
 async function openLookup(token, pinned = false, anchor = null) {
@@ -1123,7 +1216,7 @@ function lookupWordRecord() {
     word: j.word || selected.lemma, reading: j.reading || selected.reading || "",
     meaning: lookupMeaning || entry.senses?.[0]?.english_definitions?.join("; ") || "",
     sentence: hasContext ? lookupCue?.text || "" : "", title: hasContext ? source.title : "",
-    url: hasContext ? source.type === "local" ? "local:" + source.id : "https://www.youtube.com/watch?v=" + source.id : "",
+url: hasContext ? source.type === "local" ? "local:" + source.id : source.type === "netflix" ? "https://www.netflix.com/watch/" + source.id : "https://www.youtube.com/watch?v=" + source.id : "",
     time: hasContext ? currentTime() : 0 };
 }
 function recordLookup() {
@@ -1823,6 +1916,7 @@ $("search").onsubmit = (e) => {
   e.preventDefault();
   const value = $("query").value.trim(),
     id = idFrom(value);
+if (ImmersedNetflix.netflixURL(value)) { $("query").value = ""; openNetflix(value); return; }
   if (id) {
     closePanel();
     let startAt = null;
@@ -1838,6 +1932,7 @@ $("search").onsubmit = (e) => {
   }
 };
 async function toggleFullscreen() {
+if (netflix) { window.webkit?.messageHandlers?.immersed?.postMessage({ action: "netflixFullscreen" }); return; }
   if (document.fullscreenElement) await document.exitFullscreen();
   else {
     const video = $("video");
@@ -1932,7 +2027,8 @@ for (const rate of [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]) {
   item.setAttribute("role", "menuitemradio");
   item.onclick = () => {
     extras.playbackRate = rate; persist(); updateSpeedButton(); closeSpeedMenu();
-    if (localMedia) localMedia.playbackRate = rate;
+    if (netflix) netflixCommand("rate", rate);
+    else if (localMedia) localMedia.playbackRate = rate;
     else youtube?.setPlaybackRate?.(rate);
     $("speed").focus();
   };
@@ -2123,6 +2219,7 @@ applyPreferences();
 
 for (const [id, label, icon] of [
   ["discoverButton", "Discover", "discover"], ["watchButton", "Watch", "watch"],
+  ["netflixButton", "Netflix", "netflix"],
   ["openFile", "Open file", "folder"], ["libraryButton", "Library", "library"],
   ["wordsButton", "Words", "words"], ["settingsButton", "Settings", "settings"],
   ["fullscreen", "Video fullscreen", "fullscreen"], ["closeLookup", "Close lookup", "close"],

@@ -22,6 +22,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     var gestureX: CGFloat = 0
     var gestureY: CGFloat = 0
     var gestureFired = false
+    var netflixView: WKWebView?
+    var netflixSplit: NSSplitView?
     let home = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Immersed Mac")
     var blockAds: Bool { UserDefaults.standard.object(forKey: "blockAds") as? Bool ?? true }
 
@@ -99,6 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         item(view, "Study window", #selector(showStudy), "1")
         item(view, "Saved words", #selector(words), "3")
         item(view, "Browse YouTube (unfiltered)", #selector(browseYouTube), "b")
+        item(view, "Netflix", #selector(browseNetflix), "")
         let fullscreen = view.addItem(withTitle: "Toggle Full Screen", action: #selector(NSWindow.toggleFullScreen(_:)), keyEquivalent: "f")
         fullscreen.keyEquivalentModifierMask = [.control, .command]
         NSApp.mainMenu = menu
@@ -168,10 +171,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         let alert = NSAlert(); alert.messageText = title; alert.informativeText = detail; alert.beginSheetModal(for: window)
     }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "immersedNetflix" {
+            guard message.frameInfo.isMainFrame, message.webView === netflixView,
+                  ["www.netflix.com", "netflix.com"].contains(message.frameInfo.request.url?.host ?? ""),
+                  let payload = message.body as? [String: Any],
+                  ["state", "cues", "line", "reset", "tracks", "error", "shortcut"].contains(payload["event"] as? String ?? ""),
+                  let data = try? JSONSerialization.data(withJSONObject: payload), data.count <= 8 * 1024 * 1024,
+                  let json = String(data: data, encoding: .utf8) else { return }
+            if payload["event"] as? String == "shortcut" {
+                if payload["command"] as? String == "fullscreen" { window.toggleFullScreen(nil) }
+                else if let command = payload["command"] as? String, ["previous", "next"].contains(command) {
+                    web.evaluateJavaScript("window.immersedPlayback?.('skip',\(command == "previous" ? -1 : 1))", completionHandler: nil)
+                }
+                return
+            }
+            web.evaluateJavaScript("window.immersedNetflixEvent?.(\(json))", completionHandler: nil)
+            return
+        }
         guard message.frameInfo.isMainFrame, message.webView === web,
               message.frameInfo.request.url?.host == "127.0.0.1",
               let object = message.body as? [String: Any], let action = object["action"] as? String else { return }
-        if action == "blockAds", let enabled = object["enabled"] as? Bool {
+        if action == "openNetflix" {
+            openNetflix(object["url"] as? String)
+        } else if action == "closeNetflix" {
+            netflixView?.evaluateJavaScript("window.immersedNetflixCommand?.({command:'pause'})", completionHandler: nil)
+            netflixView?.stopLoading()
+            netflixView?.configuration.userContentController.removeScriptMessageHandler(forName: "immersedNetflix")
+            netflixView?.removeFromSuperview(); web.removeFromSuperview(); window.contentView = web
+            netflixSplit = nil; netflixView = nil
+        } else if action == "netflixFullscreen" {
+            window.toggleFullScreen(nil)
+        } else if action == "netflixCommand", let command = object["command"] as? String,
+                  ["play", "pause", "seek", "rate", "language", "original", "snapshot"].contains(command),
+                  let data = try? JSONSerialization.data(withJSONObject: object), let json = String(data: data, encoding: .utf8) {
+            netflixView?.evaluateJavaScript("window.immersedNetflixCommand?.(\(json))", completionHandler: nil)
+        } else if action == "blockAds", let enabled = object["enabled"] as? Bool {
             UserDefaults.standard.set(enabled, forKey: "blockAds"); updateAdRules()
         } else if action == "captionFrame" { scanVideoCaption(object)
         } else if action == "playback" {
@@ -247,6 +281,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
             }
         }.resume()
     }
+    @objc func browseNetflix() { web.evaluateJavaScript("window.openNetflix?.()", completionHandler: nil) }
+    func openNetflix(_ value: String?) {
+        var url = URL(string: "https://www.netflix.com/browse")!
+        if let value, let candidate = URL(string: value), candidate.scheme == "https",
+           ["www.netflix.com", "netflix.com"].contains(candidate.host ?? ""), candidate.user == nil, candidate.password == nil, candidate.port == nil,
+           candidate.path.range(of: "^/watch/[0-9]+/?$", options: .regularExpression) != nil { url = candidate }
+        if let netflixView { netflixView.load(URLRequest(url: url)); return }
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = .default()
+        config.mediaTypesRequiringUserActionForPlayback = []
+        // Keep the study pane visible in fullscreen. Netflix's own element
+        // fullscreen would hide word lookup.
+        config.preferences.isElementFullscreenEnabled = false
+        config.userContentController.add(self, name: "immersedNetflix")
+        for name in ["netflix", "netflix-bridge"] {
+            if let file = Bundle.main.url(forResource: name, withExtension: "js"), let code = try? String(contentsOf: file, encoding: .utf8) {
+                config.userContentController.addUserScript(WKUserScript(source: code, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+            }
+        }
+        let view = WKWebView(frame: .zero, configuration: config)
+        view.navigationDelegate = self; view.uiDelegate = self
+        view.allowsBackForwardNavigationGestures = true
+        netflixView = view
+        let split = NSSplitView(frame: window.contentView!.bounds)
+        split.isVertical = true; split.dividerStyle = .thin
+        web.removeFromSuperview()
+        split.addArrangedSubview(view); split.addArrangedSubview(web)
+        window.contentView = split; netflixSplit = split
+        split.adjustSubviews(); split.setPosition(split.bounds.width * 0.65, ofDividerAt: 0)
+        view.load(URLRequest(url: url))
+    }
     @objc func browseYouTube() { openBrowser(URL(string: "https://www.youtube.com/?hl=ja&gl=JP")!) }
     func openBrowser(_ url: URL) {
         if let existing = browserWindows.first {
@@ -262,6 +327,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     }
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
         guard let url = navigationAction.request.url else { decisionHandler(.cancel); return }
+        if webView === netflixView, navigationAction.targetFrame?.isMainFrame != false {
+            guard url.scheme == "https", let host = url.host,
+                  host == "netflix.com" || host.hasSuffix(".netflix.com") else { decisionHandler(.cancel); return }
+        }
         if url.host == "accounts.google.com" {
             decisionHandler(.cancel)
             alert("Google sign-in is unavailable in the embedded player", "Google blocks sign-in in embedded web views. Public YouTube browsing, search, and local media remain available. Your browser cookies are not imported.")

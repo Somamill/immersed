@@ -20,6 +20,16 @@ immersed-mac
 
 The first command launch creates `~/Applications/immersed.app`. Open **immersed.** from Finder, Spotlight or Launchpad afterward. Initial setup installs the local dictionaries, context database and speech runtime. Speech models download on first use; prepare them before going offline. Subsequent starts reuse dependencies, dictionaries, models and transcripts. Quit immersed. before updating with `brew upgrade --fetch-HEAD Somamill/immersed/immersed-mac`.
 
+## Netflix original subtitles
+
+Choose **Netflix** in the Mac toolbar or paste an `https://www.netflix.com/watch/…` link. Netflix opens in a native pane alongside the study reader. Sign in directly on Netflix and select a subtitle language in its **Audio & Subtitles** menu. Where the player exposes HTML subtitle tracks, the reader also offers a track selector. **Also show subtitles on the video** controls the duplicate Netflix overlay.
+
+The study reader uses original Netflix subtitle text, not Whisper, generated corrections, OCR, audio extraction or downloads. It shares word lookup, hover pause/resume, furigana, level highlighting, saved words, speed and subtitle-block navigation. When a complete original timed track is readable, previous/next use its original boundaries. If only the visible line is exposed, only encountered blocks are available for navigation. Words saved from Netflix retain the title, sentence, Netflix URL and playback time. Fullscreen keeps the native Netflix pane and study reader side by side so word lookup remains available.
+
+Netflix account cookies stay in the Mac app’s persistent WebKit store. The bridge accepts messages only from the Netflix main frame and inspects textual subtitle responses already requested by its player. It does not copy browser cookies or fetch DRM media. Automatic speech generation and offline saving are unavailable for Netflix.
+
+**Playback limitation:** [Netflix lists supported Mac browsers](https://help.netflix.com/en/node/30081), including Safari, but does not list embedded WKWebView apps. Signing in and protected playback may therefore be rejected by Netflix. The subtitle bridge and controls are tested with local original-caption fixtures; authenticated playback with a real Netflix subscription has not been verified. This is an experimental integration, not a promise that every Netflix title will play inside immersed.
+
 ## Local video and Japanese audiobooks
 
 Use **Open file**, Command-O, drag and drop, or Finder’s Open With menu. Supported import extensions are MP4, M4V, MOV, M4B, M4A, MP3, WAV, AAC, FLAC, OGG and WebM. Actual playback depends on the codecs WebKit supports; H.264/AAC MP4 and AAC M4B/M4A are the tested paths. Imports copy media into the local library so moving the original does not break study sessions.
