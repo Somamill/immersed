@@ -88,3 +88,19 @@ Previous/next controls and arrow keys move to adjacent complete subtitle blocks.
 On the Mac, **Read captions from video** can compare generated YouTube subtitles with Japanese text burned into the source video. Apple Vision reads two small source-frame samples; matching requires sufficient Japanese text, similar pronunciation and agreement between both frames. Unrelated titles and unmatched/unclear text are ignored. Acoustic text and timing are retained, and accepted caption text is cached locally for replay. The normal dictionary and playback do not wait for this background check. Frame access can fail on restricted videos, and creator captions/OCR can also be imperfect. Videos without usable on-screen text continue to use speech recognition.
 
 Frame sampling uses short range reads, not a complete video download. The local cache is limited to 120 frame pairs. Settings can disable sampling. The separate **Save offline** button saves the complete video to Library without switching the current player.
+
+## Trackpad and preparation progress
+
+Two-finger horizontal trackpad gestures move to the previous or next subtitle block, including in video fullscreen. Vertical scrolling, text controls, modal panels and open word lookups are protected from subtitle navigation. A gesture triggers once; momentum does not skip multiple blocks. Physical trackpad feel may vary with system settings.
+
+Discover's **Find more videos** fetches additional pages (up to 72 candidates per search), deduplicating results and keeping the same language, duration and conversation filters. Each page is verified progressively.
+
+Speech preparation has a compact progress bar, also visible in video fullscreen. Loading/queued/download stages are indeterminate; recognition percentages reflect completed audio in the current task, not the entire length of a windowed audiobook. A cached ready transcript hides the bar. Audiobook look-ahead now starts after two seconds of playback, eight seconds earlier than before. Empty-subtitle polling is 350 ms instead of 650 ms.
+
+### Speech engine comparison (2026-11-11)
+
+The production engine remains Apple's GPU-accelerated MLX Whisper with word timestamps and overlap ownership. Turbo is recommended; Large v3 is an optional slower alternate, not a promise of better results. A persistent single speech worker reuses the loaded model and avoids concurrent large-model memory pressure on M1.
+
+Primary references reviewed: [Apple MLX Whisper](https://github.com/ml-explore/mlx-examples/blob/main/whisper/README.md), [WhisperKit / Argmax OSS](https://github.com/argmaxinc/argmax-oss-swift), and [Kotoba Whisper v2](https://huggingface.co/kotoba-tech/kotoba-whisper-v2.0). WhisperKit provides a native Core ML alternative; Kotoba publishes Japanese accuracy/speed results. Neither is shipped as a replacement without representative local timing and subtitle-alignment evaluation. Earlier tests on the reported source rejected Kotoba because it omitted speech.
+
+A fresh local experiment compared an 8-second first block with the existing 26-second core on the supplied public YouTube excerpt. After warming both paths, first cues took 2.92 vs 2.99 seconds, but total processing increased to 9.56 vs 5.26 seconds and wording changed. The shorter-block experiment was rejected. These are single-clip observations, not general model rankings. No speech-model weights have been retrained, and homophone errors still require source captions or checking the audio.

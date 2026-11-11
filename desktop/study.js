@@ -152,7 +152,18 @@ function applyPreferences() {
   updateCoverage();
   if (!$("discovery").hidden) discoveryPaint?.();
 }
+function speechProgress(data = null) {
+  const panel = $("speechProgress"), bar = $("speechBar");
+  panel.hidden = !data || ["ready", "unavailable"].includes(data.status);
+  if (panel.hidden) return;
+  const measured = data.phase === "recognizing" && data.duration > 0;
+  const percent = Math.max(0, Math.min(100, Math.floor(100 * (data.processedSeconds || 0) / data.duration)));
+  $("speechStage").textContent = (extras.speechQuality === "accurate" ? "Large v3" : "Whisper Turbo") + " · " + (data.stage || "Preparing subtitles");
+  $("speechPercent").textContent = measured ? percent + "%" : "Preparing…";
+  if (measured) bar.value = percent; else bar.removeAttribute("value");
+}
 function status(text, error = false) {
+  if (error || !text) speechProgress();
   $("status").textContent = text;
   $("status").className = error ? "error" : "";
 }
@@ -242,6 +253,7 @@ function seekTo(t) {
   void renderCue();
 }
 function stopMedia() {
+  speechProgress();
   void flushPlayback();
   clearTimeout(pollTimer);
   clearTimeout(hoverTimer);
@@ -481,7 +493,7 @@ function playbackChanged(force = false) {
       void beginTranscript();
     } else if (
       playing() &&
-      currentTime() % 60 > 10 &&
+      currentTime() % 60 > 2 &&
       prefetchedWindow !== minute + 1 &&
       (minute + 1) * 60 < source.duration
     ) {
@@ -615,6 +627,7 @@ async function beginTranscript(retry = false) {
     source.type === "local" ? "desktop/local-transcript" : "desktop/transcribe";
 
   status("Preparing Japanese subtitles…");
+  speechProgress({ status: "processing" });
   try {
     await api(route, params, "POST");
     if (generation !== requestGeneration) return;
@@ -654,6 +667,7 @@ async function pollTranscript(route, params, generation) {
         cues.length +
         " segments";
     }
+    speechProgress(data);
     if (data.status === "ready") {
       status("");
 
@@ -678,7 +692,7 @@ async function pollTranscript(route, params, generation) {
       () => pollTranscript(route, params, generation),
       cues.some((c) => c.start <= currentTime() && currentTime() < c.end)
         ? 1500
-        : 650,
+        : 350,
     );
   } catch (e) {
     if (generation === requestGeneration) {
@@ -788,6 +802,8 @@ function positionLookup() {
 }
 new ResizeObserver(() => positionLookup()).observe($("lookup"));
 window.addEventListener("resize", positionLookup);
+document.addEventListener("scroll", () => { if (selected) positionLookup(); }, true);
+window.visualViewport?.addEventListener("resize", positionLookup);
 window.addEventListener("blur", () => { if (selected && !lookupPinned) closeLookup(); });
 function closeLookup(resume = true) {
   clearTimeout(hoverTimer);
@@ -1310,8 +1326,8 @@ function showSettings() {
     "Turbo is the default. The alternate large-v3 model can produce different spelling or more kana and is not always more accurate. Its first use downloads model weights.",
     "speechQuality",
     [
-      ["balanced", "Fast — turbo"],
-      ["accurate", "Alternate — large-v3"],
+      ["balanced", "Turbo · recommended"],
+      ["accurate", "Large v3 · slower"],
     ],
     true,
   );
@@ -1392,6 +1408,7 @@ function showWatch() {
   searchGeneration++;
 }
 function showDiscovery(query = discoveryQuery) {
+  speechProgress();
   if (document.fullscreenElement) void document.exitFullscreen();
   closePanel();
   closeLookup();
@@ -1440,9 +1457,12 @@ async function searchYouTube(query) {
   lengthLabel.append(el("span", "Length"), length); controls.append(lengthLabel);
   const cards = el("div", null, "searchResults"), message = el("p", "", "hint");
   const retry = button("Try again", () => void searchYouTube(query)); retry.hidden = true;
-  body.append(controls, heading, cards, message, retry);
+  const more = button("Find more videos", () => { page++; void fetchResults(); });
+  more.className = "discoveryMore"; more.hidden = true;
+  body.append(controls, heading, cards, message, retry, more);
   const rendered = new Map();
-  let latest = { items: [], status: "loading" };
+  let latest = { items: [], status: "loading" }, page = 1;
+  const collected = new Map();
   function paint() {
     original.checked = extras.originalOnly; conversation.checked = extras.conversationFirst;
     shorts.checked = prefs.hideShorts; length.value = String(prefs.minimumMinutes);
@@ -1469,7 +1489,7 @@ async function searchYouTube(query) {
       card.querySelector(".searchDuration").textContent = formatDuration(item.duration);
       card.querySelector(".searchLanguage").textContent = item.language === "ja" ? "Japanese original" : item.language || "Language unverified";
     }
-    progress.textContent = data.status === "checking"
+    progress.textContent = data.status === "loading" ? "Finding conversations…" : data.status === "checking"
       ? "Checking originals · " + (data.checked || 0) + "/" + (data.total || data.items.length)
       : filtered.length + (filtered.length === 1 ? " video" : " videos");
     message.textContent = !filtered.length
@@ -1484,12 +1504,16 @@ async function searchYouTube(query) {
   shorts.onchange = () => { prefs.hideShorts = shorts.checked; persist(); void searchYouTube(query); };
   length.onchange = () => { prefs.minimumMinutes = Number(length.value); persist(); void searchYouTube(query); };
   paint();
+  async function fetchResults() {
+  more.disabled = true; more.textContent = "Finding more…";
   try {
     do {
-      const data = await api("desktop/search", { query, conversation: extras.conversationFirst,
+      const data = await api("desktop/search", { query, page, conversation: extras.conversationFirst,
         minimumMinutes: prefs.minimumMinutes, hideShorts: prefs.hideShorts });
       if (generation !== searchGeneration || $("discovery").hidden) return;
-      latest = data; paint();
+      for (const item of data.items) collected.set(item.id, item);
+      latest = { ...data, items: [...collected.values()] }; paint();
+      more.hidden = data.hasMore !== true;
       if (data.status !== "checking") break;
       await new Promise(r => setTimeout(r, 650));
     } while (generation === searchGeneration && !$("discovery").hidden);
@@ -1497,7 +1521,9 @@ async function searchYouTube(query) {
     if (generation !== searchGeneration || $("discovery").hidden) return;
     progress.textContent = "Couldn’t load videos"; message.textContent = error.message;
     cards.classList.remove("loading"); retry.hidden = false;
+  } finally { more.disabled = false; more.textContent = "Find more videos"; }
   }
+  await fetchResults();
 }
 
 async function importMedia(file) {
@@ -1697,7 +1723,7 @@ document.addEventListener("fullscreenchange", () => {
   if (document.fullscreenElement === $("video")) {
     const overlay = el("div", null, "fullscreenStudy");
     overlay.id = "fullscreenStudy";
-    for (const id of ["subtitles", "lookup", "controls"]) {
+    for (const id of ["speechProgress", "subtitles", "lookup", "controls"]) {
       const node = $(id), home = document.createComment(id + " home");
       node.replaceWith(home); fullscreenHomes.set(node, home); overlay.append(node);
     }
@@ -1710,7 +1736,7 @@ document.addEventListener("fullscreenchange", () => {
     $("video").append(exit);
     exit.focus();
   } else restoreFullscreenStudy();
-  positionLookup();
+  requestAnimationFrame(() => requestAnimationFrame(positionLookup));
 });
 $("fullscreen").onclick = () =>
   void toggleFullscreen().catch((e) => status(e.message, true));
@@ -1718,6 +1744,10 @@ $("play").onclick = () => {
   resumePending = false;
   resumeAfterLookup = false;
   playing() ? pause() : play();
+};
+window.immersedTrackpad = direction => {
+  if (!$("panel").open && $("discovery").hidden && !selected &&
+      !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) skip(direction);
 };
 $("previous").onclick = () => skip(-1);
 $("next").onclick = () => skip(1);

@@ -104,3 +104,16 @@ test("different discovery filters have independent caches; broader searches reta
   await manager.search("音楽", { conversation: true });
   assert.equal(calls, 2);
 });
+test("discovery requests later result pages without reusing the first page cache", async () => {
+  const calls = [];
+  const manager = createSearch({run: async (_, args) => {
+    calls.push(args);
+    return {stdout: JSON.stringify({entries: Array.from({length:18}, (_,i) => ({id:String(i).padStart(11,'a'),duration:1800,title:'対談'}))})};
+  }, peek: () => ({language:'ja'}), videoInfo: async()=>({})});
+  assert.equal((await manager.search('文化',{page:1})).hasMore,true);
+  await manager.search('文化',{page:2});
+  assert.equal(calls[1][calls[1].indexOf('--playlist-start')+1],'19');
+  assert.match(calls[1].at(-1),/^ytsearch36:/);
+  await manager.search('文化',{page:2});
+  assert.equal(calls.length,2);
+});

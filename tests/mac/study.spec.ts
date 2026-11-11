@@ -772,3 +772,29 @@ test("Discover shares length settings, favors conversations, and ignores stale t
   await page.getByRole("button", { name: "Discover", exact: true }).click();
   await expect(page.locator("#discoveryBody").getByLabel("Conversation first", { exact: true })).not.toBeChecked();
 });
+
+test("more discovery results retain the first page and use the same filters", async ({ page }) => {
+  await page.route("**/api/desktop/search?**", route => {
+    const params = new URL(route.request().url()).searchParams;
+    const second = params.get("page") === "2";
+    return route.fulfill({json:{status:"ready",hasMore:!second,items:[{id:second?"bbbbbbbbbbb":"aaaaaaaaaaa",title:second?"Second interview":"First interview",duration:3600,language:"ja"}]}});
+  });
+  await page.goto("/"); await page.locator("#discoverButton").click();
+  await page.getByRole("button", {name:"Find more videos",exact:true}).click();
+  await expect(page.locator(".searchVideo")).toHaveCount(2);
+  await expect(page.getByRole("button", {name:"Find more videos",exact:true})).toBeHidden();
+});
+
+test("speech progress is measured and trackpad commands use subtitle boundaries in fullscreen", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => (window as any).eval(`speechProgress({status:'processing',phase:'loading'});`));
+  await expect(page.locator("#speechBar")).not.toHaveAttribute("value");
+  await page.evaluate(() => (window as any).eval(`speechProgress({status:'processing',phase:'recognizing',duration:60,processedSeconds:15});youtube={getCurrentTime:()=>7,getPlayerState:()=>2,seekTo:t=>window.__seek=t};cues=[{start:0,end:4,text:'一'},{start:5,end:9,text:'二'},{start:10,end:14,text:'三'}];`));
+  await expect(page.locator("#speechPercent")).toHaveText("25%");
+  await page.locator("#fullscreen").click();
+  await page.evaluate(() => (window as any).immersedTrackpad(1));
+  await expect.poll(() => page.evaluate(() => (window as any).__seek)).toBeCloseTo(10.015);
+  await page.evaluate(() => (window as any).eval(`speechProgress({status:'ready'});`));
+  await page.locator("#exitVideoFullscreen").click();
+  await expect(page.locator("#speechProgress")).toBeHidden();
+});

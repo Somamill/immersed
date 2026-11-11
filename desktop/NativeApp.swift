@@ -18,12 +18,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     var terminating = false
     var ready = false
     var captionScanBusy = false
+    var gestureMonitor: Any?
+    var gestureX: CGFloat = 0
+    var gestureY: CGFloat = 0
+    var gestureFired = false
     let home = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Immersed Mac")
     var blockAds: Bool { UserDefaults.standard.object(forKey: "blockAds") as? Bool ?? true }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
         setupPlaybackCommands()
+        gestureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .swipe]) { [weak self] event in
+            guard let self, event.window === self.window,
+                  self.web?.url?.host == "127.0.0.1" else { return event }
+            if event.type == .swipe {
+                guard abs(event.deltaX) > abs(event.deltaY) else { return event }
+                self.web.evaluateJavaScript("window.immersedTrackpad?.(\(event.deltaX < 0 ? 1 : -1))", completionHandler: nil)
+                return nil
+            }
+            guard event.hasPreciseScrollingDeltas, event.momentumPhase.isEmpty else { return event }
+            if event.phase.contains(.began) { self.gestureX = 0; self.gestureY = 0; self.gestureFired = false }
+            self.gestureX += event.scrollingDeltaX; self.gestureY += event.scrollingDeltaY
+            let horizontal = abs(self.gestureX) > 18 && abs(self.gestureX) > abs(self.gestureY) * 1.5
+            if horizontal && !self.gestureFired && abs(self.gestureX) >= 75 {
+                self.gestureFired = true
+                self.web.evaluateJavaScript("window.immersedTrackpad?.(\(self.gestureX < 0 ? 1 : -1))", completionHandler: nil)
+            }
+            return horizontal ? nil : event
+        }
         web = makeWebView()
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 860), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "immersed."
@@ -85,7 +107,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         if blockAds, let rules = adRules { config.userContentController.add(rules) }
         let view = WKWebView(frame: .zero, configuration: config)
         view.uiDelegate = self; view.navigationDelegate = self
-        view.allowsBackForwardNavigationGestures = true
+        view.allowsBackForwardNavigationGestures = false
         webViews.append(view)
         return view
     }

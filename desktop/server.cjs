@@ -538,6 +538,7 @@ async function fallback(req, res) {
     if (!query || query.length > 120)
       return json(res, 400, { error: "Enter up to 120 characters" });
     return json(res, 200, await searches.search(query, {
+      page: Number(url.searchParams.get("page")),
       conversation: url.searchParams.get("conversation") === "true",
       minimumMinutes: Number(url.searchParams.get("minimumMinutes")),
       hideShorts: url.searchParams.get("hideShorts") !== "false",

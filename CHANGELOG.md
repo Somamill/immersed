@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.14.0 — 2026-11-11
+
+More discovery, trackpad study and clearer speech progress
+
+- Find additional discovery pages with the same language and length filters, up to 72 candidates per search.
+- Add native trackpad subtitle navigation, stable fullscreen lookup anchoring and a measured speech progress bar with honest loading states.
+- Start audiobook look-ahead eight seconds earlier and poll missing subtitles faster. Keep GPU-accelerated Turbo recommended; reject a shorter-chunk experiment that increased total time. WhisperKit and Kotoba need further validation before replacing the engine.
+
 ## 0.13.0 — 2026-11-11
 
 Discover Japanese podcasts and conversations on Mac

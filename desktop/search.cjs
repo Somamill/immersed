@@ -11,6 +11,7 @@ function createSearch({ run, videoInfo, peek = () => null }) {
       status: job.remaining ? "checking" : "ready",
       checked: job.items.length - job.remaining,
       total: job.items.length,
+      hasMore: job.hasMore,
     };
   }
   function pump() {
@@ -41,7 +42,8 @@ function createSearch({ run, videoInfo, peek = () => null }) {
   }
   async function search(query, value = {}) {
     const filters = discovery.options(value);
-    const key = JSON.stringify([query, filters]);
+    const page = Math.max(1, Math.min(4, Math.floor(Number(value.page) || 1)));
+    const key = JSON.stringify([query, filters, page]);
     const old = cache.get(key);
     if (old && Date.now() - old.time < 300000) return snapshot(old);
     if (pending.has(key)) return pending.get(key);
@@ -60,7 +62,8 @@ function createSearch({ run, videoInfo, peek = () => null }) {
           "--extractor-retries",
           "1",
           "--dump-single-json",
-          "ytsearch18:" + discovery.queryFor(query, filters),
+          "--playlist-start", String((page - 1) * 18 + 1),
+          "ytsearch" + (page * 18) + ":" + discovery.queryFor(query, filters),
         ],
         { timeout: 25000, maxBuffer: 4 * 1024 * 1024 },
       );
@@ -88,6 +91,7 @@ function createSearch({ run, videoInfo, peek = () => null }) {
         .sort((a, b) => filters.conversation ? discovery.score(b) - discovery.score(a) : 0);
       const job = {
         items,
+        hasMore: page < 4 && (raw.entries || []).length >= 18,
         time: Date.now(),
         remaining: items.filter((x) => !x.checked).length,
       };
