@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.15.1",
+    "date": "2026-11-11",
+    "title": "Keep speech preparation display uncluttered",
+    "notes": [
+      "Use concise speech stages in the progress bar and hide duplicate footer status while preparation is active."
+    ]
+  },
+  {
     "version": "0.15.0",
     "date": "2026-11-11",
     "title": "Floating glass navigation and vocabulary progress",

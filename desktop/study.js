@@ -181,10 +181,12 @@ function applyPreferences() {
 function speechProgress(data = null) {
   const panel = $("speechProgress"), bar = $("speechBar");
   panel.hidden = !data || ["ready", "unavailable"].includes(data.status);
+  $("status").hidden = !panel.hidden;
   if (panel.hidden) return;
   const measured = data.phase === "recognizing" && data.duration > 0;
   const percent = Math.max(0, Math.min(100, Math.floor(100 * (data.processedSeconds || 0) / data.duration)));
-  $("speechStage").textContent = (extras.speechQuality === "accurate" ? "Large v3" : "Whisper Turbo") + " · " + (data.stage || "Preparing subtitles");
+  const stage = data.phase === "recognizing" ? "Transcribing" : data.phase === "loading" ? "Loading model" : /audio/i.test(data.stage || "") ? "Preparing audio" : "Preparing subtitles";
+  $("speechStage").textContent = (extras.speechQuality === "accurate" ? "Large v3" : "Whisper Turbo") + " · " + stage;
   $("speechPercent").textContent = measured ? percent + "%" : "Preparing…";
   if (measured) bar.value = percent; else bar.removeAttribute("value");
 }

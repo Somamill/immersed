@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.15.1 — 2026-11-11
+
+Keep speech preparation display uncluttered
+
+- Use concise speech stages in the progress bar and hide duplicate footer status while preparation is active.
+
 ## 0.15.0 — 2026-11-11
 
 Floating glass navigation and vocabulary progress
