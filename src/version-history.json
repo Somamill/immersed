@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.12.5",
+    "date": "2026-11-11",
+    "title": "Bundle the iPhone fallback player",
+    "notes": [
+      "Load the fallback YouTube player from the app bundle instead of the unavailable GitHub Pages URL or temporary Expo tunnel. Preserve Japanese caption and playback bridges.",
+      "This removes the gateway page inside an already-open app; Expo Go launch still requires a live development server. YouTube can still deny embedded playback, and captionless videos still need an accessible audio source."
+    ]
+  },
+  {
     "version": "0.12.4",
     "date": "2026-11-11",
     "title": "Use stable GitHub Pages player fallback",

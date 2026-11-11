@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.12.5 — 2026-11-11
+
+Bundle the iPhone fallback player
+
+- Load the fallback YouTube player from the app bundle instead of the unavailable GitHub Pages URL or temporary Expo tunnel. Preserve Japanese caption and playback bridges.
+- This removes the gateway page inside an already-open app; Expo Go launch still requires a live development server. YouTube can still deny embedded playback, and captionless videos still need an accessible audio source.
+
 ## 0.12.4 — 2026-11-11
 
 Use stable GitHub Pages player fallback

@@ -211,20 +211,23 @@ test('selected videos use the normal Japanese YouTube watch page', () => {
 
 test('HTTPS fallback embeds the selected video with an origin referrer', async ({ page, baseURL }) => {
   const hosted = hostedPlayerSource('M7lc1UVf-VE');
-  expect(hosted.uri).toBe('https://somamill.github.io/immersed/player/?v=M7lc1UVf-VE');
+  expect(hosted.baseUrl).toBe('https://somamill.github.io/immersed/player/');
+  expect(hosted.html).toContain('M7lc1UVf-VE');
+  expect(hosted).not.toHaveProperty('uri');
   expect(() => hostedPlayerSource('bad')).toThrow();
   let embedReferer = '';
   await page.route('https://www.youtube.com/embed/**', route => {
     embedReferer = route.request().headers()['referer'] || '';
     return route.fulfill({ contentType: 'text/html', body: '<body>video loaded</body>' });
   });
-  await page.goto('/youtube-player.html?v=M7lc1UVf-VE');
+  await page.goto('/');
+  await page.setContent(hosted.html);
   await expect(page.frameLocator('iframe').locator('body')).toHaveText('video loaded');
   expect(embedReferer).toBe(new URL('/', baseURL).href);
   expect(await page.locator('iframe').getAttribute('src')).toContain('cc_lang_pref=ja');
 });
 
-test('hosted player relays Japanese captions and playback commands across its iframe', async ({ page }) => {
+test('bundled player relays Japanese captions and playback commands across its iframe', async ({ page }) => {
   await page.addInitScript(() => {
     if (location.hostname === '127.0.0.1') {
       const host = window as unknown as { messages: unknown[]; ReactNativeWebView: { postMessage: (data: string) => void } };
@@ -233,7 +236,8 @@ test('hosted player relays Japanese captions and playback commands across its if
     }
   });
   await page.route('https://www.youtube.com/embed/**', route => route.fulfill({ contentType: 'text/html', body: '<meta name="viewport" content="width=device-width,initial-scale=1"><div id="movie_player"><video></video></div>' }));
-  await page.goto('/youtube-player.html?v=M7lc1UVf-VE');
+  await page.goto('/');
+  await page.setContent(hostedPlayerSource('M7lc1UVf-VE').html);
   await page.frameLocator('iframe').locator('#movie_player').waitFor();
   await page.frameLocator('iframe').locator('body').evaluate((_, script) => {
     const frame = window as unknown as { ytInitialPlayerResponse: unknown };

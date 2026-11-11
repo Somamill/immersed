@@ -78,7 +78,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
       try {
         const u = new URL(request.url);
         if (u.protocol !== 'https:') return false;
-        if (hostedFallback && hostedSource && request.url === hostedSource.uri) return true;
+        if (hostedFallback && hostedSource && request.url === hostedSource.baseUrl) return true;
         if (isYouTubeSignInUrl(u.toString())) { explainYouTubeSignIn(u.toString()); return false; }
         if (hideShorts && u.pathname.startsWith('/shorts/')) return false;
         if (!/(^|\.)youtube\.com$/.test(u.hostname)) return false;
