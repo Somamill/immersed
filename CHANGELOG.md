@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.12.3 — 2026-11-11
+
+Keep the iPhone preview retrying
+
+- Run the Expo preview under a detached supervisor and keep retrying tunnel failures with bounded backoff instead of stopping after eight failures.
+- The preview remains tied to this temporary cloud workspace; a workspace shutdown or a newly assigned Expo URL can still interrupt the link. Permanent availability requires hosting outside the preview session.
+
 ## 0.12.2 — 2026-11-11
 
 Preserve Japanese captions when playback is blocked

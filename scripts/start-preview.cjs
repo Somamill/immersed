@@ -33,8 +33,9 @@ function start() {
   child.on('close', () => {
     if (stopping) return;
     failures = Date.now() - started >= 60000 ? 1 : failures + 1;
-    if (failures > 8) { console.error('Preview stopped after repeated connection failures. Check the network/service before restarting.'); process.exitCode = 1; return; }
-    const delay = Math.min(30000, 3000 * 2 ** (failures - 1));
+    // Keep the preview available for long-running sessions. A bounded retry
+    // delay avoids a rapid restart loop during a prolonged tunnel outage.
+    const delay = Math.min(300000, 3000 * 2 ** Math.min(failures - 1, 7));
     console.error(`Preview disconnected; restarting in ${delay / 1000}s. Expo may assign a new preview address.`);
     retry = setTimeout(start, delay);
   });
