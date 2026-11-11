@@ -1,27 +1,25 @@
 const { analyze, lookup } = require('./language.cjs');
-// Join only a short, nearly contiguous pair whose combined morphology contains
-// a verified word/inflection crossing the old boundary. Preserve every glyph.
+// A verified lexical token must cross every internal boundary of a merged group.
 async function reflowCaptions(cues, { maxDuration = 6, maxCharacters = 48 } = {}) {
   const result = [];
-  let joined = 0;
-  for (let i = 0; i < cues.length; i++) {
-    const next = cues[i];
-    const previous = result.at(-1);
-    let merge = false;
-    if (previous && previous.sentenceStart === undefined && next.sentenceStart === undefined && !previous.hardEnd && joined < 2 && next.start >= previous.end - 0.02 && next.start - previous.end <= 0.12 && next.end - previous.start <= maxDuration && previous.text.length + next.text.length <= maxCharacters && /[ぁ-ヿ㐀-鿿々]$/.test(previous.text) && /^[ぁ-ヿ㐀-鿿々]/.test(next.text)) {
-      const boundary = previous.text.length;
-      const tokens = await analyze(previous.text + next.text, true);
-      const crossing = tokens.find(t => t.word && t.start < boundary && t.end > boundary);
-      if (crossing) merge = (await lookup(crossing.lemma, crossing)).length > 0;
+  for (let i=0;i<cues.length;i++) {
+    result.push({cue:{...cues[i]},parts:Math.max(1,Math.min(4,cues[i].readingParts||1))});
+    for(let count=2;count<=Math.min(4,result.length);count++) {
+      const group=result.slice(-count), entries=group.map(x=>x.cue), first=entries[0], last=entries.at(-1);
+      const parts=group.reduce((sum,x)=>sum+x.parts,0), text=entries.map(c=>c.text).join('');
+      if(parts>4 || last.end-first.start>maxDuration || text.length>maxCharacters || entries.some(c=>c.sentenceStart!==undefined)) continue;
+      if(entries.some((c,n)=>n && (entries[n-1].hardEnd || c.start<entries[n-1].end-.02 || c.start-entries[n-1].end>.12 || !/[ぁ-ヿ㐀-鿿々]$/.test(entries[n-1].text) || !/^[ぁ-ヿ㐀-鿿々]/.test(c.text)))) continue;
+      const tokens=await analyze(text,true), firstBoundary=first.text.length, lastBoundary=text.length-last.text.length;
+      const crossing=tokens.find(t=>t.word && t.start<firstBoundary && t.end>lastBoundary);
+      if(!crossing || !(await lookup(crossing.lemma,crossing)).length) continue;
+      const cue={start:first.start,end:last.end,text,...(entries.some(c=>c.uncertain)?{uncertain:true}:{}),...(last.hardEnd?{hardEnd:true}:{})};
+      result.splice(-count,count,{cue,parts}); break;
     }
-    if (merge) { result[result.length - 1] = { start: previous.start, end: next.end, text: previous.text + next.text, ...(next.hardEnd ? { hardEnd: true } : {}) }; joined++; }
-    else { result.push({ ...next }); joined = 0; }
-    // Yield between small groups so word lookup can run ahead of background work.
-    if (i % 8 === 7) await new Promise(resolve => setImmediate(resolve));
+    if(i%8===7) await new Promise(resolve=>setImmediate(resolve));
   }
-  return result;
+  return result.map(x=>x.cue);
 }
 function validBatch(cues) {
   return Array.isArray(cues) && cues.length > 0 && cues.length <= 48 && cues.every((c, i) => c && typeof c.text === 'string' && c.text.length > 0 && c.text.length <= 2000 && Number.isFinite(c.start) && Number.isFinite(c.end) && c.start >= 0 && c.end > c.start && (!i || c.start >= cues[i - 1].end - 0.02));
 }
-module.exports = { reflowCaptions, validBatch };
+module.exports={reflowCaptions,validBatch};

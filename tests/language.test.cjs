@@ -196,3 +196,11 @@ test('Mac reading reflow joins the reported 読者 split without correcting unsu
  assert.deepEqual(await reflowCaptions([a,b],{maxDuration:12,maxCharacters:80}),[{start:a.start,end:b.end,text:a.text+b.text}]);
  assert.deepEqual(await reflowCaptions([a,b]),[a,b]);
 });
+
+test('reading reflow handles compounds, kana, inflections and three/four-way word fragments generically',async()=>{
+ const {reflowCaptions}=require('../server/caption-reflow.cjs');
+ for(const parts of [['社','会'],['国際','関係'],['言語','化'],['勉強し','ていました'],['吸い','取り'],['取り','戻した'],['申し','込み'],['コミュ','ニ','ケーション'],['コミュ','ニ','ケー','ション'],['ポッド','キャスト'],['ありが','とうございます']]){
+  const cues=parts.map((text,i)=>({start:i,end:i+1,text}));
+  assert.deepEqual(await reflowCaptions(cues,{maxDuration:12,maxCharacters:80}),[{start:0,end:parts.length,text:parts.join('')}],parts.join('/'));
+ }
+});

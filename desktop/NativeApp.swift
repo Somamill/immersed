@@ -195,19 +195,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
             }
         }
     }
+    func deliverVideoCaption(_ key: String, _ lines: [String], _ attempt: Int, _ busy: Bool, _ confidence: Double) {
+        let payload: [Any] = [key, lines, attempt, busy, confidence, 3]
+        guard let data = try? JSONSerialization.data(withJSONObject: payload), let json = String(data: data, encoding: .utf8) else { return }
+        web.evaluateJavaScript("window.immersedVideoText?.(...\(json))", completionHandler: nil)
+    }
     func scanVideoCaption(_ object: [String: Any]) {
-        guard NSApp.isActive, window.isVisible, !captionScanBusy,
+        guard NSApp.isActive, window.isVisible,
               let key = object["key"] as? String, key.count <= 200,
               let id = object["videoId"] as? String, id.range(of: "^[A-Za-z0-9_-]{11}$", options: .regularExpression) != nil,
               let at = object["at"] as? Double, at.isFinite, at >= 0, at <= 86400 else { return }
+        let attempt = object["attempt"] as? Int ?? 0
+        if captionScanBusy { deliverVideoCaption(key, [], attempt, true, 1); return }
         captionScanBusy = true
         var components = URLComponents(string: "http://127.0.0.1:4765/api/desktop/caption-frames")!
         components.queryItems = [URLQueryItem(name: "videoId", value: id), URLQueryItem(name: "at", value: String(at))]
         var query = URLRequest(url: components.url!); query.timeoutInterval = 40
         URLSession.shared.dataTask(with: query) { [weak self] data, _, _ in
             var observations: [[String]] = []
+            var confidences: [Double] = []
+            var busy = false
             if let data, let result = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let frames = result["frames"] as? [String] {
-                for encoded in frames.prefix(2) {
+                busy = result["busy"] as? Bool ?? false
+                for encoded in frames.prefix(3) {
                     guard let imageData = Data(base64Encoded: encoded), imageData.count < 2_000_000,
                           let image = NSImage(data: imageData), let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { continue }
                     let request = VNRecognizeTextRequest()
@@ -217,23 +227,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
                     request.minimumTextHeight = 0.025
                     request.regionOfInterest = CGRect(x: 0, y: 0, width: 1, height: 0.4)
                     do { try VNImageRequestHandler(cgImage: cg).perform([request]) } catch { }
+                    var confidence = 1.0
                     let lines = (request.results ?? []).sorted { $0.boundingBox.midY > $1.boundingBox.midY }.compactMap { observation -> String? in
-                        guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.87,
+                        guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.45,
                               candidate.string.range(of: "[ぁ-ゖァ-ヺ一-龯]", options: .regularExpression) != nil else { return nil }
+                        confidence = min(confidence, Double(candidate.confidence))
                         return String(candidate.string.prefix(300))
                     }
-                    observations.append(lines)
+                    observations.append(Array(lines.prefix(12))); confidences.append(confidence)
                 }
             }
-            if observations.isEmpty { observations = [[]] }
-            let captured = observations
+            while observations.count < 3 { observations.append([]); confidences.append(1) }
+            let captured = observations, scores = confidences, wasBusy = busy
             Task { @MainActor in
                 guard let self else { return }
                 self.captionScanBusy = false
-                for lines in captured {
-                    guard let data = try? JSONSerialization.data(withJSONObject: [key, lines]), let json = String(data: data, encoding: .utf8) else { continue }
-                    self.web.evaluateJavaScript("window.immersedVideoText?.(...\(json))", completionHandler: nil)
-                }
+                if wasBusy { self.deliverVideoCaption(key, [], attempt, true, 1); return }
+                for (index, lines) in captured.enumerated() { self.deliverVideoCaption(key, lines, attempt, false, scores[index]) }
             }
         }.resume()
     }

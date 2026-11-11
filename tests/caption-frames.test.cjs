@@ -11,10 +11,10 @@ test('frame sampling is bounded, deduplicated and cached without full video down
     calls.push({ command, args, options });
     if (command === 'yt-dlp') return { stdout: 'https://video.example.test/public-stream' };
     assert.equal(options.timeout, 18000);
-    assert.equal(args[args.indexOf('-frames:v') + 1], '2');
-    assert.equal(args[args.indexOf('-t') + 1], '0.5');
-    assert.ok(args.includes('fps=5,scale=960:-2'));
-    for (const n of [1, 2]) fs.writeFileSync(args.at(-1).replace('%d', String(n)), Buffer.from('frame' + n));
+    assert.equal(args[args.indexOf('-frames:v') + 1], '3');
+    assert.equal(args[args.indexOf('-t') + 1], '0.6');
+    assert.ok(args.includes('fps=5,scale=1920:-2'));
+    for (const n of [1, 2, 3]) fs.writeFileSync(args.at(-1).replace('%d', String(n)), Buffer.from('frame' + n));
     return { stdout: '' };
   };
   try {
@@ -22,7 +22,7 @@ test('frame sampling is bounded, deduplicated and cached without full video down
     await assert.rejects(() => service.sample('../file', 1));
     await assert.rejects(() => service.sample('5C3hh2fO4mE', -1));
     const [a, b] = await Promise.all([service.sample('5C3hh2fO4mE', 364.4), service.sample('5C3hh2fO4mE', 364.4)]);
-    assert.equal(a.frames.length, 2); assert.deepEqual(a, b);
+    assert.equal(a.frames.length, 3); assert.deepEqual(a, b);
     assert.deepEqual(await service.sample('5C3hh2fO4mE', 364.4), a);
     assert.equal(calls.filter(c => c.command === 'yt-dlp').length, 1);
     assert.equal(calls.filter(c => c.command === 'ffmpeg').length, 1);

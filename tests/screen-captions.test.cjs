@@ -13,3 +13,12 @@ test('matching tolerates caption line breaks but rejects missing or oversized te
   assert.equal(await matchScreenCaption('文章', ['長'.repeat(301)]), null);
   assert.equal(await matchScreenCaption('文章', null), null);
 });
+test('quoted dictionary compounds recover severe spelling errors only with shared acoustic evidence',async()=>{
+ const raw='スループを国為発用っていう本とかで';
+ const result=await matchScreenCaption(raw,['それこそ『ルポ 国威発揚』という本で']);
+ assert.equal(result?.text,'それこそ『ルポ 国威発揚』という本で');
+ assert.equal(result.method,'quoted-dictionary-match');
+ assert.equal(await matchScreenCaption(raw,['それこそ『ルポ 国成発揚』という本で']),null);
+ assert.equal(await matchScreenCaption(raw,['それこそ『日本経済入門』という本で']),null);
+ assert.equal(await matchScreenCaption('近現代史を結構研究されていて',['まったく関係ない商品の広告です']),null);
+});

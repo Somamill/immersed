@@ -1040,3 +1040,13 @@ body.light .recentMeaning { color: #365945; }
 .fullscreenWake:focus-visible { outline: 2px solid #b6e3c4; outline-offset: -3px; }
 
 .fullscreenChromeHidden { opacity: 0 !important; pointer-events: none !important; }
+
+/* Natural Japanese text rhythm: tokens remain interactive without added gaps. */
+.subtitles { padding: clamp(20px, 2.5vw, 38px); }
+.line { font-family: "Hiragino Sans", "Yu Gothic", -apple-system, sans-serif; font-size: clamp(25px, 2.25vw, 37px); line-height: 1.8; font-weight: 500; letter-spacing: .005em; word-spacing: normal; line-break: strict; word-break: normal; overflow-wrap: normal; text-wrap: pretty; text-align: start; width: fit-content; max-width: 100%; }
+.word { font: inherit; letter-spacing: inherit; line-height: inherit; padding: 0; margin: 0; vertical-align: baseline; max-width: 100%; border-radius: .14em; }
+.word ruby { ruby-align: center; ruby-position: over; }
+.word rt { font-size: .3em; font-weight: 500; line-height: 1.1; letter-spacing: .06em; color: #bad8c6; }
+.word:hover, .word:focus-visible { box-shadow: 0 0 0 3px #b4dec414; }
+.fullscreenStudy .line { font-size: clamp(24px, 2.4vw, 40px); line-height: 1.75; text-shadow: 0 2px 5px #000; }
+body.light .word rt { color: #476b54; }

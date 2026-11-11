@@ -117,31 +117,35 @@ function scanCurrentVideoCaption(now) {
   const key = requestGeneration + ":" + screenCaptionKey(cue);
   let frame = screenFrames.get(key);
   if (!frame) {
-    frame = { cue, original: cue.text, attempts: 0, confirmations: 0, pending: false, complete: false };
+    frame = { cue, original: cue.text, attempts: 0, confirmations: 0, responses: 0, pending: false, complete: false };
     screenFrames.set(key, frame);
   }
-  if (frame.pending || frame.complete || frame.attempts >= 4) return;
+  if (frame.pending || frame.complete || frame.attempts >= 3) return;
   const rect = $("video").getBoundingClientRect();
   if (rect.width < 100 || rect.height < 50) return;
-  frame.pending = true; frame.attempts++;
+  frame.pending = true; frame.attempts++; frame.responses = 0;
+  const attempt = frame.sequence = (frame.sequence || 0) + 1;
+  const sample = frame.attempts;
   lastScreenScan = now;
   window.webkit.messageHandlers.immersed.postMessage({ action: "captionFrame", key,
-    videoId: source.id, at: cue.start + Math.min(0.8, (cue.end - cue.start) * 0.4) });
-  setTimeout(() => { frame.pending = false; }, 22000);
+    videoId: source.id, attempt, at: Math.max(cue.start, Math.min(cue.end - 0.05, !playing() && sample === 1 && currentTime() >= cue.start && currentTime() < cue.end ? currentTime() : cue.start + sample * 0.8)) });
+  setTimeout(() => { if (frame.sequence === attempt) frame.pending = false; }, 45000);
 }
-window.immersedVideoText = async (key, lines) => {
+window.immersedVideoText = async (key, lines, attempt, busy = false, confidence = 1, totalFrames = 2) => {
   const frame = screenFrames.get(key);
-  if (!frame || !Array.isArray(lines) || !key.startsWith(requestGeneration + ":")) return;
-  if (!extras.screenCaptionCheck || selected) { frame.pending = false; return; }
+  if (!frame || frame.complete || !Array.isArray(lines) || !key.startsWith(requestGeneration + ":") || (attempt != null && attempt !== frame.sequence)) return;
+  frame.expectedResponses = Math.max(2, Math.min(3, totalFrames));
+  if (busy) { frame.pending = false; frame.attempts = Math.max(0, frame.attempts - 1); return; }
+  if (!extras.screenCaptionCheck || selected) { frame.pending = false; frame.attempts = 0; frame.sequence = (frame.sequence || 0) + 1; return; }
   try {
     const result = await api("immersion/screen-caption", { sentence: frame.original, lines: JSON.stringify(lines) });
-    if (!screenFrames.has(key)) return;
-    frame.responses = (frame.responses || 0) + 1;
-    if (frame.responses >= 2) frame.complete = true;
+    if (!screenFrames.has(key) || (attempt != null && attempt !== frame.sequence)) return;
     if (!result.match) return;
-    frame.confirmations = frame.text === result.match.text ? frame.confirmations + 1 : 1;
+    const same = frame.text === result.match.text;
+    frame.confirmations = same ? frame.confirmations + 1 : 1;
+    frame.confidence = same ? Math.min(frame.confidence ?? 1, confidence) : confidence;
     frame.text = result.match.text;
-    if (frame.confirmations < 2) return;
+    if (frame.confirmations < (frame.confidence < .87 ? 3 : 2)) return;
     frame.complete = true;
     const index = cues.findIndex(c => c.start === frame.cue.start && (c.text === frame.original || c.asrText === frame.original));
     if (index < 0) return;
@@ -153,7 +157,7 @@ window.immersedVideoText = async (key, lines) => {
     cues[index] = { ...cues[index], screenText: frame.text, asrText: frame.original, screenVerified: true };
     if (!selected) { cues[index].text = frame.text; cueIndex = -1; void renderCue(); }
   } catch { /* Keep acoustic subtitles when the frame cannot be matched. */ }
-  finally { frame.pending = false; }
+  finally { if (attempt == null || attempt === frame.sequence) { frame.responses = (frame.responses || 0) + 1; if (frame.responses >= (frame.expectedResponses || 2) || frame.complete) { frame.pending = false; if (frame.attempts >= 3) frame.complete = true; } } }
 };
 const positions = read("immersed.positions", {});
 let lastPositionSave = 0,
@@ -751,24 +755,30 @@ async function pollTranscript(route, params, generation) {
     }
   }
 }
-const readingJoins = new Map(), readingPending = new Set();
+const readingJoins = new Map(), readingPending = new Set(), readingWindows = new Map();
 function refineNearCue(index) {
-  for (const i of [index - 1, index]) {
-    const a = cues[i], b = cues[i + 1];
-    if (!ImmersedReadingCues.candidate(a, b)) continue;
-    const key = ImmersedReadingCues.key(a, b), generation = requestGeneration;
-    if (readingJoins.has(key) || readingPending.has(key)) continue;
-    readingPending.add(key);
-    void api("immersion/reflow", {}, "POST", JSON.stringify({cues:[a,b],reading:true})).then(data => {
-      const fixed = data.cues;
-      const merged = fixed?.length === 1 && fixed[0].text === a.text + b.text && fixed[0].start === a.start && fixed[0].end === b.end;
-      cacheSet(readingJoins, key, merged, 600);
-      if (merged && generation === requestGeneration && !selected) {
-        cues = ImmersedReadingCues.apply(cues, readingJoins); cueIndex = -1; void renderCue();
-      }
-    }).catch(() => {}).finally(() => readingPending.delete(key));
-  }
+  const batch=cues.slice(Math.max(0,index-3),Math.min(cues.length,index+4));
+  if(batch.length<2)return;
+  const windowKey=ImmersedReadingCues.groupKey(batch),generation=requestGeneration;
+  if(readingWindows.has(windowKey)||readingPending.has(windowKey))return;
+  readingPending.add(windowKey);
+  void api("immersion/reflow",{},"POST",JSON.stringify({cues:batch,reading:true})).then(data=>{
+    if(!Array.isArray(data.cues))return;
+    let offset=0;const joins=[];
+    for(const fixed of data.cues){
+      const start=offset;let text="";
+      while(offset<batch.length && text.length<fixed.text?.length)text+=batch[offset++].text;
+      const group=batch.slice(start,offset);
+      if(!group.length||fixed.text!==text||fixed.start!==group[0].start||fixed.end!==group.at(-1).end)return;
+      if(group.length>1){if(!ImmersedReadingCues.candidateGroup(group))return;joins.push(ImmersedReadingCues.groupKey(group));}
+    }
+    if(offset!==batch.length)return;
+    cacheSet(readingWindows,windowKey,true,600);
+    for(const key of joins)cacheSet(readingJoins,key,true,600);
+    if(joins.length&&generation===requestGeneration&&!selected){cues=ImmersedReadingCues.apply(cues,readingJoins);cueIndex=-1;void renderCue();}
+  }).catch(()=>{}).finally(()=>readingPending.delete(windowKey));
 }
+
 async function renderCue() {
   if (selected && lookupAnchor && lookupCue && (currentTime() < lookupCue.start - .5 || currentTime() > lookupCue.end + .5)) closeLookup();
   if (selected && lookupAnchor && extras.pauseOnHover) return;

@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.17.0 — 2026-11-11
+
+Natural Japanese typography and general word-boundary repair
+
+- Improve Japanese spacing, paragraph wrapping and furigana without artificial gaps between interactive words.
+- Generalize dictionary-backed repairs across up to four subtitle fragments for compounds, kana words and inflections, preserving all characters and audio bounds across refreshes.
+- Use sharper source frames and retry missed caption checks. Require repeated OCR agreement; weaker quoted-compound matches additionally need dictionary and phonetic evidence. Preserve original speech text; absent, paraphrased or unreadable source captions can still leave recognition errors.
+
 ## 0.16.4 — 2026-11-11
 
 Resume hover-paused playback through YouTube buffering

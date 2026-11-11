@@ -903,3 +903,36 @@ test('hover resumes a playing YouTube video that was buffering at lookup entry',
  await expect(page.locator('#lookup')).not.toHaveClass(/show/);
  await expect.poll(()=>page.evaluate(()=>(window as any).__state)).toBe(1);
 });
+
+test('multi-fragment words read naturally without inserted token spaces',async({page})=>{
+ await page.goto('/');
+ await page.evaluate(()=>(window as any).eval(`youtube={getCurrentTime:()=>1.5,getPlayerState:()=>2,pauseVideo:()=>{}};cues=[{start:0,end:1,text:'コミュ'},{start:1,end:2,text:'ニ'},{start:2,end:3,text:'ケーションについて話します。'}];cueIndex=-1;renderCue();`));
+ await expect(page.getByRole('button',{name:'Look up コミュニケーション',exact:true})).toBeVisible();
+ const text=await page.locator('.line').evaluate(node=>{const copy=node.cloneNode(true) as HTMLElement;copy.querySelectorAll('rt').forEach(x=>x.remove());return copy.textContent;});
+ expect(text).toBe('コミュニケーションについて話します。');
+ await page.screenshot({path:'work/japanese-spacing-preview.png'});
+ await page.getByRole('button',{name:'Look up コミュニケーション',exact:true}).hover();
+ await expect(page.locator('#lookup')).toHaveClass(/show/);
+});
+test('lower-confidence screen text needs three matching observations and failed checks can retry',async({page})=>{
+ await page.goto('/');
+ await page.evaluate(()=>(window as any).eval(`youtube={getCurrentTime:()=>222.2,getPlayerState:()=>2,pauseVideo:()=>{}};source={type:'youtube',id:'lGTvO8sdj4E'};cues=[{start:221.5,end:224.52,text:'スループを国為発用っていう本とかで'}];cueIndex=-1;renderCue();window.__key=requestGeneration+':'+screenCaptionKey(cues[0]);screenFrames.set(window.__key,{cue:cues[0],original:cues[0].text,attempts:1,sequence:1,responses:0,confirmations:0,pending:true});`));
+ for(let i=0;i<2;i++)await page.evaluate(()=>(window as any).immersedVideoText((window as any).__key,['それこそ『ルポ 国威発揚』という本で'],1,false,.5,3));
+ expect(await page.evaluate(()=>(window as any).eval('cues[0].screenVerified || false'))).toBe(false);
+ expect(await page.evaluate(()=>(window as any).eval('screenFrames.get(window.__key).pending'))).toBe(true);
+ await page.evaluate(()=>(window as any).immersedVideoText((window as any).__key,['それこそ『ルポ 国威発揚』という本で'],1,false,.5,3));
+ await expect.poll(()=>page.evaluate(()=>(window as any).eval('cues[0].text'))).toBe('それこそ『ルポ 国威発揚』という本で');
+ expect(await page.evaluate(()=>(window as any).eval('cues[0].asrText'))).toBe('スループを国為発用っていう本とかで');
+});
+test('unmatched OCR attempts and a busy scanner do not permanently exhaust caption checks',async({page})=>{
+ await page.goto('/');
+ await page.evaluate(()=>(window as any).eval(`source={type:'youtube',id:'lGTvO8sdj4E'};cues=[{start:0,end:4,text:'日本語の文章を読んでいます'}];window.__key=requestGeneration+':'+screenCaptionKey(cues[0]);screenFrames.set(window.__key,{cue:cues[0],original:cues[0].text,attempts:1,sequence:1,responses:0,confirmations:0,pending:true});`));
+ for(let i=0;i<2;i++)await page.evaluate(()=>(window as any).immersedVideoText((window as any).__key,[],1));
+ expect(await page.evaluate(()=>(window as any).eval('!!screenFrames.get(window.__key).complete'))).toBe(false);
+ expect(await page.evaluate(()=>(window as any).eval('screenFrames.get(window.__key).pending'))).toBe(false);
+ await page.evaluate(()=>(window as any).eval('screenFrames.get(window.__key).sequence=2;screenFrames.get(window.__key).attempts=2;'));
+ await page.evaluate(()=>(window as any).immersedVideoText((window as any).__key,[],2,true));
+ expect(await page.evaluate(()=>(window as any).eval('screenFrames.get(window.__key).attempts'))).toBe(1);
+ await page.evaluate(()=>(window as any).immersedVideoText((window as any).__key,['日本語の文章を読んでいます'],1));
+ expect(await page.evaluate(()=>(window as any).eval('screenFrames.get(window.__key).confirmations'))).toBe(0);
+});
