@@ -57,3 +57,20 @@ class MacTranscriptionTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+class WarmProgressTest(unittest.TestCase):
+    def test_reused_model_does_not_report_a_new_download_or_load(self):
+        original, quality = transcribe.recognizer, transcribe._loaded_quality
+        transcribe.recognizer = lambda: lambda _: [{'start': .1, 'end': .8, 'text': '日本語'}]
+        transcribe._loaded_quality = 'balanced'
+        try:
+            with tempfile.TemporaryDirectory() as folder:
+                audio = Path(folder) / 'speech.wav'
+                with wave.open(str(audio), 'wb') as out:
+                    out.setnchannels(1); out.setsampwidth(2); out.setframerate(16000)
+                    out.writeframes(b'\0\x10' * 16000)
+                updates = []
+                transcribe.transcribe(str(audio), emit=updates.append)
+                self.assertEqual(updates[0]['phase'], 'recognizing')
+        finally:
+            transcribe.recognizer, transcribe._loaded_quality = original, quality

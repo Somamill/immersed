@@ -1768,10 +1768,12 @@ let fullscreenControlsTimer;
 function revealFullscreenControls() {
   if (document.fullscreenElement !== $("video")) return;
   $("video").classList.add("controlsVisible");
+  for (const id of ["controls", "speechProgress", "exitVideoFullscreen"]) $(id)?.classList.remove("fullscreenChromeHidden");
   clearTimeout(fullscreenControlsTimer);
   fullscreenControlsTimer = setTimeout(() => {
     if (!$("speedMenu").hidden) return;
     $("video").classList.remove("controlsVisible");
+    for (const id of ["controls", "speechProgress", "exitVideoFullscreen"]) $(id)?.classList.add("fullscreenChromeHidden");
   }, 1600);
 }
 $("video").addEventListener("pointermove", e => {
@@ -1786,10 +1788,12 @@ function restoreFullscreenStudy() {
   $("fullscreenStudy")?.remove();
   $("exitVideoFullscreen")?.remove();
   $("fullscreenWake")?.remove();
-  clearTimeout(fullscreenControlsTimer); $("video").classList.remove("controlsVisible");
+  clearTimeout(fullscreenControlsTimer); $("video").classList.remove("controlsVisible", "fullscreenActive");
+  for (const id of ["controls", "speechProgress", "exitVideoFullscreen"]) $(id)?.classList.remove("fullscreenChromeHidden");
 }
 document.addEventListener("fullscreenchange", () => {
   if (document.fullscreenElement === $("video")) {
+    $("video").classList.add("fullscreenActive");
     const overlay = el("div", null, "fullscreenStudy");
     overlay.id = "fullscreenStudy";
     for (const id of ["speechProgress", "subtitles", "lookup", "controls"]) {

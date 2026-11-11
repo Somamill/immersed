@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.16.1",
+    "date": "2026-11-11",
+    "title": "Stabilize native fullscreen idle controls and warm-model progress",
+    "notes": [
+      "Hide native fullscreen chrome with explicit element state as well as fullscreen styling, keeping subtitle lookup available.",
+      "Keep measured transcription progress visible when the same MLX speech model is reused instead of reporting another model load for each section."
+    ]
+  },
+  {
     "version": "0.16.0",
     "date": "2026-11-11",
     "title": "Quiet fullscreen and current-video subtitle priority",

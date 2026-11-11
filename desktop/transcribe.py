@@ -16,6 +16,7 @@ from pathlib import Path
 PIPELINE = 'mac-whisper-context-v3'
 CORE_SECONDS = 26
 CONTEXT_SECONDS = 2
+_loaded_quality = None
 
 
 def decode_temperatures():
@@ -35,13 +36,16 @@ def recognizer():
     if platform.machine() == 'arm64':
         import mlx_whisper
         def run(path):
-            return mlx_whisper.transcribe(
+            global _loaded_quality
+            result = mlx_whisper.transcribe(
                 path, path_or_hf_repo=('mlx-community/whisper-large-v3-mlx' if os.environ.get('IMMERSED_SPEECH_QUALITY') == 'accurate' else 'mlx-community/whisper-large-v3-turbo'),
                 language='ja', task='transcribe', word_timestamps=True,
                 condition_on_previous_text=False, temperature=decode_temperatures(),
                 no_speech_threshold=0.6, logprob_threshold=-1.0,
                 compression_ratio_threshold=2.4, hallucination_silence_threshold=2.0,
             )['segments']
+            _loaded_quality = os.environ.get('IMMERSED_SPEECH_QUALITY', 'balanced')
+            return result
     else:
         model = cpu_model()
         def run(path):
@@ -175,7 +179,8 @@ def transcribe(path, start=0, span=None, emit=None):
             if not is_silent(chunk):
                 with redirect_stdout(sys.stderr):
                     if run is None:
-                        emit({'status':'processing','phase':'loading','stage':'Loading the local speech model','cues':[],'append':True,'processedSeconds':core-start,'duration':stop-start})
+                        warm = _loaded_quality == os.environ.get('IMMERSED_SPEECH_QUALITY', 'balanced')
+                        emit({'status':'processing','phase':'recognizing' if warm else 'loading','stage':'Transcribing' if warm else 'Loading the local speech model','cues':[],'append':True,'processedSeconds':core-start,'duration':stop-start})
                         run = recognizer()
                     for segment in run(chunk):
                         new_cues.extend(owned_cues(segment, left, core, end, duration))

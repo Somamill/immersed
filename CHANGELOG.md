@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.16.1 — 2026-11-11
+
+Stabilize native fullscreen idle controls and warm-model progress
+
+- Hide native fullscreen chrome with explicit element state as well as fullscreen styling, keeping subtitle lookup available.
+- Keep measured transcription progress visible when the same MLX speech model is reused instead of reporting another model load for each section.
+
 ## 0.16.0 — 2026-11-11
 
 Quiet fullscreen and current-video subtitle priority
