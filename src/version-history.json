@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.16.4",
+    "date": "2026-11-11",
+    "title": "Resume hover-paused playback through YouTube buffering",
+    "notes": [
+      "Track playback intent through YouTube buffering so hover lookup does not mistake a buffer for a manual pause. Close temporary lookup when keyboard focus leaves it, and clear lookup when opening a panel."
+    ]
+  },
+  {
     "version": "0.16.3",
     "date": "2026-11-11",
     "title": "Dismiss hover lookup reliably and keep split words readable",

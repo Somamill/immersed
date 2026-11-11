@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.16.4 — 2026-11-11
+
+Resume hover-paused playback through YouTube buffering
+
+- Track playback intent through YouTube buffering so hover lookup does not mistake a buffer for a manual pause. Close temporary lookup when keyboard focus leaves it, and clear lookup when opening a panel.
+
 ## 0.16.3 — 2026-11-11
 
 Dismiss hover lookup reliably and keep split words readable

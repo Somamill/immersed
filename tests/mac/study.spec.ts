@@ -893,3 +893,13 @@ test('Mac reading view keeps 読者 together across the reported timed boundary'
  await expect(page.getByRole('button',{name:'Look up 読者',exact:true})).toBeVisible();
  await expect.poll(()=>page.evaluate(()=>(window as any).eval('cues.length'))).toBe(1);
 });
+
+test('hover resumes a playing YouTube video that was buffering at lookup entry',async({page})=>{
+ await page.goto('/');
+ await page.evaluate(()=>(window as any).eval(`window.__state=3;youtube={getCurrentTime:()=>.2,getPlayerState:()=>window.__state,pauseVideo:()=>{window.__state=2;handleYouTubeState({data:2})},playVideo:()=>{window.__state=1;handleYouTubeState({data:1})}};handleYouTubeState({data:1});handleYouTubeState({data:3});cues=[{start:0,end:4,text:'政治です。'}];cueIndex=-1;renderCue();`));
+ await page.getByRole('button',{name:'Look up 政治',exact:true}).hover();
+ await expect(page.locator('#lookup')).toHaveClass(/show/);
+ await page.locator('#query').focus();
+ await expect(page.locator('#lookup')).not.toHaveClass(/show/);
+ await expect.poll(()=>page.evaluate(()=>(window as any).__state)).toBe(1);
+});

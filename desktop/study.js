@@ -92,7 +92,8 @@ let localMedia = null,
   leaveTimer = null,
   levels = {},
   library = [],
-  youtubeReady = null;
+  youtubeReady = null,
+  youtubePlaybackIntent = false;
 // Repair the 0.9.5 forced model switch. Later explicit model choices persist.
 if (!read("immersed.kanjiDefault", false)) {
   extras.speechQuality = "balanced";
@@ -253,9 +254,19 @@ const familiarity = (t) =>
     prefs.knowledge,
   );
 function handleYouTubeState(event) {
-  if (event.data === 1) resumePending = false;
-  else if (event.data === 2 && resumePending && !selected) youtube?.playVideo?.();
+  if (event.data === 1) { youtubePlaybackIntent = true; resumePending = false; }
+  else if (event.data === 0) youtubePlaybackIntent = false;
+  else if (event.data === 2) {
+    if (!resumePending && !(selected && resumeAfterLookup)) youtubePlaybackIntent = false;
+    if (resumePending && !selected) youtube?.playVideo?.();
+  }
 }
+function playbackWasRunning() {
+  if (localMedia) return !localMedia.paused;
+  const state = youtube?.getPlayerState?.();
+  return state === 1 || (state === 3 && youtubePlaybackIntent);
+}
+
 function currentTime() {
   return localMedia?.currentTime || youtube?.getCurrentTime?.() || 0;
 }
@@ -268,6 +279,7 @@ function pause() {
   else youtube?.pauseVideo?.();
 }
 function play() {
+  if (!localMedia) youtubePlaybackIntent = true;
   if (localMedia) localMedia.play().catch((e) => status(e.message, true));
   else youtube?.playVideo?.();
 }
@@ -309,6 +321,7 @@ function stopMedia() {
   }
   youtube?.destroy?.();
   youtube = null;
+  youtubePlaybackIntent = false;
   localMedia = null;
   source = null;
   cues = [];
@@ -875,6 +888,7 @@ document.addEventListener("pointermove", event => {
   else scheduleLookupLeave();
 });
 document.addEventListener("pointerout", event => { if (!event.relatedTarget) scheduleLookupLeave(); });
+document.addEventListener("focusin", event => { if (selected && !lookupPinned && !event.target.closest?.("#lookup, .word")) closeLookup(); });
 document.documentElement.addEventListener("mouseleave", scheduleLookupLeave);
 function closeLookup(resume = true) {
   clearTimeout(hoverTimer);
@@ -898,7 +912,7 @@ async function openLookup(token, pinned = false, anchor = null) {
   clearTimeout(leaveTimer); leaveTimer = null;
   if (selected === token) { positionLookup(); return; }
   if (!selected) {
-    resumeAfterLookup = resumePending || playing();
+    resumeAfterLookup = resumePending || playbackWasRunning();
     if (pinned || extras.pauseOnHover) pause();
     else resumeAfterLookup = false;
   }
@@ -1100,6 +1114,7 @@ function saveWord() {
 
 function showPanel(title) {
   $("panel").classList.remove("searchPanel");
+  resumeAfterLookup = false; resumePending = false; closeLookup(false);
   pause();
   $("panelTitle").textContent = title;
   $("panelBody").replaceChildren();
