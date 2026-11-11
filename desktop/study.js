@@ -85,6 +85,8 @@ let localMedia = null,
   resumeAfterLookup = false,
   resumePending = false,
   lookupAnchor = null,
+  lookupCue = null,
+  hoverCooldownUntil = 0,
   cueSeek = null,
   hoverTimer = null,
   leaveTimer = null,
@@ -677,7 +679,7 @@ async function pollTranscript(route, params, generation) {
     if (Array.isArray(data.cues) && (data.cues.length || data.windowed)) {
       const previous = JSON.stringify(cues[cueIndex]);
       transcriptKind = data.source || "generated";
-      cues = data.cues.map(restoredScreenCaption);
+      cues = ImmersedReadingCues.apply(data.cues.map(restoredScreenCaption), readingJoins);
       const active = cues.findLastIndex(
         (c) => c.start <= currentTime() && currentTime() < c.end,
       );
@@ -736,8 +738,28 @@ async function pollTranscript(route, params, generation) {
     }
   }
 }
+const readingJoins = new Map(), readingPending = new Set();
+function refineNearCue(index) {
+  for (const i of [index - 1, index]) {
+    const a = cues[i], b = cues[i + 1];
+    if (!ImmersedReadingCues.candidate(a, b)) continue;
+    const key = ImmersedReadingCues.key(a, b), generation = requestGeneration;
+    if (readingJoins.has(key) || readingPending.has(key)) continue;
+    readingPending.add(key);
+    void api("immersion/reflow", {}, "POST", JSON.stringify({cues:[a,b],reading:true})).then(data => {
+      const fixed = data.cues;
+      const merged = fixed?.length === 1 && fixed[0].text === a.text + b.text && fixed[0].start === a.start && fixed[0].end === b.end;
+      cacheSet(readingJoins, key, merged, 600);
+      if (merged && generation === requestGeneration && !selected) {
+        cues = ImmersedReadingCues.apply(cues, readingJoins); cueIndex = -1; void renderCue();
+      }
+    }).catch(() => {}).finally(() => readingPending.delete(key));
+  }
+}
 async function renderCue() {
-  if (selected && resumeAfterLookup && (lookupPinned || extras.pauseOnHover)) return;
+  if (selected && lookupAnchor && lookupCue && (currentTime() < lookupCue.start - .5 || currentTime() > lookupCue.end + .5)) closeLookup();
+  if (selected && lookupAnchor && extras.pauseOnHover) return;
+  if (selected && resumeAfterLookup && lookupPinned) return;
   if (!cues.length) {
     renderGeneration++;
     cueIndex = -1;
@@ -750,13 +772,14 @@ async function renderCue() {
     if (i === cueSeek.index || performance.now() > cueSeek.until) cueSeek = null;
     else i = cueSeek.index;
   }
-  if (i === cueIndex) return;
+  if (i === cueIndex) { if (i < 0 && $("subtitles").hasChildNodes()) $("subtitles").replaceChildren(); return; }
   cueIndex = i;
   const generation = ++renderGeneration;
   if (i < 0) {
     $("subtitles").textContent = "";
     return;
   }
+  refineNearCue(i);
   const text = cues[i].text;
   $("subtitles").textContent = text;
   let tokens;
@@ -803,16 +826,17 @@ async function renderCue() {
       ruby.append(el("rt", token.reading));
       button.append(ruby);
     } else button.textContent = token.text;
-    button.onclick = () => openLookup(token, true, button);
+    button.dataset.lemma = token.lemma;
+    button.onclick = () => openLookup(token, false, button);
     button.onmouseenter = () => {
-      clearTimeout(leaveTimer);
+      clearTimeout(leaveTimer); leaveTimer = null;
       clearTimeout(hoverTimer);
-      if (extras.hoverLookup)
+      if (extras.hoverLookup && performance.now() >= hoverCooldownUntil)
         hoverTimer = setTimeout(() => openLookup(token, false, button), selected ? 35 : 65);
     };
     button.onmouseleave = () => {
       clearTimeout(hoverTimer);
-      if (!lookupPinned) leaveTimer = setTimeout(() => closeLookup(), 220);
+      scheduleLookupLeave();
     };
     line.append(button);
   }
@@ -840,11 +864,24 @@ window.addEventListener("resize", positionLookup);
 document.addEventListener("scroll", () => { if (selected) positionLookup(); }, true);
 window.visualViewport?.addEventListener("resize", positionLookup);
 window.addEventListener("blur", () => { if (selected && !lookupPinned) closeLookup(); });
+function scheduleLookupLeave() {
+  clearTimeout(hoverTimer);
+  if (!selected || lookupPinned || leaveTimer) return;
+  leaveTimer = setTimeout(() => { leaveTimer = null; closeLookup(); }, 200);
+}
+document.addEventListener("pointermove", event => {
+  if (!selected || lookupPinned) return;
+  if (event.target.closest?.(".word, #lookup")) { clearTimeout(leaveTimer); leaveTimer = null; }
+  else scheduleLookupLeave();
+});
+document.addEventListener("pointerout", event => { if (!event.relatedTarget) scheduleLookupLeave(); });
+document.documentElement.addEventListener("mouseleave", scheduleLookupLeave);
 function closeLookup(resume = true) {
   clearTimeout(hoverTimer);
-  clearTimeout(leaveTimer);
+  clearTimeout(leaveTimer); leaveTimer = null;
   $("lookup").classList.remove("show");
   selected = null;
+  lookupCue = null;
   lookupAnchor = null;
   lookupPinned = false;
   if (resume && resumeAfterLookup) {
@@ -852,13 +889,14 @@ function closeLookup(resume = true) {
     play();
   }
   resumeAfterLookup = false;
+  cues = ImmersedReadingCues.apply(cues, readingJoins); cueIndex = -1;
   for (const cue of cues) if (cue.screenText && cue.text !== cue.screenText) { cue.text = cue.screenText; cueIndex = -1; }
 }
 async function openLookup(token, pinned = false, anchor = null) {
   clearTimeout(hoverTimer);
   lookupAnchor = anchor || lookupAnchor;
-  clearTimeout(leaveTimer);
-  if (selected === token) { lookupPinned ||= pinned; positionLookup(); return; }
+  clearTimeout(leaveTimer); leaveTimer = null;
+  if (selected === token) { positionLookup(); return; }
   if (!selected) {
     resumeAfterLookup = resumePending || playing();
     if (pinned || extras.pauseOnHover) pause();
@@ -870,6 +908,7 @@ async function openLookup(token, pinned = false, anchor = null) {
   }
   lookupPinned = pinned;
   selected = token;
+  lookupCue = cues[cueIndex];
   decorateButton($("saveWord"), "Save word", "save");
   lookupEntries = [];
   lookupMeaning = "";
@@ -908,7 +947,7 @@ async function openLookup(token, pinned = false, anchor = null) {
     $("saveWord").disabled = !lookupEntries.length;
     renderDefinitions();
     recordLookup();
-    const caption = cues[cueIndex];
+    const caption = lookupCue;
     if (caption && token.start != null) {
       const context = {
         word: token.text,
@@ -1040,7 +1079,7 @@ function lookupWordRecord() {
   return { key: (entry.slug || selected.lemma) + ":" + (j.reading || ""),
     word: j.word || selected.lemma, reading: j.reading || selected.reading || "",
     meaning: lookupMeaning || entry.senses?.[0]?.english_definitions?.join("; ") || "",
-    sentence: hasContext ? cues[cueIndex]?.text || "" : "", title: hasContext ? source.title : "",
+    sentence: hasContext ? lookupCue?.text || "" : "", title: hasContext ? source.title : "",
     url: hasContext ? source.type === "local" ? "local:" + source.id : "https://www.youtube.com/watch?v=" + source.id : "",
     time: hasContext ? currentTime() : 0 };
 }
@@ -1354,7 +1393,7 @@ function showSettings() {
   setting(
     body,
     "Lookup on hover",
-    "Hover a word briefly to look it up. Click to pin lookup.",
+    "Hover or click a subtitle word. Move away from the word and lookup card to close it and resume hover-paused playback.",
     "hoverLookup",
     null,
     true,
@@ -1820,9 +1859,11 @@ document.addEventListener("fullscreenchange", () => {
 $("fullscreen").onclick = () =>
   void toggleFullscreen().catch((e) => status(e.message, true));
 $("play").onclick = () => {
+  const wasPlaying = playing();
   resumePending = false;
   resumeAfterLookup = false;
-  playing() ? pause() : play();
+  closeLookup(false);
+  wasPlaying ? pause() : play();
 };
 window.immersedTrackpad = direction => {
   if (!$("panel").open && $("discovery").hidden && !selected &&
@@ -1871,16 +1912,15 @@ document.addEventListener("pointerdown", event => {
   if (!event.target.closest(".speedControl")) closeSpeedMenu();
   if (selected && !event.target.closest("#lookup, .word")) closeLookup();
 });
-$("closeLookup").onclick = () => closeLookup();
-$("lookup").onmouseenter = () => clearTimeout(leaveTimer);
-$("lookup").onmouseleave = () => {
-  if (!lookupPinned) leaveTimer = setTimeout(() => closeLookup(), 180);
-};
+$("closeLookup").onclick = () => { hoverCooldownUntil = performance.now() + 350; closeLookup(); };
+$("lookup").onmouseenter = () => { clearTimeout(leaveTimer); leaveTimer = null; };
+$("lookup").onmouseleave = scheduleLookupLeave;
 $("known").onclick = () => {
   if (!selected) return;
   prefs.knowledge[selected.lemma] = familiarity(selected) !== "known";
   persist();
   updateKnown();
+  for (const node of $("subtitles").querySelectorAll(".word")) if (node.dataset.lemma === selected.lemma) node.classList.toggle("unknown", ImmersedLearning.shouldHighlightToken(levels, selected, prefs.level, prefs.knowledge));
   cueIndex = -1;
   void renderCue();
 };

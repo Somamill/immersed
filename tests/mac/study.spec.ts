@@ -864,3 +864,32 @@ test('returning to a paused preparation resumes it automatically',async({page})=
  await expect(page.locator('#count')).toHaveText('1 segments');
  expect(posts).toBe(2);
 });
+
+test('clicking a subtitle word never pins hover lookup and leaving resumes owned playback',async({page})=>{
+ await page.goto('/');
+ await page.evaluate(()=>(window as any).eval(`window.__state=1;youtube={getCurrentTime:()=>.3,getPlayerState:()=>window.__state,pauseVideo:()=>{window.__state=2},playVideo:()=>{window.__state=1}};cues=[{start:0,end:4,text:'政治について話します。'}];cueIndex=-1;renderCue();`));
+ await page.getByRole('button',{name:'Look up 政治',exact:true}).click();
+ await expect(page.locator('#lookup')).toHaveClass(/show/);
+ await page.evaluate(()=>(window as any).eval(`cues=[{start:0,end:4,text:'政治について話しますね。'}];cueIndex=-1;renderCue();`));
+ await expect(page.getByRole('button',{name:'Look up 政治',exact:true})).toBeVisible();
+ await page.locator('#lookup').hover();
+ await expect(page.locator('#lookup')).toHaveClass(/show/);
+ await page.mouse.move(10,85);
+ await expect(page.locator('#lookup')).not.toHaveClass(/show/);
+ await expect.poll(()=>page.evaluate(()=>(window as any).__state)).toBe(1);
+});
+test('lookup closes on pointer leaving the web document without starting a manually paused video',async({page})=>{
+ await page.goto('/');
+ await page.evaluate(()=>(window as any).eval(`window.__plays=0;youtube={getCurrentTime:()=>.3,getPlayerState:()=>2,pauseVideo:()=>{},playVideo:()=>window.__plays++};cues=[{start:0,end:4,text:'政治です。'}];cueIndex=-1;renderCue();`));
+ await page.getByRole('button',{name:'Look up 政治',exact:true}).hover();
+ await expect(page.locator('#lookup')).toHaveClass(/show/);
+ await page.evaluate(()=>document.documentElement.dispatchEvent(new MouseEvent('mouseleave')));
+ await expect(page.locator('#lookup')).not.toHaveClass(/show/);
+ expect(await page.evaluate(()=>(window as any).__plays)).toBe(0);
+});
+test('Mac reading view keeps 読者 together across the reported timed boundary',async({page})=>{
+ await page.goto('/');
+ await page.evaluate(()=>(window as any).eval(`youtube={getCurrentTime:()=>294,getPlayerState:()=>2,pauseVideo:()=>{}};cues=[{start:286.405,end:293.785,text:'例えば書籍であれば内容を通じて著者と読'},{start:293.785,end:296.525,text:'者と間の会話になるんですよね'}];cueIndex=-1;renderCue();`));
+ await expect(page.getByRole('button',{name:'Look up 読者',exact:true})).toBeVisible();
+ await expect.poll(()=>page.evaluate(()=>(window as any).eval('cues.length'))).toBe(1);
+});

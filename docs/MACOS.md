@@ -32,7 +32,7 @@ For accessible YouTube videos, **Save offline** saves media to the same library.
 
 The Mac and iOS app share preference restoration, vocabulary familiarity and coverage estimation code, as well as the same Japanese morphology/dictionary service and JLPT data. Settings include completed JLPT level, dark mode, furigana, pitch accent, known/unknown overrides, Shorts filtering and minimum duration. Unlisted words have no assumed JLPT level. Explicit unknown overrides remain highlighted at every level.
 
-Hover briefly to look up a word and pause playback; leaving the lookup resumes only if hover originally paused it. Click to pin lookup. Saved words retain their meaning, reading, source sentence and playback context. Dictionary search accepts Japanese and English. Contextual spelling suggestions are suggestions, not verified corrections.
+Hover briefly to look up a word and pause playback; leaving the lookup resumes only if hover originally paused it. Clicking a subtitle word also opens a temporary lookup; leaving the word and card closes it. Dictionary-search entries stay open until dismissed. Saved words retain their meaning, reading, source sentence and playback context. Dictionary search accepts Japanese and English. Contextual spelling suggestions are suggestions, not verified corrections.
 
 - Space / K: play or pause.
 - Left / Right: previous or next sentence.
@@ -122,3 +122,9 @@ For generated YouTube transcripts, the first section surrounds the current playh
 Fullscreen controls fade after 1.6 seconds. Subtitles and word lookup stay interactive. Move to the bottom of the video or focus a control with the keyboard to reveal transport controls; Escape still closes lookup and exits fullscreen. Motion is reduced when the system requests it. Cue rendering reuses the active subtitle index when safe and avoids unnecessary play-button DOM writes, and the hidden study page stops its visual work while Discover is open.
 
 Discover defaults to **Native audience**, with domestic conversation, interview and discussion queries rather than Japanese-learning seeds. The filter excludes recognizable learner-oriented titles/channels; turn it off to include them. Language and length filters still apply. Title-based audience classification is a heuristic.
+
+## Hover dismissal and split-word reading repairs
+
+Subtitle lookups no longer become pinned by a click. Pointer leave, leaving the web document and moving into the video close temporary lookups and resume playback only if that lookup originally paused it. Subtitle refreshes retain the hovered target until dismissal; explicit playback closes lookup, and explicit close briefly suppresses accidental reopening underneath the pointer. Manual pauses remain pauses.
+
+The Mac checks adjacent cues around the current reading position for dictionary-confirmed words split across their boundary. For example, the reported `読` / `者` boundary becomes one readable `読者` block. This preserves every transcript character and the outer audio bounds, respects pauses and explicit clears, and does not guess missing particles or rewrite recognition errors. Repairs are cached and applied in the background. The original generated transcript remains unchanged on disk.

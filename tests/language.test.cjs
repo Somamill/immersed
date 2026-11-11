@@ -189,3 +189,10 @@ test('potential and negative adjective lookups retain the dictionary base and gr
 test('causative endings are not mislabelled as potential forms of another verb',async()=>{
  const token=(await analyze('読ませなかった'))[0];assert.equal(token.lemma,'読む');assert.ok(token.grammar.includes('causative'));assert.ok(token.grammar.includes('negative'));
 });
+
+test('Mac reading reflow joins the reported 読者 split without correcting unsupported speech',async()=>{
+ const {reflowCaptions}=require('../server/caption-reflow.cjs');
+ const a={start:286.405,end:293.785,text:'例えば書籍であれば内容を通じて著者と読'},b={start:293.785,end:296.525,text:'者と間の会話になるんですよね'};
+ assert.deepEqual(await reflowCaptions([a,b],{maxDuration:12,maxCharacters:80}),[{start:a.start,end:b.end,text:a.text+b.text}]);
+ assert.deepEqual(await reflowCaptions([a,b]),[a,b]);
+});

@@ -1,14 +1,14 @@
 const { analyze, lookup } = require('./language.cjs');
 // Join only a short, nearly contiguous pair whose combined morphology contains
 // a verified word/inflection crossing the old boundary. Preserve every glyph.
-async function reflowCaptions(cues) {
+async function reflowCaptions(cues, { maxDuration = 6, maxCharacters = 48 } = {}) {
   const result = [];
   let joined = 0;
   for (let i = 0; i < cues.length; i++) {
     const next = cues[i];
     const previous = result.at(-1);
     let merge = false;
-    if (previous && previous.sentenceStart === undefined && next.sentenceStart === undefined && !previous.hardEnd && joined < 2 && next.start >= previous.end - 0.02 && next.start - previous.end <= 0.12 && next.end - previous.start <= 6 && previous.text.length + next.text.length <= 48 && /[ぁ-ヿ㐀-鿿々]$/.test(previous.text) && /^[ぁ-ヿ㐀-鿿々]/.test(next.text)) {
+    if (previous && previous.sentenceStart === undefined && next.sentenceStart === undefined && !previous.hardEnd && joined < 2 && next.start >= previous.end - 0.02 && next.start - previous.end <= 0.12 && next.end - previous.start <= maxDuration && previous.text.length + next.text.length <= maxCharacters && /[ぁ-ヿ㐀-鿿々]$/.test(previous.text) && /^[ぁ-ヿ㐀-鿿々]/.test(next.text)) {
       const boundary = previous.text.length;
       const tokens = await analyze(previous.text + next.text, true);
       const crossing = tokens.find(t => t.word && t.start < boundary && t.end > boundary);

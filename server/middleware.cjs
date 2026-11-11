@@ -21,7 +21,7 @@ module.exports = function middleware(next) {
         let data;
         try { data = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return json(400, { error: 'Invalid caption batch' }); }
         if (!validBatch(data.cues)) return json(400, { error: 'Invalid caption batch' });
-        return json(200, { cues: await reflowCaptions(data.cues) });
+        return json(200, { cues: await reflowCaptions(data.cues, data.reading === true ? {maxDuration:12,maxCharacters:80} : {}) });
       }
       if (req.method !== 'GET') return json(405, { error: 'Method not allowed' });
       if (url.pathname.endsWith('/analyze')) {

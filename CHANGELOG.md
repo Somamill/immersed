@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.16.3 — 2026-11-11
+
+Dismiss hover lookup reliably and keep split words readable
+
+- Subtitle clicks no longer pin hover lookup. Leaving the word and card closes it and resumes only playback paused by lookup; preserve the hovered target during subtitle refreshes and respect manual pauses.
+- Handle pointer exit into embedded video, explicit playback, and accidental reopening after Close. Clear stale text during subtitle gaps.
+- Join dictionary-confirmed split words such as 読 / 者 in the Mac reading view, preserving transcript characters and audio bounds. Recognition errors can still remain; no guessed wording is substituted.
+
 ## 0.16.2 — 2026-11-11
 
 Show saved subtitle sections immediately on reopening
