@@ -537,7 +537,11 @@ async function fallback(req, res) {
     const query = (url.searchParams.get("query") || "").trim();
     if (!query || query.length > 120)
       return json(res, 400, { error: "Enter up to 120 characters" });
-    return json(res, 200, await searches.search(query));
+    return json(res, 200, await searches.search(query, {
+      conversation: url.searchParams.get("conversation") === "true",
+      minimumMinutes: Number(url.searchParams.get("minimumMinutes")),
+      hideShorts: url.searchParams.get("hideShorts") !== "false",
+    }));
   }
   if (
     url.pathname === "/api/desktop/transcribe" &&
@@ -589,7 +593,8 @@ async function fallback(req, res) {
   if (
     url.pathname === "/study.js" ||
     url.pathname === "/study.css" ||
-    url.pathname === "/compare.js"
+    url.pathname === "/compare.js" ||
+    url.pathname === "/discovery.js"
   ) {
     res.writeHead(200, {
       "Content-Type": url.pathname.endsWith(".js")

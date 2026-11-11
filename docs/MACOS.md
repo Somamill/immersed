@@ -2,6 +2,14 @@
 
 immersed. is a compiled arm64 AppKit application with an embedded WebKit study interface and YouTube player. It opens its own Mac window. Homebrew manages its local Node, Python, FFmpeg and yt-dlp dependencies; MLX runs speech recognition on Apple Silicon. Distribution currently uses GitHub/Homebrew without Developer ID signing or notarization.
 
+## Discover Japanese conversations
+
+Use **Discover** in the Mac toolbar to browse Conversations, Podcasts, Interviews, Books & culture, Everyday life and Ideas. The top search field searches Discover or opens a pasted YouTube link in the embedded player. **Watch** returns to the current player without replacing its media.
+
+Discover shares **Original Japanese only**, **Hide Shorts** and **Minimum video length** (Any, 15+, 30+, 60+ minutes) with Settings. Unknown or non-Japanese source-language metadata is excluded while the original-language filter is on. The app currently studies Japanese; discovery follows that language.
+
+**Conversation first** is enabled by default. It biases searches toward spoken discussion, ranks podcast/interview titles higher, and filters recognizable background music and gameplay. Turn it off for broader searches. This uses titles and channel metadata, so it cannot guarantee that every result is entirely speech. Results appear progressively as original-language checks finish, and matching searches are cached for five minutes.
+
 ## Install and launch
 
 ```sh
@@ -18,7 +26,7 @@ Use **Open file**, Command-O, drag and drop, or Finder’s Open With menu. Suppo
 
 M4B/M4A audio has native media controls and chapter selection when chapter metadata is present. Local video and audio share timed Japanese subtitles, word lookup, furigana, pitch accent, saved-word context, known/unknown overrides, sentence navigation, playback speed and position restoration. The local dictionary and completed transcripts work offline.
 
-For accessible YouTube videos, **Download for offline** saves media to the same library. A completed online transcript is reused when available; otherwise local recognition generates one. Downloads are limited to 2 GB, local imports to 8 GB. A video’s access restrictions can prevent downloading. Cached transcripts are stored separately for fast and accuracy modes. Remove a library item with its two-step Remove control; an actively transcribing item must finish first.
+For accessible YouTube videos, **Save offline** saves media to the same library. A completed online transcript is reused when available; otherwise local recognition generates one. Downloads are limited to 2 GB, local imports to 8 GB. A video’s access restrictions can prevent downloading. Cached transcripts are stored separately for fast and accuracy modes. Remove a library item with its two-step Remove control; an actively transcribing item must finish first.
 
 ## Study settings and Mac controls
 

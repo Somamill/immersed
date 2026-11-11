@@ -924,3 +924,46 @@ body.light .lookup .definitions { color: #173120; }
 .phraseMeaning small, .phraseMeaning strong { display: block; }
 .phraseMeaning strong { margin-top: 4px; font-size: 20px; }
 .phraseMeaning p { margin: 5px 0 0; line-height: 1.45; }
+
+/* Discovery shares filters with Settings and leaves the current player intact. */
+[hidden] { display: none !important; }
+header .brand { min-width: 175px; }
+header #search { min-width: 180px; }
+header #query { min-width: 0; }
+header nav { flex-shrink: 0; }
+header nav button { padding: 10px 12px; }
+header nav button[aria-pressed="true"] { background: #b6e3c4; color: #11281b; border-color: #b6e3c4; }
+.discoveryPage { max-width: 1540px; margin: auto; padding: 42px max(24px, 4vw) 64px; }
+.discoveryIntro { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.discoveryEyebrow { color: #9abda5; font-size: 11px; letter-spacing: 1.8px; font-weight: 700; }
+.discoveryIntro h1 { font-size: clamp(32px, 4vw, 48px); margin: 8px 0; letter-spacing: -1.5px; }
+.discoveryIntro p { color: #acbeb1; margin: 0; line-height: 1.5; }
+.discoveryTopics { display: flex; flex-wrap: wrap; gap: 8px; margin: 28px 0 22px; }
+.discoveryTopics button { border: 1px solid #304737; background: #122019; color: #c9dacf; border-radius: 24px; padding: 10px 17px; }
+.discoveryTopics button[aria-pressed="true"] { background: #b6e3c4; color: #10261a; border-color: #b6e3c4; }
+.discoveryPage .searchFilters { display: flex; align-items: center; flex-wrap: wrap; gap: 16px 22px; padding-bottom: 22px; border-bottom: 1px solid #26382d; }
+.discoveryLength { display: flex; align-items: center; gap: 10px; color: #b1c4b7; font-size: 14px; }
+.discoveryLength select { border: 1px solid #3b5343; border-radius: 10px; background: #15251b; color: #e0eee5; padding: 8px 12px; }
+.discoveryPage .searchSummary { margin: 22px 0; }
+.discoveryPage .searchSummary h2 { margin: 0; font-size: 22px; }
+.discoveryPage .searchResults { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px 20px; }
+.discoveryPage .searchVideo { background: transparent; border: 0; padding: 0; border-radius: 14px; transition: transform 120ms ease; }
+.discoveryPage .searchVideo:hover { transform: translateY(-2px); background: transparent; }
+.discoveryPage .searchArtwork { border-radius: 14px; }
+.discoveryPage .searchVideo h3 { margin: 12px 0 6px; font-size: 16px; line-height: 1.45; }
+.discoveryPage .searchVideo p, .discoveryPage .searchLanguage { margin-left: 0; }
+.discoveryPage .searchLanguage { display: block; margin-top: 6px; }
+body.light .discoveryIntro p, body.light .discoveryLength { color: #455c4c; }
+body.light .discoveryTopics button, body.light .discoveryLength select { background: #e6eee8; color: #1b3925; }
+body.light .discoveryTopics button[aria-pressed="true"] { background: #b6e3c4; }
+@media (max-width: 1200px) {
+  header { height: auto; min-height: 82px; flex-wrap: wrap; }
+  header .brand { min-width: 150px; }
+  header nav { display: flex; flex-wrap: wrap; gap: 5px; }
+  .discoveryPage .searchResults { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 650px) {
+  .discoveryPage { padding: 24px 20px; }
+  .discoveryPage .searchResults { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .discoveryPage .searchVideo { transition: none; } }

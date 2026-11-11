@@ -2,6 +2,14 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.13.0 — 2026-11-11
+
+Discover Japanese podcasts and conversations on Mac
+
+- Add a dedicated Mac Discover page with podcast, interview, culture, everyday-life and ideas topics, plus search in the embedded app.
+- Share original-Japanese, minimum-length and Shorts settings with discovery. Conversation first favors spoken content and filters obvious music/gameplay; metadata cannot guarantee every result is entirely speech.
+- Preserve the current player when switching between Discover and Watch. Cache results and show confirmed originals progressively.
+
 ## 0.12.5 — 2026-11-11
 
 Bundle the iPhone fallback player

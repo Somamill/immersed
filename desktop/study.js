@@ -35,6 +35,7 @@ if (!localStorage.getItem("immersed.preferences")) {
 let extras = {
     blockAds: true,
     originalOnly: true,
+    conversationFirst: true,
     hoverLookup: true,
     screenCaptionCheck: true,
     pauseOnHover: true,
@@ -149,6 +150,7 @@ function applyPreferences() {
   cueIndex = -1;
   void renderCue();
   updateCoverage();
+  if (!$("discovery").hidden) discoveryPaint?.();
 }
 function status(text, error = false) {
   $("status").textContent = text;
@@ -313,6 +315,7 @@ function loadYouTubeAPI() {
   return youtubeReady;
 }
 async function loadVideo(id, title, startAt = null) {
+  showWatch();
   stopMedia();
   source = { type: "youtube", id, title: title || id };
   const generation = requestGeneration;
@@ -494,6 +497,7 @@ function playbackChanged(force = false) {
 document.addEventListener("visibilitychange", () => void flushPlayback());
 window.addEventListener("pagehide", () => void flushPlayback());
 async function openLocal(id, time = null) {
+  showWatch();
   const item = (await refreshLibrary()).find((x) => x.id === id);
   if (!item) throw Error("This media is no longer in the library.");
   stopMedia();
@@ -1204,6 +1208,7 @@ function setting(body, label, description, key, options, isExtra = false) {
         typeof object[key] === "number" ? Number(control.value) : control.value;
       persist();
       applyPreferences();
+      if (!$("discovery").hidden && key === "minimumMinutes") void searchYouTube(discoveryQuery);
       if (key === "speechQuality" && source) {
         requestGeneration++;
         clearTimeout(pollTimer);
@@ -1219,6 +1224,7 @@ function setting(body, label, description, key, options, isExtra = false) {
       object[key] = control.checked;
       persist();
       applyPreferences();
+      if (!$("discovery").hidden && ["hideShorts", "originalOnly", "conversationFirst"].includes(key)) void searchYouTube(discoveryQuery);
       if (key === "pitchAccent") renderDefinitions();
     };
   }
@@ -1255,7 +1261,7 @@ function showSettings() {
   setting(
     body,
     "Minimum video length",
-    "Applies to YouTube search results.",
+    "Applies to Discover and YouTube search results.",
     "minimumMinutes",
     [
       [0, "Any"],
@@ -1272,6 +1278,7 @@ function showSettings() {
     null,
     true,
   );
+  setting(body, "Conversation first", "Prioritize podcasts, interviews and discussion in Discover. Hide obvious music and gameplay results.", "conversationFirst", null, true);
   setting(
     body,
     "Block ad requests",
@@ -1370,148 +1377,126 @@ function exportBackup() {
   }
 }
 let searchGeneration = 0;
+let discoveryQuery = "日本語", discoveryTopic = "Conversations", discoveryPaint = null;
+const discoveryTopics = [
+  ["Conversations", "日本語"], ["Podcasts", "日本語 ポッドキャスト"],
+  ["Interviews", "日本語 インタビュー"], ["Books & culture", "読書 文学 文化"],
+  ["Everyday life", "暮らし 日常 会話"], ["Ideas", "社会 哲学 対話"],
+];
+function showWatch() {
+  $("discovery").hidden = true;
+  $("watchPage").hidden = false;
+  $("discoverButton").setAttribute("aria-pressed", "false");
+  $("watchButton").setAttribute("aria-pressed", "true");
+  $("fullscreen").disabled = false;
+  searchGeneration++;
+}
+function showDiscovery(query = discoveryQuery) {
+  if (document.fullscreenElement) void document.exitFullscreen();
+  closePanel();
+  closeLookup();
+  pause();
+  $("watchPage").hidden = true;
+  $("discovery").hidden = false;
+  $("discoverButton").setAttribute("aria-pressed", "true");
+  $("watchButton").setAttribute("aria-pressed", "false");
+  $("fullscreen").disabled = true;
+  for (const topic of $("discoveryTopics").children)
+    topic.setAttribute("aria-pressed", String(topic.textContent === discoveryTopic));
+  void searchYouTube(query);
+}
+for (const [name, query] of discoveryTopics) {
+  const topic = button(name, () => { discoveryTopic = name; showDiscovery(query); });
+  topic.setAttribute("aria-pressed", "false");
+  $("discoveryTopics").append(topic);
+}
 async function searchYouTube(query) {
-  const generation = ++searchGeneration,
-    body = showPanel("YouTube search");
-  $("panel").classList.add("searchPanel");
+  if ($("discovery").hidden) { showDiscovery(query); return; }
+  discoveryQuery = query;
+  const generation = ++searchGeneration, body = $("discoveryBody");
+  body.replaceChildren();
   const heading = el("div", null, "searchSummary"),
-    title = el("h3", query),
-    progress = el("span", "Finding videos…", "hint");
+    title = el("h2", discoveryTopic || query),
+    progress = el("span", "Finding conversations…", "hint");
   heading.append(title, progress);
   const controls = el("div", null, "searchFilters");
-  const original = el("label", null, "searchToggle"),
-    toggle = el("input");
-  toggle.type = "checkbox";
-  toggle.checked = extras.originalOnly;
-  toggle.setAttribute("aria-label", "Original Japanese only");
-  original.append(toggle, document.createTextNode("Original Japanese only"));
-  controls.append(original);
-  const cards = el("div", null, "searchResults"),
-    message = el("p", "", "hint");
-  const refine = el("form", null, "searchRefine"),
-    input = el("input");
-  input.type = "search";
-  input.value = query;
-  input.setAttribute("aria-label", "Search within YouTube");
-  const submit = el("button", "Search", "primary");
-  refine.append(input, submit);
-  refine.onsubmit = (e) => {
-    e.preventDefault();
-    if (input.value.trim()) {
-      $("query").value = input.value.trim();
-      void searchYouTube(input.value.trim());
-    }
-  };
-  body.append(refine, heading, controls, cards, message);
+  function check(label, checked) {
+    const row = el("label", null, "searchToggle"), input = el("input");
+    input.type = "checkbox"; input.checked = checked;
+    input.setAttribute("aria-label", label);
+    row.append(input, document.createTextNode(label)); controls.append(row);
+    return input;
+  }
+  const original = check("Original Japanese only", extras.originalOnly),
+    conversation = check("Conversation first", extras.conversationFirst),
+    shorts = check("Hide Shorts", prefs.hideShorts);
+  const lengthLabel = el("label", null, "discoveryLength"), length = el("select");
+  length.setAttribute("aria-label", "Minimum video length");
+  for (const minutes of [0, 15, 30, 60]) {
+    const option = el("option", minutes ? minutes + "+ minutes" : "Any length");
+    option.value = String(minutes); length.append(option);
+  }
+  length.value = String(prefs.minimumMinutes);
+  lengthLabel.append(el("span", "Length"), length); controls.append(lengthLabel);
+  const cards = el("div", null, "searchResults"), message = el("p", "", "hint");
+  const retry = button("Try again", () => void searchYouTube(query)); retry.hidden = true;
+  body.append(controls, heading, cards, message, retry);
   const rendered = new Map();
   let latest = { items: [], status: "loading" };
   function paint() {
-    const data = latest,
-      filtered = data.items.filter(
-        (x) =>
-          (!extras.originalOnly || x.language === "ja") &&
-          (!prefs.hideShorts || !x.isShort) &&
-          x.duration >= prefs.minimumMinutes * 60,
-      ),
-      ids = new Set(filtered.map((x) => x.id));
-    for (const [id, node] of rendered)
-      if (!ids.has(id)) {
-        node.remove();
-        rendered.delete(id);
+    original.checked = extras.originalOnly; conversation.checked = extras.conversationFirst;
+    shorts.checked = prefs.hideShorts; length.value = String(prefs.minimumMinutes);
+    const data = latest, filters = { ...prefs, conversation: extras.conversationFirst },
+      filtered = data.items.filter(x => (!extras.originalOnly || x.language === "ja") && ImmersedDiscovery.eligible(x, filters))
+        .sort((a, b) => extras.conversationFirst ? ImmersedDiscovery.score(b) - ImmersedDiscovery.score(a) : 0),
+      ids = new Set(filtered.map(x => x.id));
+    for (const [id, node] of rendered) if (!ids.has(id)) { node.remove(); rendered.delete(id); }
+    for (const [index, item] of filtered.entries()) {
+      let card = rendered.get(item.id);
+      if (!card) {
+        card = el("button", null, "searchVideo"); card.type = "button";
+        const art = el("div", null, "searchArtwork"), image = el("img");
+        image.alt = ""; image.loading = "lazy"; image.decoding = "async";
+        if (/^https:\/\/i\.ytimg\.com\//.test(item.thumbnail || "")) image.src = item.thumbnail;
+        art.append(image, el("span", "", "searchDuration"));
+        card.append(art, el("h3"), el("p", "", "hint"), el("small", "", "searchLanguage"));
+        card.onclick = () => { showWatch(); void loadVideo(item.id, item.title); };
+        cards.append(card); rendered.set(item.id, card);
       }
-    for (const item of filtered) {
-      if (rendered.has(item.id)) {
-        const card = rendered.get(item.id);
-        card.style.order = String(filtered.indexOf(item));
-        card.querySelector("h3").textContent = item.title;
-        card.querySelector("p").textContent = item.channel;
-        card.querySelector(".searchDuration").textContent = formatDuration(
-          item.duration,
-        );
-        card.querySelector(".searchLanguage").textContent =
-          item.language === "ja"
-            ? "Japanese original"
-            : item.language || "Language unverified";
-        continue;
-      }
-      const card = el("button", null, "searchVideo");
-      card.type = "button";
-      card.style.order = String(filtered.indexOf(item));
-      card.setAttribute("aria-label", "Watch " + item.title);
-      const art = el("div", null, "searchArtwork"),
-        image = el("img");
-      image.alt = "";
-      image.loading = "lazy";
-      if (/^https:\/\/i\.ytimg\.com\//.test(item.thumbnail || ""))
-        image.src = item.thumbnail;
-      art.append(
-        image,
-        el("span", formatDuration(item.duration), "searchDuration"),
-      );
-      card.append(
-        art,
-        el("h3", item.title),
-        el("p", item.channel, "hint"),
-        el(
-          "small",
-          item.language === "ja"
-            ? "Japanese original"
-            : item.language || "Language unverified",
-          "searchLanguage",
-        ),
-      );
-      card.onclick = () => {
-        closePanel();
-        void loadVideo(item.id, item.title);
-      };
-      cards.append(card);
-      rendered.set(item.id, card);
+      card.style.order = String(index); card.setAttribute("aria-label", "Watch " + item.title);
+      card.querySelector("h3").textContent = item.title;
+      card.querySelector("p").textContent = item.channel || "";
+      card.querySelector(".searchDuration").textContent = formatDuration(item.duration);
+      card.querySelector(".searchLanguage").textContent = item.language === "ja" ? "Japanese original" : item.language || "Language unverified";
     }
-    progress.textContent =
-      data.status === "checking"
-        ? "Checking originals · " +
-          (data.checked || 0) +
-          "/" +
-          (data.total || data.items.length)
-        : filtered.length + " videos";
+    progress.textContent = data.status === "checking"
+      ? "Checking originals · " + (data.checked || 0) + "/" + (data.total || data.items.length)
+      : filtered.length + (filtered.length === 1 ? " video" : " videos");
     message.textContent = !filtered.length
-      ? data.status === "checking"
-        ? "Results will appear as their original language is confirmed."
-        : data.status === "loading"
-          ? ""
-          : "No matches with these filters. Try a different query or turn off “Original Japanese only”."
+      ? data.status === "checking" ? "Checking the language of these videos…"
+        : data.status === "loading" ? "" : "No matching videos. Try another topic, a shorter minimum length, or change the filters."
       : "";
-    cards.classList.toggle(
-      "loading",
-      !filtered.length && data.status !== "ready",
-    );
+    cards.classList.toggle("loading", !filtered.length && data.status !== "ready");
   }
-  toggle.onchange = () => {
-    extras.originalOnly = toggle.checked;
-    persist();
-    paint();
-  };
+  discoveryPaint = paint;
+  original.onchange = () => { extras.originalOnly = original.checked; persist(); paint(); };
+  conversation.onchange = () => { extras.conversationFirst = conversation.checked; persist(); void searchYouTube(query); };
+  shorts.onchange = () => { prefs.hideShorts = shorts.checked; persist(); void searchYouTube(query); };
+  length.onchange = () => { prefs.minimumMinutes = Number(length.value); persist(); void searchYouTube(query); };
   paint();
   try {
     do {
-      const data = await api("desktop/search", { query });
-      if (
-        generation !== searchGeneration ||
-        !$("panel").open ||
-        $("panelTitle").textContent !== "YouTube search"
-      )
-        return;
-      latest = data;
-      paint();
+      const data = await api("desktop/search", { query, conversation: extras.conversationFirst,
+        minimumMinutes: prefs.minimumMinutes, hideShorts: prefs.hideShorts });
+      if (generation !== searchGeneration || $("discovery").hidden) return;
+      latest = data; paint();
       if (data.status !== "checking") break;
-      await new Promise((r) => setTimeout(r, 650));
-    } while (generation === searchGeneration && $("panel").open);
+      await new Promise(r => setTimeout(r, 650));
+    } while (generation === searchGeneration && !$("discovery").hidden);
   } catch (error) {
-    if (generation === searchGeneration) {
-      progress.textContent = "Search unavailable";
-      message.textContent = error.message;
-      cards.classList.remove("loading");
-    }
+    if (generation !== searchGeneration || $("discovery").hidden) return;
+    progress.textContent = "Couldn’t load videos"; message.textContent = error.message;
+    cards.classList.remove("loading"); retry.hidden = false;
   }
 }
 
@@ -1687,7 +1672,10 @@ $("search").onsubmit = (e) => {
       if (time) startAt = Number(time[1] || 0) * 3600 + Number(time[2] || 0) * 60 + Number(time[3] || 0);
     } catch {}
     void loadVideo(id, undefined, startAt);
-  } else if (value) void searchYouTube(value);
+  } else if (value) {
+    discoveryTopic = "";
+    showDiscovery(value.slice(0, 120));
+  }
 };
 async function toggleFullscreen() {
   if (document.fullscreenElement) await document.exitFullscreen();
@@ -1804,6 +1792,9 @@ $("openFile").onclick = () =>
       })
     : $("fileInput").click();
 $("fileInput").onchange = () => void importMedia($("fileInput").files[0]);
+$("discoverButton").onclick = () => showDiscovery();
+$("watchButton").onclick = showWatch;
+$("refreshDiscovery").onclick = () => void searchYouTube(discoveryQuery);
 $("libraryButton").onclick = showLibrary;
 $("wordsButton").onclick = showWords;
 $("settingsButton").onclick = showSettings;
@@ -1860,6 +1851,7 @@ document.addEventListener("keydown", (e) => {
     !e.metaKey &&
     !e.ctrlKey &&
     !e.altKey &&
+    $("discovery").hidden &&
     !/INPUT|TEXTAREA|SELECT/.test(e.target.tagName)
   ) {
     e.preventDefault();
@@ -1881,7 +1873,8 @@ document.addEventListener("keydown", (e) => {
     ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName) ||
     e.metaKey ||
     e.ctrlKey ||
-    $("panel").open
+    $("panel").open ||
+    !$("discovery").hidden
   )
     return;
   if (e.code === "Space" || e.key.toLowerCase() === "k") {

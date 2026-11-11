@@ -167,11 +167,11 @@ test("original-language search filtering excludes unknown and dubbed metadata", 
   await page.goto("/");
   await page.locator("#query").fill("歴史");
   await page.locator("#search").getByRole("button").click();
-  await expect(page.locator("#panelBody")).toContainText("日本語オリジナル");
-  await expect(page.locator("#panelBody")).not.toContainText(
+  await expect(page.locator("#discoveryBody")).toContainText("日本語オリジナル");
+  await expect(page.locator("#discoveryBody")).not.toContainText(
     "English original",
   );
-  await expect(page.locator("#panelBody")).not.toContainText("Unknown source");
+  await expect(page.locator("#discoveryBody")).not.toContainText("Unknown source");
 });
 
 test("near-N1 screenshot passage stays quiet and manual unknown uses an underline", async ({
@@ -721,4 +721,54 @@ test("video text needs two matching frames before replacing an acoustic caption"
   await page.evaluate(() => (window as any).immersedVideoText((window as any).__frameKey,['「紙上の教会」という概念がある']));
   await expect(page.locator("#lookupWord")).toHaveText("市場");
   await expect(page.locator("#subtitles")).toContainText("市場");
+});
+
+test("Discover shares length settings, favors conversations, and ignores stale topic responses", async ({ page }) => {
+  let releaseOld: (() => void) | undefined;
+  const requests: URL[] = [];
+  await page.route("**/api/desktop/search?**", async route => {
+    const url = new URL(route.request().url()); requests.push(url);
+    if (url.searchParams.get("query") === "日本語 ポッドキャスト") {
+      await new Promise<void>(resolve => { releaseOld = resolve; });
+      await route.fulfill({ json: { status: "ready", items: [{ id: "oldoldoldol", title: "Old podcast", duration: 4000, language: "ja" }] } });
+      return;
+    }
+    await route.fulfill({ json: { status: "ready", items: [
+      { id: "aaaaaaaaaaa", title: "文化の対談", duration: 2400, language: "ja" },
+      { id: "bbbbbbbbbbb", title: "短い会話", duration: 600, language: "ja" },
+      { id: "ccccccccccc", title: "English interview", duration: 4000, language: "en" },
+      { id: "ddddddddddd", title: "作業用BGM", duration: 7000, language: "ja" },
+      { id: "eeeeeeeeeee", title: "Japanese Short", duration: 2400, language: "ja", isShort: true },
+    ] } });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await page.locator("#panelBody").getByLabel("Minimum video length", { exact: true }).selectOption("30");
+  await page.locator("#closePanel").click();
+  await page.getByRole("button", { name: "Discover", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Discover", exact: true })).toBeVisible();
+  await expect(page.locator("#discoveryBody").getByLabel("Minimum video length", { exact: true })).toHaveValue("30");
+  await expect(page.locator(".searchVideo")).toHaveCount(1);
+  await expect(page.locator(".searchVideo")).toContainText("文化の対談");
+  await page.screenshot({ path: "work/discovery-preview.png", fullPage: true });
+  expect(requests.at(-1)?.searchParams.get("conversation")).toBe("true");
+  expect(requests.at(-1)?.searchParams.get("minimumMinutes")).toBe("30");
+  await page.locator("#discoveryBody").getByLabel("Minimum video length", { exact: true }).selectOption("0");
+  await expect(page.locator(".searchVideo")).toHaveCount(2);
+  await page.locator("#discoveryBody").getByLabel("Conversation first", { exact: true }).uncheck();
+  await expect(page.locator(".searchVideo")).toHaveCount(3);
+  await page.getByRole("button", { name: "Podcasts", exact: true }).click();
+  await expect.poll(() => Boolean(releaseOld)).toBe(true);
+  await page.getByRole("button", { name: "Interviews", exact: true }).click();
+  await expect(page.locator(".searchSummary h2")).toHaveText("Interviews");
+  releaseOld!();
+  await expect(page.locator("#discoveryBody")).not.toContainText("Old podcast");
+  await page.getByRole("button", { name: "Watch", exact: true }).click();
+  await expect(page.locator("#watchPage")).toBeVisible();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  await expect(page.locator("#panelBody").getByLabel("Minimum video length", { exact: true })).toHaveValue("0");
+  await expect(page.locator("#panelBody").getByLabel("Conversation first", { exact: true })).not.toBeChecked();
+  await page.reload();
+  await page.getByRole("button", { name: "Discover", exact: true }).click();
+  await expect(page.locator("#discoveryBody").getByLabel("Conversation first", { exact: true })).not.toBeChecked();
 });

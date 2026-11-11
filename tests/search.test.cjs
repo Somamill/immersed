@@ -69,3 +69,38 @@ test("search caches confirmed metadata and tolerates individual verification fai
   assert.equal(done.status, "ready");
   assert.equal(done.items[1].language, null);
 });
+test("discovery biases retrieval and filters short music/gameplay before checking metadata", async () => {
+  let query, inspected = [];
+  const manager = createSearch({
+    run: async (_, args) => {
+      query = args.at(-1);
+      return { stdout: JSON.stringify({ entries: [
+        { id: "aaaaaaaaaaa", title: "作業用BGM", duration: 7200 },
+        { id: "bbbbbbbbbbb", title: "哲学 インタビュー", duration: 2400 },
+        { id: "ccccccccccc", title: "日常 会話", duration: 600 },
+        { id: "ddddddddddd", title: "音楽について対談", duration: 3600 },
+        { id: "eeeeeeeeeee", title: "ゲーム実況", duration: 3600 },
+        { id: "fffffffffff", title: "対談 Short", duration: 1800, url: "https://youtube.com/shorts/fffffffffff" },
+      ] }) };
+    },
+    videoInfo: async id => { inspected.push(id); return { language: "ja" }; },
+  });
+  const result = await manager.search("哲学", { conversation: true, minimumMinutes: 30 });
+  assert.match(query, /哲学.*ポッドキャスト/);
+  assert.deepEqual(result.items.map(x => x.id), ["bbbbbbbbbbb", "ddddddddddd"]);
+  await tick();
+  assert.deepEqual(inspected.sort(), ["bbbbbbbbbbb", "ddddddddddd"]);
+});
+test("different discovery filters have independent caches; broader searches retain music", async () => {
+  let calls = 0;
+  const manager = createSearch({
+    run: async () => { calls++; return { stdout: JSON.stringify({ entries: [
+      { id: "aaaaaaaaaaa", title: "作業用BGM", duration: 2000 },
+    ] }) }; },
+    peek: () => ({ language: "ja" }), videoInfo: async () => ({}),
+  });
+  assert.equal((await manager.search("音楽", { conversation: true })).items.length, 0);
+  assert.equal((await manager.search("音楽", { conversation: false })).items.length, 1);
+  await manager.search("音楽", { conversation: true });
+  assert.equal(calls, 2);
+});

@@ -1,4 +1,5 @@
 const VALID = /^[A-Za-z0-9_-]{11}$/;
+const discovery = require("./discovery.js");
 function createSearch({ run, videoInfo, peek = () => null }) {
   const cache = new Map(),
     pending = new Map(),
@@ -38,10 +39,12 @@ function createSearch({ run, videoInfo, peek = () => null }) {
         });
     }
   }
-  async function search(query) {
-    const old = cache.get(query);
+  async function search(query, value = {}) {
+    const filters = discovery.options(value);
+    const key = JSON.stringify([query, filters]);
+    const old = cache.get(key);
     if (old && Date.now() - old.time < 300000) return snapshot(old);
-    if (pending.has(query)) return pending.get(query);
+    if (pending.has(key)) return pending.get(key);
     const task = (async () => {
       const { stdout } = await run(
         "yt-dlp",
@@ -57,7 +60,7 @@ function createSearch({ run, videoInfo, peek = () => null }) {
           "--extractor-retries",
           "1",
           "--dump-single-json",
-          "ytsearch12:" + query,
+          "ytsearch18:" + discovery.queryFor(query, filters),
         ],
         { timeout: 25000, maxBuffer: 4 * 1024 * 1024 },
       );
@@ -80,13 +83,15 @@ function createSearch({ run, videoInfo, peek = () => null }) {
           language: null,
           ...(peek(e.id) || {}),
           checked: !!peek(e.id),
-        }));
+        }))
+        .filter(item => discovery.eligible(item, filters))
+        .sort((a, b) => filters.conversation ? discovery.score(b) - discovery.score(a) : 0);
       const job = {
         items,
         time: Date.now(),
         remaining: items.filter((x) => !x.checked).length,
       };
-      cache.set(query, job);
+      cache.set(key, job);
       if (cache.size > 30) cache.delete(cache.keys().next().value);
       queue.unshift(
         ...items.flatMap((item, index) =>
@@ -95,8 +100,8 @@ function createSearch({ run, videoInfo, peek = () => null }) {
       );
       pump();
       return snapshot(job);
-    })().finally(() => pending.delete(query));
-    pending.set(query, task);
+    })().finally(() => pending.delete(key));
+    pending.set(key, task);
     return task;
   }
   return { search };

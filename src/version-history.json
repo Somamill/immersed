@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.13.0",
+    "date": "2026-11-11",
+    "title": "Discover Japanese podcasts and conversations on Mac",
+    "notes": [
+      "Add a dedicated Mac Discover page with podcast, interview, culture, everyday-life and ideas topics, plus search in the embedded app.",
+      "Share original-Japanese, minimum-length and Shorts settings with discovery. Conversation first favors spoken content and filters obvious music/gameplay; metadata cannot guarantee every result is entirely speech.",
+      "Preserve the current player when switching between Discover and Watch. Cache results and show confirmed originals progressively."
+    ]
+  },
+  {
     "version": "0.12.5",
     "date": "2026-11-11",
     "title": "Bundle the iPhone fallback player",

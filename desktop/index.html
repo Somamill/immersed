@@ -19,6 +19,8 @@
         /><button class="primary">Search</button>
       </form>
       <nav aria-label="Navigation">
+        <button id="discoverButton" aria-pressed="false">Discover</button>
+        <button id="watchButton" aria-pressed="true">Watch</button>
         <button
           id="fullscreen"
           aria-label="Video fullscreen"
@@ -31,7 +33,12 @@
         ><button id="settingsButton">Settings</button>
       </nav>
     </header>
-    <main>
+    <section id="discovery" class="discoveryPage" aria-label="Discover videos" hidden>
+      <div class="discoveryIntro"><div><span class="discoveryEyebrow">JAPANESE · WATCH &amp; LISTEN</span><h1>Discover</h1><p>Good conversations. More time in Japanese.</p></div><button id="refreshDiscovery" class="muted">Refresh</button></div>
+      <div id="discoveryTopics" class="discoveryTopics" role="group" aria-label="Video topics"></div>
+      <div id="discoveryBody"></div>
+    </section>
+    <main id="watchPage">
       <section class="videoCard">
         <div class="video" id="video">
           <div class="placeholder">
@@ -120,6 +127,7 @@
     <script src="/shared/preferences-core.js"></script>
     <script src="/shared/learning-core.js"></script>
     <script src="/compare.js"></script>
+    <script src="/discovery.js"></script>
     <script src="/study.js"></script>
   </body>
 </html>
