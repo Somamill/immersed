@@ -728,7 +728,7 @@ test("Discover shares length settings, favors conversations, and ignores stale t
   const requests: URL[] = [];
   await page.route("**/api/desktop/search?**", async route => {
     const url = new URL(route.request().url()); requests.push(url);
-    if (url.searchParams.get("query") === "日本語 ポッドキャスト") {
+    if (url.searchParams.get("query") === "ポッドキャスト 雑談") {
       await new Promise<void>(resolve => { releaseOld = resolve; });
       await route.fulfill({ json: { status: "ready", items: [{ id: "oldoldoldol", title: "Old podcast", duration: 4000, language: "ja" }] } });
       return;
@@ -820,4 +820,47 @@ test("glass icon navigation and recent words persist explicit learning progress"
   await page.getByRole("button",{name:"Remove 政治",exact:true}).click();
   await expect(page.locator(".savedWord")).toHaveCount(0);
   await expect(page.locator(".recentWord")).toHaveCount(1);
+});
+
+test("fullscreen fades controls while subtitle lookup stays interactive",async({page})=>{
+ await page.goto('/');
+ await page.evaluate(()=>(window as any).eval(`youtube={getCurrentTime:()=>.2,getPlayerState:()=>2,pauseVideo:()=>{}};cues=[{start:0,end:5,text:'政治です。'}];cueIndex=-1;renderCue();`));
+ await expect(page.getByRole('button',{name:'Look up 政治',exact:true})).toBeVisible();
+ await page.locator('#fullscreen').click();
+ await expect(page.locator('#video .controls')).toHaveCSS('opacity','0',{timeout:6000});
+ await page.getByRole('button',{name:'Look up 政治',exact:true}).hover();
+ await expect(page.locator('#lookup')).toHaveClass(/show/);
+ await expect(page.locator('#definitions')).toContainText(/politic|government/i);
+ await expect(page.locator('#video .controls')).toHaveCSS('opacity','0',{timeout:6000});
+ await expect(page.locator('#saveWord')).toBeVisible();
+ await page.locator('#closeLookup').click();
+ await page.locator('#fullscreenWake').hover({position:{x:10,y:10}});
+ await expect(page.locator('#video .controls')).toHaveCSS('opacity','1');
+ await page.keyboard.press('Escape'); await page.keyboard.press('Escape');
+ await expect(page.locator('.studyCard .controls')).toHaveCSS('opacity','1');
+});
+test('native audience preference is shared by Discover and Settings',async({page})=>{
+ await page.route('**/api/desktop/search?**',route=>route.fulfill({json:{status:'ready',items:[
+  {id:'aaaaaaaaaaa',title:'作家の対談',duration:3600,language:'ja'},
+  {id:'bbbbbbbbbbb',title:'Japanese Listening Practice for N3',duration:3600,language:'ja'}
+ ]}}));
+ await page.goto('/');await page.locator('#discoverButton').click();
+ await expect(page.locator('.searchVideo')).toHaveCount(1);
+ await page.locator('#discoveryBody').getByLabel('Native audience',{exact:true}).uncheck();
+ await expect(page.locator('.searchVideo')).toHaveCount(2);
+ await page.locator('#settingsButton').click();
+ await expect(page.locator('#panelBody').getByLabel('Native audience',{exact:true})).not.toBeChecked();
+});
+
+test('returning to a paused preparation resumes it automatically',async({page})=>{
+ let posts=0,gets=0;
+ await page.route('**/api/desktop/transcribe?**',route=>{
+  if(route.request().method()==='POST'){posts++;return route.fulfill({json:{status:'queued'}});}
+  gets++;
+  return route.fulfill({json:gets===1?{status:'paused'}:{status:'ready',cues:[{start:0,end:4,text:'日本語です。'}]}});
+ });
+ await page.goto('/');
+ await page.evaluate(()=>(window as any).eval(`source={type:'youtube',id:'aaaaaaaaaaa',title:'話'};youtube={getCurrentTime:()=>.2,getPlayerState:()=>2};beginTranscript();`));
+ await expect(page.locator('#count')).toHaveText('1 segments');
+ expect(posts).toBe(2);
 });

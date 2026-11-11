@@ -1021,3 +1021,20 @@ dialog { background: linear-gradient(145deg,#244032f7,#10251cfc); }
 .recentMeaning { display: block; margin-top: 6px; font-size: 14px; color: #c2d9cc; }
 .recentWordDetail:hover strong { text-decoration: underline; text-underline-offset: 4px; }
 body.light .recentMeaning { color: #365945; }
+/* Idle fullscreen keeps the video and readable, interactive subtitles alone. */
+.video:fullscreen .fullscreenStudy .controls,
+.video:fullscreen .exitVideoFullscreen,
+.video:fullscreen .speechProgress { transition: opacity 180ms ease, transform 180ms ease; }
+.video:fullscreen:not(.controlsVisible) .fullscreenStudy .controls,
+.video:fullscreen:not(.controlsVisible) .exitVideoFullscreen,
+.video:fullscreen:not(.controlsVisible) .speechProgress { opacity: 0; pointer-events: none; transform: translateY(8px); }
+.iconButton, .control { transition: background-color 140ms ease, box-shadow 140ms ease, transform 140ms ease; }
+.iconButton:active, .control:active { transform: scale(.96); }
+#panel[open] { animation: glassAppear 150ms ease-out; }
+@keyframes glassAppear { from { opacity: 0; transform: translateY(6px) scale(.99); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .iconButton, .control, .video:fullscreen .controls, .video:fullscreen .exitVideoFullscreen, .video:fullscreen .speechProgress { transition: none; }
+  #panel[open] { animation: none; }
+}
+.fullscreenWake { position: absolute; z-index: 4; left: 0; right: 0; bottom: 0; height: 100px; background: transparent; }
+.fullscreenWake:focus-visible { outline: 2px solid #b6e3c4; outline-offset: -3px; }

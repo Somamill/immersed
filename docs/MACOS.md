@@ -112,3 +112,13 @@ The Mac study window uses a transparent title area and a floating glass toolbar.
 **Words** now includes the latest 100 successful dictionary lookups. Repeated hover within 30 seconds does not inflate the lookup count. Open a recent entry again or save it with the bookmark button. Saved words show Learning or Known, with explicit controls to change that state. The dashboard counts saved words and those explicitly marked known; looking up a word does not establish mastery. Removing a saved word leaves its recent lookup intact.
 
 History is local to this Mac and included in exported settings backups. Context is retained when reopening a word without a new video sentence. Automatic iCloud sync still requires signing configuration.
+
+## Focus-first video preparation and quiet fullscreen
+
+YouTube preparation now gives the selected video's speech tasks priority over queued background work. Unfinished downloads for a video you leave are cancelled, while recognized sections are checkpointed on disk. Opening more videos no longer returns the old three-video rejection. At most two older recognition jobs continue behind the current one; older queued jobs pause and can resume from their checkpoints when selected again.
+
+For generated YouTube transcripts, the first section surrounds the current playhead (up to 12 seconds); remaining work is processed in bounded sections of up to 26 seconds, choosing gaps nearest the latest playhead. Partial cues are sorted by video time, and preparation percentage measures completed audio rather than assuming that a seeked-to position means earlier audio was processed. Each completed section is saved. Creator captions and complete cached transcripts still take precedence. Audio access/download and first model loading remain necessary; selecting a new video yields after the active speech section, rather than forcibly interrupting GPU inference.
+
+Fullscreen controls fade after 1.6 seconds. Subtitles and word lookup stay interactive. Move to the bottom of the video or focus a control with the keyboard to reveal transport controls; Escape still closes lookup and exits fullscreen. Motion is reduced when the system requests it. Cue rendering reuses the active subtitle index when safe and avoids unnecessary play-button DOM writes, and the hidden study page stops its visual work while Discover is open.
+
+Discover defaults to **Native audience**, with domestic conversation, interview and discussion queries rather than Japanese-learning seeds. The filter excludes recognizable learner-oriented titles/channels; turn it off to include them. Language and length filters still apply. Title-based audience classification is a heuristic.

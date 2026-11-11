@@ -59,6 +59,7 @@ let extras = {
     blockAds: true,
     originalOnly: true,
     conversationFirst: true,
+    nativeAudience: true,
     hoverLookup: true,
     screenCaptionCheck: true,
     pauseOnHover: true,
@@ -649,7 +650,7 @@ async function beginTranscript(retry = false) {
   const params =
     source.type === "local"
       ? { id: source.id, quality: extras.speechQuality, at: currentTime() }
-      : { videoId: source.id, quality: extras.speechQuality };
+      : { videoId: source.id, quality: extras.speechQuality, at: currentTime() };
   if (retry) params.retry = "true";
   const route =
     source.type === "local" ? "desktop/local-transcript" : "desktop/transcribe";
@@ -670,6 +671,7 @@ async function beginTranscript(retry = false) {
 async function pollTranscript(route, params, generation) {
   if (generation !== requestGeneration) return;
   try {
+    if (source?.type === "youtube") params.at = currentTime();
     const data = await api(route, params);
     if (generation !== requestGeneration) return;
     if (Array.isArray(data.cues) && (data.cues.length || data.windowed)) {
@@ -700,6 +702,11 @@ async function pollTranscript(route, params, generation) {
       status("");
 
       void sampleCoverage();
+      return;
+    }
+    if (data.status === "paused") {
+      await api(route, params, "POST");
+      if (generation === requestGeneration) pollTimer = setTimeout(() => pollTranscript(route, params, generation), 350);
       return;
     }
     if (data.status === "unavailable") {
@@ -738,7 +745,7 @@ async function renderCue() {
     return;
   }
   const t = currentTime();
-  let i = cues.findLastIndex((c) => c.start <= t && t < c.end);
+  let i = cueIndex >= 0 && cues[cueIndex]?.start <= t && t < cues[cueIndex]?.end && (!cues[cueIndex + 1] || cues[cueIndex + 1].start > t) ? cueIndex : cues.findLastIndex((c) => c.start <= t && t < c.end);
   if (cueSeek) {
     if (i === cueSeek.index || performance.now() > cueSeek.until) cueSeek = null;
     else i = cueSeek.index;
@@ -1280,7 +1287,7 @@ function setting(body, label, description, key, options, isExtra = false) {
       object[key] = control.checked;
       persist();
       applyPreferences();
-      if (!$("discovery").hidden && ["hideShorts", "originalOnly", "conversationFirst"].includes(key)) void searchYouTube(discoveryQuery);
+      if (!$("discovery").hidden && ["hideShorts", "originalOnly", "conversationFirst", "nativeAudience"].includes(key)) void searchYouTube(discoveryQuery);
       if (key === "pitchAccent") renderDefinitions();
     };
   }
@@ -1334,6 +1341,7 @@ function showSettings() {
     null,
     true,
   );
+  setting(body, "Native audience", "Favor Japanese domestic discussions and filter recognizable learner content in Discover.", "nativeAudience", null, true);
   setting(body, "Conversation first", "Prioritize podcasts, interviews and discussion in Discover. Hide obvious music and gameplay results.", "conversationFirst", null, true);
   setting(
     body,
@@ -1433,10 +1441,10 @@ function exportBackup() {
   }
 }
 let searchGeneration = 0;
-let discoveryQuery = "日本語", discoveryTopic = "Conversations", discoveryPaint = null;
+let discoveryQuery = "社会 対談", discoveryTopic = "Conversations", discoveryPaint = null;
 const discoveryTopics = [
-  ["Conversations", "日本語"], ["Podcasts", "日本語 ポッドキャスト"],
-  ["Interviews", "日本語 インタビュー"], ["Books & culture", "読書 文学 文化"],
+  ["Conversations", "社会 対談"], ["Podcasts", "ポッドキャスト 雑談"],
+  ["Interviews", "作家 インタビュー"], ["Books & culture", "読書 文学 文化"],
   ["Everyday life", "暮らし 日常 会話"], ["Ideas", "社会 哲学 対話"],
 ];
 function showWatch() {
@@ -1485,6 +1493,7 @@ async function searchYouTube(query) {
     return input;
   }
   const original = check("Original Japanese only", extras.originalOnly),
+    nativeAudience = check("Native audience", extras.nativeAudience),
     conversation = check("Conversation first", extras.conversationFirst),
     shorts = check("Hide Shorts", prefs.hideShorts);
   const lengthLabel = el("label", null, "discoveryLength"), length = el("select");
@@ -1505,8 +1514,9 @@ async function searchYouTube(query) {
   const collected = new Map();
   function paint() {
     original.checked = extras.originalOnly; conversation.checked = extras.conversationFirst;
+    nativeAudience.checked = extras.nativeAudience;
     shorts.checked = prefs.hideShorts; length.value = String(prefs.minimumMinutes);
-    const data = latest, filters = { ...prefs, conversation: extras.conversationFirst },
+    const data = latest, filters = { ...prefs, conversation: extras.conversationFirst, nativeAudience: extras.nativeAudience },
       filtered = data.items.filter(x => (!extras.originalOnly || x.language === "ja") && ImmersedDiscovery.eligible(x, filters))
         .sort((a, b) => extras.conversationFirst ? ImmersedDiscovery.score(b) - ImmersedDiscovery.score(a) : 0),
       ids = new Set(filtered.map(x => x.id));
@@ -1540,6 +1550,7 @@ async function searchYouTube(query) {
   }
   discoveryPaint = paint;
   original.onchange = () => { extras.originalOnly = original.checked; persist(); paint(); };
+  nativeAudience.onchange = () => { extras.nativeAudience = nativeAudience.checked; persist(); void searchYouTube(query); };
   conversation.onchange = () => { extras.conversationFirst = conversation.checked; persist(); void searchYouTube(query); };
   shorts.onchange = () => { prefs.hideShorts = shorts.checked; persist(); void searchYouTube(query); };
   length.onchange = () => { prefs.minimumMinutes = Number(length.value); persist(); void searchYouTube(query); };
@@ -1548,7 +1559,7 @@ async function searchYouTube(query) {
   more.disabled = true; more.textContent = "Finding more…";
   try {
     do {
-      const data = await api("desktop/search", { query, page, conversation: extras.conversationFirst,
+      const data = await api("desktop/search", { query, page, nativeAudience: extras.nativeAudience, conversation: extras.conversationFirst,
         minimumMinutes: prefs.minimumMinutes, hideShorts: prefs.hideShorts });
       if (generation !== searchGeneration || $("discovery").hidden) return;
       for (const item of data.items) collected.set(item.id, item);
@@ -1753,11 +1764,29 @@ async function toggleFullscreen() {
   }
 }
 const fullscreenHomes = new Map();
+let fullscreenControlsTimer;
+function revealFullscreenControls() {
+  if (document.fullscreenElement !== $("video")) return;
+  $("video").classList.add("controlsVisible");
+  clearTimeout(fullscreenControlsTimer);
+  fullscreenControlsTimer = setTimeout(() => {
+    if (!$("speedMenu").hidden) return;
+    $("video").classList.remove("controlsVisible");
+  }, 1600);
+}
+$("video").addEventListener("pointermove", e => {
+  if (!e.target.closest("#subtitles, #lookup")) revealFullscreenControls();
+});
+$("video").addEventListener("focusin", e => {
+  if (e.target.closest("#controls, #exitVideoFullscreen")) revealFullscreenControls();
+});
 function restoreFullscreenStudy() {
   for (const [node, home] of fullscreenHomes) home.replaceWith(node);
   fullscreenHomes.clear();
   $("fullscreenStudy")?.remove();
   $("exitVideoFullscreen")?.remove();
+  $("fullscreenWake")?.remove();
+  clearTimeout(fullscreenControlsTimer); $("video").classList.remove("controlsVisible");
 }
 document.addEventListener("fullscreenchange", () => {
   if (document.fullscreenElement === $("video")) {
@@ -1768,6 +1797,11 @@ document.addEventListener("fullscreenchange", () => {
       node.replaceWith(home); fullscreenHomes.set(node, home); overlay.append(node);
     }
     $("video").append(overlay);
+    const wake = el("div", null, "fullscreenWake");
+    wake.id = "fullscreenWake"; wake.tabIndex = 0;
+    wake.setAttribute("aria-label", "Show fullscreen controls");
+    wake.onpointerenter = revealFullscreenControls; wake.onfocus = revealFullscreenControls;
+    $("video").append(wake);
     const exit = el("button", "✕", "exitVideoFullscreen");
     exit.id = "exitVideoFullscreen";
     exit.setAttribute("aria-label", "Exit video fullscreen");
@@ -1775,6 +1809,7 @@ document.addEventListener("fullscreenchange", () => {
     exit.onclick = () => void document.exitFullscreen();
     $("video").append(exit);
     exit.focus();
+    revealFullscreenControls();
   } else restoreFullscreenStudy();
   requestAnimationFrame(() => requestAnimationFrame(positionLookup));
 });
@@ -1799,6 +1834,7 @@ function updateSpeedButton() {
 }
 function closeSpeedMenu() {
   $("speedMenu").hidden = true;
+  revealFullscreenControls();
   $("speed").setAttribute("aria-expanded", "false");
 }
 for (const rate of [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]) {
@@ -1965,9 +2001,9 @@ document.addEventListener("drop", (e) => {
   e.preventDefault();
   if (e.dataTransfer.files.length) void importMedia(e.dataTransfer.files[0]);
 });
-let last = 0;
+let last = 0, lastPlayingState = null;
 function tick(t) {
-  if (t - last > 100) {
+  if (t - last > 100 && document.visibilityState !== "hidden" && $("discovery").hidden) {
     last = t;
     if (source && playing() && t - lastPositionSave > 5000) {
       lastPositionSave = t;
@@ -1978,7 +2014,8 @@ function tick(t) {
     }
     void renderCue();
     scanCurrentVideoCaption(t);
-    $("play").textContent = playing() ? "Ⅱ" : "▶";
+    const isPlaying = playing();
+    if (isPlaying !== lastPlayingState) { lastPlayingState = isPlaying; $("play").textContent = isPlaying ? "Ⅱ" : "▶"; }
     if (pendingSeek && youtube?.getPlayerState) {
       seekTo(pendingSeek);
       pendingSeek = 0;

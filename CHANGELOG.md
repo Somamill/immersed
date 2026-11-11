@@ -2,6 +2,15 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.16.0 — 2026-11-11
+
+Quiet fullscreen and current-video subtitle priority
+
+- Fade fullscreen controls after inactivity while subtitles and dictionary lookup stay interactive. Reveal controls from the bottom edge or keyboard focus, with reduced-motion support.
+- Default Discover to native Japanese audiences and domestic discussions, with a persistent toggle to include learner content while preserving language and length filters.
+- Prioritize speech at the current video playhead, checkpoint completed sections and continue remaining work in bounded background sections. Replace the three-video rejection with priority scheduling and resumable background pauses; downloads and model loading can still take time.
+- Reduce redundant subtitle scans and play-button updates, and suspend hidden study rendering while Discover is open.
+
 ## 0.15.1 — 2026-11-11
 
 Keep speech preparation display uncluttered

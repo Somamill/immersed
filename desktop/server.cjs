@@ -4,6 +4,7 @@ const http = require("node:http"),
   os = require("node:os");
 const { execFile, spawn } = require("node:child_process");
 const { promisify } = require("node:util");
+const focusedSpeech = require("./focused-speech.cjs");
 const { createMedia } = require("./media.cjs");
 const { createSearch } = require("./search.cjs");
 const { createCaptionFrames } = require("./caption-frames.cjs");
@@ -12,7 +13,7 @@ const api = require("../server/middleware.cjs");
 const processAbort = new AbortController();
 const execute = promisify(execFile);
 const run = (file, args, options = {}) =>
-    execute(file, args, { ...options, signal: processAbort.signal }),
+    execute(file, args, { ...options, signal: options.signal ? AbortSignal.any([processAbort.signal, options.signal]) : processAbort.signal }),
   root = path.join(__dirname, ".."),
   cache = path.join(
     process.env.IMMERSED_DATA_ROOT || root,
@@ -20,6 +21,8 @@ const run = (file, args, options = {}) =>
   );
 fs.mkdirSync(cache, { recursive: true });
 const captionFrames = createCaptionFrames({ run, root: path.join(process.env.IMMERSED_DATA_ROOT || root, ".data/caption-frames") });
+let foregroundSpeech = null;
+const speechPositions = new Map(), videoPreparations = new Map(), pausedSpeech = new Set();
 const jobs = new Map(),
   validId = (id) => /^[A-Za-z0-9_-]{11}$/.test(id || "");
 const json = (res, status, value) => {
@@ -129,7 +132,8 @@ function pumpSpeech() {
     idleWorkerTimer.unref();
     return;
   }
-  speechQueue.sort((a, b) => b.priority - a.priority);
+  const weight = task => task.owner === foregroundSpeech && task.owner ? 100 : task.owner ? 0 : task.priority;
+  speechQueue.sort((a, b) => weight(b) - weight(a));
   const task = speechQueue.shift();
   activeSpeech = task;
   const child = ensureSpeechWorker();
@@ -146,7 +150,7 @@ function pumpSpeech() {
     }) + "\n",
   );
 }
-function speechSlice(audio, progress, quality, start, duration, priority) {
+function speechSlice(audio, progress, quality, start, duration, priority, owner = null) {
   return new Promise((resolve, reject) => {
     if (speechStopping) return reject(Error("Speech service is stopping"));
     speechQueue.push({
@@ -157,6 +161,7 @@ function speechSlice(audio, progress, quality, start, duration, priority) {
       start,
       duration,
       priority,
+      owner,
       resolve,
       reject,
       cues: [],
@@ -195,6 +200,24 @@ async function recognize(
   const duration = Number(stdout);
   if (!Number.isFinite(duration) || duration <= 0)
     throw Error("Invalid audio duration");
+  if (options.owner) {
+    const partial = path.join(cache, options.owner.replace(":", "-") + ".partial.json");
+    let initial = {};
+    try { initial = JSON.parse(fs.readFileSync(partial, "utf8")); if (Math.abs(initial.duration - duration) > 1) initial = {}; } catch {}
+    const result = await focusedSpeech.prepare({ duration, initial,
+      position: () => speechPositions.get(options.owner) || 0,
+      slice: (start, span, previous) => speechSlice(audio, progress => onProgress({
+        ...progress, cues: previous.cues.concat(progress.cues || []).sort((a,b)=>a.start-b.start),
+        duration, processedSeconds: previous.processedSeconds + (progress.processedSeconds || 0),
+      }), quality, start, span, 0, options.owner),
+      checkpoint: data => {
+        fs.writeFileSync(partial + ".tmp", JSON.stringify(data)); fs.renameSync(partial + ".tmp", partial);
+        onProgress({status:"processing",phase:"recognizing",...data});
+        if (pausedSpeech.has(options.owner)) throw Object.assign(Error("Background work paused for the current video"), {code:"BACKGROUND_PAUSED"});
+      },
+    });
+    return result;
+  }
   const cues = [];
   for (let start = 0; start < duration; start += 60) {
     const next = await speechSlice(
@@ -240,6 +263,8 @@ function state(id, quality = "balanced") {
 async function transcribe(id, quality = "balanced") {
   const key = id + ":" + quality;
   let folder;
+  const controller = new AbortController();
+  videoPreparations.set(key, controller);
   try {
     folder = fs.mkdtempSync(path.join(os.tmpdir(), "immersed-asr-"));
     try {
@@ -271,7 +296,7 @@ async function transcribe(id, quality = "balanced") {
           path.join(folder, "audio.%(ext)s"),
           "https://www.youtube.com/watch?v=" + id,
         ],
-        { timeout: 45000, maxBuffer: 1024 * 1024 },
+        { timeout: 45000, maxBuffer: 1024 * 1024, signal: controller.signal },
       );
     } catch {
       /* Audio recognition remains available when caption fetch fails. */
@@ -312,6 +337,7 @@ async function transcribe(id, quality = "balanced") {
         return;
       }
     }
+    if (controller.signal.aborted) throw Error("Preparation paused for the current video");
     jobs.set(key, { status: "processing", stage: "Preparing video audio" });
     await run(
       "yt-dlp",
@@ -326,7 +352,7 @@ async function transcribe(id, quality = "balanced") {
         path.join(folder, "audio.%(ext)s"),
         "https://www.youtube.com/watch?v=" + id,
       ],
-      { timeout: 10 * 60_000, maxBuffer: 1024 * 1024 },
+      { timeout: 10 * 60_000, maxBuffer: 1024 * 1024, signal: controller.signal },
     );
     const file = fs
       .readdirSync(folder)
@@ -338,11 +364,13 @@ async function transcribe(id, quality = "balanced") {
           !f.endsWith(".json"),
       );
     if (!file) throw Error("Video audio could not be accessed.");
-    jobs.set(key, { status: "queued", stage: "Waiting for the speech worker" });
+    videoPreparations.delete(key);
+    jobs.set(key, { status: "queued", stage: "Preparing subtitles at your position" });
     const cues = await recognize(
       path.join(folder, file),
       (progress) => jobs.set(key, progress),
       quality,
+      { owner: key },
     );
     if (!cues.length) throw Error("No Japanese speech was recognized.");
     fs.writeFileSync(
@@ -353,14 +381,16 @@ async function transcribe(id, quality = "balanced") {
       path.join(cache, id + "-" + quality + ".json.tmp"),
       path.join(cache, id + "-" + quality + ".json"),
     );
+    fs.rmSync(path.join(cache, id + "-" + quality + ".partial.json"), {force:true});
     jobs.set(key, { status: "ready", cues });
   } catch (e) {
     jobs.set(key, {
-      status: "unavailable",
-      message: String(e.message).slice(0, 240),
+      status: controller.signal.aborted || e.code === "BACKGROUND_PAUSED" ? "paused" : "unavailable",
+      message: controller.signal.aborted ? "Preparation paused while another video is active" : String(e.message).slice(0, 240),
       canRetry: true,
     });
   } finally {
+    if (videoPreparations.get(key) === controller) videoPreparations.delete(key);
     if (folder) fs.rmSync(folder, { recursive: true, force: true });
   }
 }
@@ -516,6 +546,10 @@ async function fallback(req, res) {
   ) {
     const id = url.searchParams.get("id");
     if (!media.get(id)) return json(res, 404, { error: "Media not found" });
+    if (req.method === "POST") {
+      foregroundSpeech = null;
+      for (const controller of videoPreparations.values()) controller.abort();
+    }
     return json(
       res,
       200,
@@ -538,6 +572,7 @@ async function fallback(req, res) {
     if (!query || query.length > 120)
       return json(res, 400, { error: "Enter up to 120 characters" });
     return json(res, 200, await searches.search(query, {
+      nativeAudience: url.searchParams.get("nativeAudience") === "true",
       page: Number(url.searchParams.get("page")),
       conversation: url.searchParams.get("conversation") === "true",
       minimumMinutes: Number(url.searchParams.get("minimumMinutes")),
@@ -551,21 +586,24 @@ async function fallback(req, res) {
     const id = url.searchParams.get("videoId"),
       key = id + ":" + quality;
     if (!validId(id)) return json(res, 400, { error: "Invalid video ID" });
+    if (req.method === "POST") {
+      foregroundSpeech = key; pausedSpeech.delete(key);
+      const backgrounds = [...jobs.entries()].reverse().filter(([other, job]) => other !== key && ["processing", "queued"].includes(job.status) && !videoPreparations.has(other));
+      for (const [other] of backgrounds.slice(2)) {
+        pausedSpeech.add(other);
+        for (let i = speechQueue.length - 1; i >= 0; i--) if (speechQueue[i].owner === other) {
+          speechQueue.splice(i, 1)[0].reject(Object.assign(Error("Background work paused for the current video"), {code:"BACKGROUND_PAUSED"}));
+        }
+      }
+      for (const [other, controller] of videoPreparations) if (other !== key) controller.abort();
+    }
+    if (foregroundSpeech === key) speechPositions.set(key, Math.max(0, Math.min(86400, Number(url.searchParams.get("at")) || 0)));
     if (
       req.method === "POST" &&
       !["processing", "queued"].includes(jobs.get(key)?.status) &&
       (state(id, quality).status !== "ready" ||
         url.searchParams.get("retry") === "true")
     ) {
-      if (
-        [...jobs.values()].filter((job) =>
-          ["processing", "queued"].includes(job.status),
-        ).length >= 3
-      )
-        return json(res, 429, {
-          error:
-            "Three videos are already being prepared. Wait for a speech job to finish.",
-        });
       jobs.set(key, { status: "processing", stage: "Preparing video audio" });
       void transcribe(id, quality);
     }

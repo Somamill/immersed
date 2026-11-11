@@ -86,7 +86,7 @@ test("discovery biases retrieval and filters short music/gameplay before checkin
     videoInfo: async id => { inspected.push(id); return { language: "ja" }; },
   });
   const result = await manager.search("哲学", { conversation: true, minimumMinutes: 30 });
-  assert.match(query, /哲学.*ポッドキャスト/);
+  assert.match(query, /哲学.*対談/);
   assert.deepEqual(result.items.map(x => x.id), ["bbbbbbbbbbb", "ddddddddddd"]);
   await tick();
   assert.deepEqual(inspected.sort(), ["bbbbbbbbbbb", "ddddddddddd"]);
@@ -116,4 +116,14 @@ test("discovery requests later result pages without reusing the first page cache
   assert.match(calls[1].at(-1),/^ytsearch36:/);
   await manager.search('文化',{page:2});
   assert.equal(calls.length,2);
+});
+test('native discovery retains domestic discussion and hides recognizable learner lessons',()=>{
+ const d=require('../desktop/discovery.js');
+ const native={title:'【対談】作家と考える社会',channel:'TBS',duration:3600};
+ const lesson={title:'Japanese Listening Practice for N3',channel:'日本語ポッドキャスト',duration:3600};
+ assert.equal(d.eligible(native,{nativeAudience:true}),true);
+ assert.equal(d.eligible(lesson,{nativeAudience:true}),false);
+ assert.equal(d.eligible(lesson,{nativeAudience:false}),true);
+ assert.match(d.queryFor('社会',{nativeAudience:true,conversation:true}),/-日本語学習/);
+ assert.doesNotMatch(d.queryFor('社会',{nativeAudience:true,conversation:true}),/^日本語/);
 });
