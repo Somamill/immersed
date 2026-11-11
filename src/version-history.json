@@ -1,5 +1,15 @@
 [
   {
+    "version": "0.15.0",
+    "date": "2026-11-11",
+    "title": "Floating glass navigation and vocabulary progress",
+    "notes": [
+      "Use a floating glass icon toolbar and transparent Mac title area, with accessible labels, tooltips, keyboard focus and active navigation states.",
+      "Keep the latest 100 dictionary lookups locally, reopen them and save words directly from history. Deduplicate rapid hover lookups and preserve original video context.",
+      "Track Saved, Learning and explicitly Known words with persistent progress and include lookup history in exported backups. Automatic iCloud sync still requires signing."
+    ]
+  },
+  {
     "version": "0.14.0",
     "date": "2026-11-11",
     "title": "More discovery, trackpad study and clearer speech progress",

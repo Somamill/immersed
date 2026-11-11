@@ -973,3 +973,51 @@ body.light .discoveryTopics button[aria-pressed="true"] { background: #b6e3c4; }
 .discoveryMore { display: block; margin: 30px auto; border: 1px solid #41654d; background: #b6e3c4; color: #11281b; border-radius: 16px; padding: 13px 26px; font-weight: 700; }
 .lookup { overscroll-behavior: contain; }
 .fullscreenStudy .speechProgress { width: min(680px, 80vw); background: #07100be8; border: 1px solid #46634f; border-radius: 12px; margin-bottom: 12px; pointer-events: auto; }
+
+/* Floating glass surfaces with semantic, keyboard-accessible icon actions. */
+.srOnly { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+:root { background: #09120e; }
+body { background: radial-gradient(ellipse at 12% 5%, #35564680, transparent 43%), radial-gradient(ellipse at 85% 75%, #2e454680, transparent 45%), #09120e; }
+header { position: sticky; z-index: 40; top: 12px; margin: 12px 22px 0 100px; height: 72px; min-height: 72px; padding: 10px 12px; gap: 12px; border: 1px solid #ffffff28; border-top-color: #ffffff60; border-radius: 26px; background: linear-gradient(145deg,#d5f4e020,#172d2480); backdrop-filter: blur(28px) saturate(160%); -webkit-backdrop-filter: blur(28px) saturate(160%); box-shadow: 0 10px 32px #0004, inset 0 1px 0 #ffffff18; }
+header .brand { min-width: 40px; }
+header .brand strong { display: none; }
+header .brand img { width: 40px; height: 40px; }
+header #search { max-width: none; min-width: 130px; gap: 5px; }
+header #query { background: #07130e50; border: 1px solid #ffffff1c; height: 46px; padding: 10px 14px; }
+header nav { display: flex; gap: 5px; }
+.iconButton { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 44px; height: 44px; padding: 10px !important; border: 1px solid #ffffff22; border-radius: 15px; background: linear-gradient(145deg,#ffffff12,#ffffff04); color: #e1f1e7; box-shadow: inset 0 1px 0 #ffffff12; }
+.iconButton:hover { background: #e2ffee24; border-color: #ffffff50; }
+.iconButton:focus-visible, .discoveryTopics button:focus-visible { outline: 2px solid #c4f6d6; outline-offset: 3px; }
+.iconButton:disabled { opacity: .4; }
+header nav button[aria-pressed="true"] { background: linear-gradient(145deg,#c0efd2,#84bdab); color: #10281d; box-shadow: 0 3px 16px #9ceac52b; }
+main { height: calc(100vh - 96px); padding-top: 18px; gap: 18px; }
+.videoCard, .studyCard { border-color: #d8ffe326; border-top-color: #e1ffe83f; border-radius: 28px; background: linear-gradient(135deg,#a4ceb914,#13281b80); box-shadow: 0 10px 30px #0003; }
+.studyHead, .videoFooter { background: #a2d3b80a; border-color: #e0ffe521; }
+.controls { width: fit-content; align-self: center; margin: 12px; padding: 8px 12px; border: 1px solid #ffffff28; border-radius: 26px; background: linear-gradient(145deg,#bedac624,#172c2280); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); box-shadow: 0 6px 22px #0004; }
+.controls .control { border-radius: 18px; }
+.lookup, dialog, .speedMenu { background: linear-gradient(145deg,#244032eb,#10251cf2); backdrop-filter: blur(30px) saturate(150%); -webkit-backdrop-filter: blur(30px) saturate(150%); border: 1px solid #d9ffe34a; box-shadow: 0 20px 70px #0008, inset 0 1px 0 #ffffff26; border-radius: 24px; }
+.lookupActions { background: #bdd7c60a; }
+.lookupActions .iconButton { width: 100%; }
+.wordProgress { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin: 8px 0 16px; }
+.wordProgress > div { background: #dbffe310; border: 1px solid #ffffff20; border-radius: 20px; padding: 18px; display: grid; gap: 5px; }
+.wordProgress strong { font-size: 30px; }
+.wordProgress span { color: #accbb9; font-size: 13px; }
+#panelBody > progress { width: 100%; height: 8px; accent-color: #b6e3c4; margin-bottom: 22px; }
+.recentWords { display: grid; gap: 8px; max-height: 320px; overflow-y: auto; padding: 2px; }
+.recentWord { display: flex; align-items: center; gap: 14px; padding: 13px; background: #d8fbe50b; border: 1px solid #d8fbe51c; border-radius: 18px; }
+.recentWord > div { flex: 1; min-width: 0; }
+.recentWord strong { font-size: 21px; margin-right: 12px; }
+.recentWord p { margin: 6px 0 0; font-size: 14px; color: #c2d9cc; }
+.wordActions { display: flex; gap: 8px; margin-top: 14px; }
+.wordState { display: inline-block; border: 1px solid #a3d3b546; border-radius: 20px; padding: 5px 11px; color: #b5dfc4; }
+body.light .iconButton { color: #183a2a; background: #f5fff566; border-color: #254a3430; }
+body.light header, body.light dialog, body.light .speedMenu { background: linear-gradient(145deg,#fffffff0,#dbe9dff0); color: #142c1f; }
+body.light .recentWord p, body.light .wordProgress span { color: #365945; }
+@media (max-width: 1200px) { header { flex-wrap: nowrap; height: 72px; } header .brand { min-width: 40px; } header nav { flex-wrap: nowrap; } }
+@media (max-width: 900px) { header { margin-left: 84px; gap: 7px; padding: 8px; } header nav { gap: 3px; } header .brand { display: none; } .iconButton { width: 40px; height: 40px; padding: 8px !important; } }
+@media (prefers-reduced-transparency: reduce) { header, dialog, .lookup, .speedMenu, .controls { background: #192f23; backdrop-filter: none; -webkit-backdrop-filter: none; } }
+dialog { background: linear-gradient(145deg,#244032f7,#10251cfc); }
+.recentWordDetail { flex: 1; min-width: 0; text-align: left; padding: 0; background: transparent; border: 0; border-radius: 6px; color: inherit; }
+.recentMeaning { display: block; margin-top: 6px; font-size: 14px; color: #c2d9cc; }
+.recentWordDetail:hover strong { text-decoration: underline; text-underline-offset: 4px; }
+body.light .recentMeaning { color: #365945; }

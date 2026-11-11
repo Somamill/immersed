@@ -104,3 +104,11 @@ The production engine remains Apple's GPU-accelerated MLX Whisper with word time
 Primary references reviewed: [Apple MLX Whisper](https://github.com/ml-explore/mlx-examples/blob/main/whisper/README.md), [WhisperKit / Argmax OSS](https://github.com/argmaxinc/argmax-oss-swift), and [Kotoba Whisper v2](https://huggingface.co/kotoba-tech/kotoba-whisper-v2.0). WhisperKit provides a native Core ML alternative; Kotoba publishes Japanese accuracy/speed results. Neither is shipped as a replacement without representative local timing and subtitle-alignment evaluation. Earlier tests on the reported source rejected Kotoba because it omitted speech.
 
 A fresh local experiment compared an 8-second first block with the existing 26-second core on the supplied public YouTube excerpt. After warming both paths, first cues took 2.92 vs 2.99 seconds, but total processing increased to 9.56 vs 5.26 seconds and wording changed. The shorter-block experiment was rejected. These are single-clip observations, not general model rankings. No speech-model weights have been retrained, and homophone errors still require source captions or checking the audio.
+
+## Glass toolbar and vocabulary progress
+
+The Mac study window uses a transparent title area and a floating glass toolbar. Navigation uses icons with hover tooltips, accessible names, keyboard focus and selected states: Discover, Watch, video fullscreen, Open file, Library, Words and Settings. Glass menus and lookup surfaces respect reduced transparency where supported.
+
+**Words** now includes the latest 100 successful dictionary lookups. Repeated hover within 30 seconds does not inflate the lookup count. Open a recent entry again or save it with the bookmark button. Saved words show Learning or Known, with explicit controls to change that state. The dashboard counts saved words and those explicitly marked known; looking up a word does not establish mastery. Removing a saved word leaves its recent lookup intact.
+
+History is local to this Mac and included in exported settings backups. Context is retained when reopening a word without a new video sentence. Automatic iCloud sync still requires signing configuration.

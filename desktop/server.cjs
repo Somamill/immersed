@@ -595,7 +595,8 @@ async function fallback(req, res) {
     url.pathname === "/study.js" ||
     url.pathname === "/study.css" ||
     url.pathname === "/compare.js" ||
-    url.pathname === "/discovery.js"
+    url.pathname === "/discovery.js" ||
+    url.pathname === "/word-history.js"
   ) {
     res.writeHead(200, {
       "Content-Type": url.pathname.endsWith(".js")

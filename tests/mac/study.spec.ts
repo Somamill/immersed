@@ -798,3 +798,26 @@ test("speech progress is measured and trackpad commands use subtitle boundaries 
   await page.locator("#exitVideoFullscreen").click();
   await expect(page.locator("#speechProgress")).toBeHidden();
 });
+
+test("glass icon navigation and recent words persist explicit learning progress", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("button",{name:"Words",exact:true}).locator("svg")).toBeVisible();
+  await page.evaluate(() => (window as any).eval(`openLookup({text:'政治',lemma:'政治',reading:'せいじ',grammar:[]},true);`));
+  await expect(page.locator("#definitions")).toContainText(/politic|government/i);
+  await page.locator("#closeLookup").click();
+  await page.getByRole("button",{name:"Words",exact:true}).click();
+  await expect(page.locator(".recentWord")).toContainText("政治");
+  await page.getByRole("button",{name:"Save 政治",exact:true}).click();
+  await expect(page.locator(".savedWord")).toHaveCount(1);
+  await page.getByRole("button",{name:"Mark 政治 known",exact:true}).click();
+  await expect(page.locator(".wordProgress")).toContainText("Known");
+  await expect(page.getByRole("progressbar",{name:"Saved words marked known"})).toHaveAttribute("value","1");
+  await page.reload();
+  await page.getByRole("button",{name:"Words",exact:true}).click();
+  await expect(page.locator(".recentWord")).toContainText("政治");
+  await expect(page.locator(".wordState")).toHaveText("Known");
+  await page.screenshot({path:"work/glass-words-preview.png"});
+  await page.getByRole("button",{name:"Remove 政治",exact:true}).click();
+  await expect(page.locator(".savedWord")).toHaveCount(0);
+  await expect(page.locator(".recentWord")).toHaveCount(1);
+});

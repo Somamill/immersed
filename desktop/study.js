@@ -6,6 +6,29 @@ const $ = (id) => document.getElementById(id),
     if (cls) e.className = cls;
     return e;
   };
+const iconPaths = {
+  discover: '<circle cx="12" cy="12" r="9"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5Z"/>',
+  play: '<path d="m9 5 11 7-11 7Z"/>', watch: '<rect x="3" y="4" width="18" height="14" rx="4"/><path d="m10 8 5 3-5 3M8 21h8"/>',
+  search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>',
+  folder: '<path d="M3 7V5a2 2 0 0 1 2-2h5l2 3h7a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M3 9h18"/>',
+  library: '<path d="M4 4v16M9 4v16m5-15 5 14M3 4h7M3 20h7"/>',
+  words: '<path d="M12 5C8 2 4 3 2 4v15c3-1 7-1 10 1 3-2 7-2 10-1V4c-3-1-7-2-10 1Zm0 0v15"/>',
+  settings: '<path d="m9 3-1 3-3 1-2 3 2 2-1 3 2 3 3-1 2 3h3l1-3 3-1 2-3-2-2 1-3-2-3-3 1-2-3Z"/><circle cx="11.5" cy="11.5" r="3"/>',
+  fullscreen: '<path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/>',
+  save: '<path d="M6 3h12v19l-6-4-6 4Z"/>', check: '<path d="m5 12 4 4L20 5"/>',
+  sound: '<path d="M4 9v6h4l5 4V5L8 9Zm13-1c3 2 3 6 0 8m3-11c5 4 5 10 0 14"/>',
+  trash: '<path d="M3 6h18M9 3h6M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',
+  close: '<path d="m6 6 12 12M6 18 18 6"/>', refresh: '<path d="M20 8a9 9 0 1 0 0 9M20 3v6h-6"/>',
+};
+function decorateButton(node, label, icon) {
+  node.setAttribute("aria-label", label); node.title = label;
+  node.classList.add("iconButton");
+  node.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + iconPaths[icon] + '</svg>';
+  node.append(el("span", label, "srOnly"));
+  return node;
+}
+function iconButton(label, icon, action) { return decorateButton(button("", action), label, icon); }
+
 function formatDuration(seconds) {
   const total = Math.max(0, Math.floor(seconds)),
     hours = Math.floor(total / 3600),
@@ -44,6 +67,8 @@ let extras = {
     ...read("immersed.mac.options", {}),
   },
   saved = read("immersed.savedWords", []);
+let recentWords = read("immersed.recentWords", []);
+if (!Array.isArray(recentWords)) recentWords = [];
 let localMedia = null,
   youtube = null,
   source = null,
@@ -137,6 +162,7 @@ function persist() {
     localStorage.setItem("immersed.preferences", JSON.stringify(prefs));
     localStorage.setItem("immersed.mac.options", JSON.stringify(extras));
     localStorage.setItem("immersed.savedWords", JSON.stringify(saved));
+    localStorage.setItem("immersed.recentWords", JSON.stringify(recentWords));
   } catch {
     status("Settings could not be saved. Export a backup from Settings.", true);
   }
@@ -835,7 +861,7 @@ async function openLookup(token, pinned = false, anchor = null) {
   }
   lookupPinned = pinned;
   selected = token;
-  $("saveWord").textContent = "Save word";
+  decorateButton($("saveWord"), "Save word", "save");
   lookupEntries = [];
   lookupMeaning = "";
   $("saveWord").disabled = true;
@@ -872,6 +898,7 @@ async function openLookup(token, pinned = false, anchor = null) {
     lookupEntries = data.data || [];
     $("saveWord").disabled = !lookupEntries.length;
     renderDefinitions();
+    recordLookup();
     const caption = cues[cueIndex];
     if (caption && token.start != null) {
       const context = {
@@ -994,38 +1021,35 @@ function renderDefinitions() {
   }
 }
 function updateKnown() {
-  if (selected)
-    $("known").textContent =
-      familiarity(selected) === "known" ? "Mark unknown" : "Mark known";
+  if (selected) decorateButton($("known"), familiarity(selected) === "known" ? "Mark unknown" : "Mark known", "check");
+}
+
+function lookupWordRecord() {
+  if (!selected || !lookupEntries[0]) return null;
+  const entry = lookupEntries[0], j = entry.japanese?.[0] || {},
+    hasContext = selected.start !== undefined && source;
+  return { key: (entry.slug || selected.lemma) + ":" + (j.reading || ""),
+    word: j.word || selected.lemma, reading: j.reading || selected.reading || "",
+    meaning: lookupMeaning || entry.senses?.[0]?.english_definitions?.join("; ") || "",
+    sentence: hasContext ? cues[cueIndex]?.text || "" : "", title: hasContext ? source.title : "",
+    url: hasContext ? source.type === "local" ? "local:" + source.id : "https://www.youtube.com/watch?v=" + source.id : "",
+    time: hasContext ? currentTime() : 0 };
+}
+function recordLookup() {
+  const word = lookupWordRecord();
+  if (!word) return;
+  recentWords = ImmersedWordHistory.record(recentWords, word);
+  persist();
 }
 function saveWord() {
-  if (!selected || !lookupEntries[0]) return;
-  const entry = lookupEntries[0],
-    j = entry.japanese?.[0] || {},
-    key = (entry.slug || selected.lemma) + ":" + (j.reading || "");
-  if (saved.some((w) => w.key === key)) {
-    status("This word is already saved.");
-    return;
-  }
-  const hasContext = selected.start !== undefined && source;
-  saved.unshift({
-    key,
-    word: j.word || selected.lemma,
-    reading: j.reading || selected.reading || "",
-    meaning: lookupMeaning || entry.senses?.[0]?.english_definitions?.join("; ") || "",
-    sentence: hasContext ? cues[cueIndex]?.text || "" : "",
-    title: hasContext ? source.title : "",
-    url:
-      hasContext && source.type === "local"
-        ? "local:" + source.id
-        : hasContext
-          ? "https://www.youtube.com/watch?v=" + source.id
-          : "",
-    time: hasContext ? currentTime() : 0,
-  });
+  const word = lookupWordRecord();
+  if (!word) return;
+  const old = saved.find(w => w.key === word.key);
+  if (!old) saved.unshift({ ...word, savedAt: Date.now() });
   persist();
-  $("saveWord").textContent = "Saved";
+  decorateButton($("saveWord"), "Saved", "check");
 }
+
 function showPanel(title) {
   $("panel").classList.remove("searchPanel");
   pause();
@@ -1171,39 +1195,53 @@ function showWords() {
     clearTimeout(dictionaryTimer);
     dictionaryTimer = setTimeout(() => void searchDictionary(), 180);
   };
-  body.append(form, results, el("h3", "Saved words"));
-  if (!saved.length)
-    body.append(
-      el("p", "Save a word from lookup to keep its original context.", "hint"),
-    );
+  const summary = ImmersedWordHistory.progress(saved, prefs.knowledge);
+  const dashboard = el("div", null, "wordProgress");
+  for (const [label, count] of [["Saved", summary.saved], ["Learning", summary.learning], ["Known", summary.known]]) {
+    const metric = el("div"); metric.append(el("strong", String(count)), el("span", label)); dashboard.append(metric);
+  }
+  const mastery = el("progress"); mastery.max = Math.max(1, summary.saved); mastery.value = summary.known;
+  mastery.setAttribute("aria-label", "Saved words marked known");
+  body.append(dashboard, mastery, form, results, el("h3", "Recent lookups"));
+  const recentList = el("div", null, "recentWords");
+  if (!recentWords.length) recentList.append(el("p", "Words you look up appear here automatically.", "hint"));
+  for (const word of recentWords) {
+    const row = el("article", null, "recentWord");
+    const details = button("", () => {
+      closePanel(); void openLookup({ text: word.word, lemma: word.word, reading: word.reading || "", grammar: [] }, true);
+    });
+    details.className = "recentWordDetail"; details.setAttribute("aria-label", "Look up " + word.word);
+    details.append(el("strong", word.word), el("small", word.reading, "hint"), el("span", word.meaning, "recentMeaning"));
+    const isSaved = saved.some(w => w.key === word.key);
+    const add = iconButton(isSaved ? "Saved" : "Save " + word.word, isSaved ? "check" : "save", () => {
+      if (!saved.some(w => w.key === word.key)) saved.unshift({ ...word, savedAt: Date.now() });
+      persist(); showWords();
+    });
+    add.disabled = isSaved;
+    row.append(details, el("small", (word.lookups || 1) + (word.lookups === 1 ? " lookup" : " lookups"), "hint"), add); recentList.append(row);
+  }
+  body.append(recentList, el("h3", "Saved words"));
+  if (!saved.length) body.append(el("p", "Save a recent lookup to start your word collection.", "hint"));
   for (const word of saved) {
-    const entry = el("article", null, "entry");
-    entry.append(
-      el("h3", word.word),
-      el("p", word.reading),
-      el("p", word.meaning),
-      el("p", word.sentence),
-      el("p", word.title, "hint"),
-      button("Play context", () => {
-        closePanel();
-        if (word.url.startsWith("local:"))
-          void openLocal(word.url.slice(6), word.time).catch((e) =>
-            status(e.message, true),
-          );
-        else {
-          loadVideo(idFrom(word.url), word.title);
-          pendingSeek = word.time;
-        }
-      }),
-      button("Remove", () => {
-        saved = saved.filter((w) => w.key !== word.key);
-        persist();
-        showWords();
-      }),
-    );
-    body.append(entry);
+    const entry = el("article", null, "entry savedWord");
+    const known = prefs.knowledge[word.word] === true;
+    entry.append(el("h3", word.word), el("p", word.reading), el("p", word.meaning), el("p", word.sentence), el("small", known ? "Known" : "Learning", "wordState"));
+    const actions = el("div", null, "wordActions");
+    actions.append(iconButton(known ? "Mark " + word.word + " learning" : "Mark " + word.word + " known", "check", () => {
+      prefs.knowledge[word.word] = !known; persist(); applyPreferences(); showWords();
+    }));
+    if (word.url) actions.append(iconButton("Play context for " + word.word, "play", () => {
+      closePanel();
+      if (word.url.startsWith("local:")) void openLocal(word.url.slice(6), word.time).catch(e => status(e.message, true));
+      else { void loadVideo(idFrom(word.url), word.title); pendingSeek = word.time; }
+    }));
+    actions.append(iconButton("Remove " + word.word, "trash", () => {
+      saved = saved.filter(w => w.key !== word.key); persist(); showWords();
+    }));
+    entry.append(actions); body.append(entry);
   }
 }
+
 let pendingSeek = 0;
 function setting(body, label, description, key, options, isExtra = false) {
   const row = el("label", null, "settingRow"),
@@ -1373,7 +1411,7 @@ async function showHistory() {
 }
 function exportBackup() {
   const text = JSON.stringify(
-    { schema: 3, preferences: prefs, savedWords: saved, macOptions: extras },
+    { schema: 3, preferences: prefs, savedWords: saved, recentWords, macOptions: extras },
     null,
     2,
   );
@@ -1857,6 +1895,7 @@ $("settingsInput").onchange = async () => {
           Number.isFinite(w.time),
       )
       .slice(0, 50000);
+    if (Array.isArray(data.recentWords)) recentWords = data.recentWords.filter(w => w && typeof w.key === "string" && typeof w.word === "string" && typeof w.url === "string" && Number.isFinite(w.time)).slice(0, 100);
     if (data.macOptions)
       for (const key of Object.keys(extras))
         if (typeof data.macOptions[key] === "boolean")
@@ -1954,3 +1993,13 @@ api("desktop/levels")
   })
   .catch(() => status("Level data unavailable.", true));
 applyPreferences();
+
+for (const [id, label, icon] of [
+  ["discoverButton", "Discover", "discover"], ["watchButton", "Watch", "watch"],
+  ["openFile", "Open file", "folder"], ["libraryButton", "Library", "library"],
+  ["wordsButton", "Words", "words"], ["settingsButton", "Settings", "settings"],
+  ["fullscreen", "Video fullscreen", "fullscreen"], ["closeLookup", "Close lookup", "close"],
+  ["closePanel", "Close panel", "close"], ["speak", "Pronounce", "sound"],
+  ["refreshDiscovery", "Refresh", "refresh"],
+]) decorateButton($(id), label, icon);
+decorateButton($("search").querySelector("button"), "Search", "search");
