@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.18.1 — 2026-11-12
+
+Improve vocabulary coverage, lookup and subtitle controls
+
+- Show estimated video vocabulary coverage beside the icon; assume katakana known at N2/N1 while respecting explicit choices; resolve honorific nouns; isolate the on-screen caption strip and align corrections to word boundaries; remove the orange uncertainty line; route embedded YouTube seek controls to subtitle blocks; add text-free startup animation and faster readiness checks. Coverage is an estimate and speech/OCR can still be imperfect. Netflix protected playback remains unverified.
+
 ## 0.18.0 — 2026-11-12
 
 Add Netflix original-subtitle study

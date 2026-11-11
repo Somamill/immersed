@@ -3,6 +3,10 @@
   function familiarity(vocabulary, lemma, reading, completedLevel, overrides) {
     if (Object.prototype.hasOwnProperty.call(overrides, lemma))
       return overrides[lemma] ? "known" : "unknown";
+    // At advanced levels, katakana vocabulary is assumed known. Explicit word
+    // choices above still win; don't persist thousands of inferred overrides.
+    if (completedLevel <= 2 && completedLevel >= 1 && /^[\p{Script=Katakana}ー・]+$/u.test((lemma || '').normalize('NFKC')))
+      return "known";
     const level = vocabulary[lemma] || vocabulary[reading];
     return !level ? "unlisted" : level >= completedLevel ? "known" : "unknown";
   }

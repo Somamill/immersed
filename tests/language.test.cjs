@@ -1,6 +1,17 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { analyze, lookup, search } = require('../server/language.cjs');
+test('unlisted honorific nouns resolve to dictionary bases without stripping ordinary words',async()=>{
+  for(const [surface,base,meaning] of [['お便り','便り',/letter|correspondence/],['お考え','考え',/thought|opinion/],['御手紙','手紙',/letter/]]){
+    const tokens=await analyze(surface+'について話す。');
+    assert.equal(tokens[0].text,surface);assert.equal(tokens[0].lemma,base);
+    assert.equal(tokens.map(t=>t.text).join(''),surface+'について話す。');
+    assert.ok((await lookup(surface))[0].senses.some(s=>s.english_definitions.some(d=>meaning.test(d))));
+    assert.ok((await lookup(tokens[0].lemma,tokens[0])).length);
+  }
+  assert.equal((await analyze('お腹'))[0].lemma,'お腹');
+  assert.deepEqual(await lookup('おzzzzzz'),[]);
+});
 
 test('inflected Japanese is grouped, normalized, and resolves through the real installed JMdict', async () => {
   const text = '昨日は日本語を勉強していました。ご飯を食べませんでした。';

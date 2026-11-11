@@ -49,6 +49,21 @@ async function matchScreenCaption(sentence, lines) {
     const hasQuote = /[「『“"]/u.test(text);
     const quoted = original < 0.68 && score >= 0.62 && hasQuote && await quotedEvidence(sentence,text,raw);
     if ((original >= 0.68 || (score >= 0.68 && !hasQuote) || quoted) && (!best || score > best.score)) best = { text, score, method: quoted ? 'quoted-dictionary-match' : 'phonetic-match' };
+    // Creator captions often span more than one speech cue. Keep a strongly
+    // aligned, whole-token prefix/suffix instead of showing the next cue early.
+    if (ratio > 1.12 && original >= .68 && !hasQuote) {
+      const tokens = await language.analyze(text, false), variants = new Set();
+      for (const token of tokens) {
+        if (token.end < text.length) variants.add(text.slice(0, token.end));
+        if (token.start > 0) variants.add(text.slice(token.start));
+      }
+      for (const variant of variants) {
+        const candidate = await pronunciation(variant), length = candidate.length / raw.length;
+        if (length < .85 || length > 1.15) continue;
+        const aligned = similarity(raw, candidate);
+        if (aligned >= .94 && (!best || aligned > best.score)) best = { text: variant, score: aligned, method: 'aligned-caption-span' };
+      }
+    }
   }
   if (cache.size >= 300) cache.delete(cache.keys().next().value);
   cache.set(key, best);

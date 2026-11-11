@@ -165,6 +165,7 @@ window.immersedVideoText = async (key, lines, attempt, busy = false, confidence 
 const positions = read("immersed.positions", {});
 let lastPositionSave = 0,
   coverageTokens = [];
+$("understanding").hidden = true;
 const analysisCache = new Map(),
   dictionaryCache = new Map(),
   pendingAnalysis = new Map();
@@ -348,6 +349,7 @@ function stopMedia() {
 
   coverageTokens = [];
   $("coverage").textContent = "";
+  $("understanding").hidden = true;
   $("download").hidden = true;
   restoreFullscreenStudy();
   if (document.fullscreenElement) void document.exitFullscreen();
@@ -392,7 +394,8 @@ window.openNetflix = openNetflix;
 window.immersedNetflixEvent = data => {
   if (!netflix || !data || typeof data !== "object") return;
   if (data.event === "reset") {
-    closeLookup(false); cues = []; cueIndex = -1; renderGeneration++;
+    closeLookup(false); cues = []; cueIndex = -1; renderGeneration++; requestGeneration++;
+    coverageTokens = []; updateCoverage();
     netflix.id = String(data.id || ""); netflix.fullTrack = false; netflix.liveCue = null; netflix.originalSent = false;
     source = null; $("subtitles").textContent = "Choose subtitles in Netflix to begin.";
     $("count").textContent = "Original subtitles"; $("coverage").textContent = "";
@@ -407,13 +410,14 @@ window.immersedNetflixEvent = data => {
     void renderCue(); playbackChanged();
   } else if (data.event === "cues" && Array.isArray(data.cues)) {
     closeLookup();
+    requestGeneration++;
     cues = data.cues.slice(0, 30000).filter(c => typeof c.text === "string" && c.text.length <= 4000 && Number.isFinite(c.start) && c.start >= 0 && Number.isFinite(c.end) && c.end > c.start)
       .map(c => ({ start: c.start, end: c.end, text: c.text })).sort((a,b) => a.start-b.start || a.end-b.end);
     netflix.fullTrack = cues.length > 0; netflix.liveCue = null; netflix.language = String(data.language || "");
     transcriptKind = "netflix-original"; cueIndex = -1; renderGeneration++;
     $("count").textContent = "Original subtitles · " + cues.length + " segments";
     $("netflixStatus").textContent = data.label || (netflix.language ? "Original subtitles · " + netflix.language : "Original Netflix subtitles");
-    void renderCue();
+    void renderCue(); void sampleCoverage();
   } else if (data.event === "line" && typeof data.text === "string" && Number.isFinite(data.time) && !netflix.fullTrack) {
     // If the player exposes only its current line, retain encountered blocks for
     // backward navigation. Never invent future words or transcribe its audio.
@@ -425,6 +429,7 @@ window.immersedNetflixEvent = data => {
       if (!cue) { cue = { start: at, end: at + 86400, text }; cues.push(cue); cues.sort((a,b)=>a.start-b.start); }
       netflix.liveCue = cue;
       $("netflixStatus").textContent = "Original Netflix subtitles · current lines";
+      if (cues.length === 1 || cues.length % 10 === 0) void sampleCoverage();
     }
     cueIndex = -1; void renderCue();
   } else if (data.event === "tracks" && Array.isArray(data.tracks)) {
@@ -739,7 +744,7 @@ window.openLocalMedia = (id, time = null) =>
 window.loadVideo = loadVideo;
 const subtitleRetries = new Map();
 function recoverSubtitles(generation) {
-  if (!source || generation !== requestGeneration) return;
+  if (!source || source.type === "netflix" || generation !== requestGeneration) return;
   const key = [
     source.type,
     source.id,
@@ -755,7 +760,7 @@ function recoverSubtitles(generation) {
   }, [2000, 5000][attempt]);
 }
 async function beginTranscript(retry = false) {
-  if (!source) return;
+  if (!source || !["youtube", "local"].includes(source.type)) return;
   const generation = requestGeneration;
   const params =
     source.type === "local"
@@ -1448,7 +1453,7 @@ function setting(body, label, description, key, options, isExtra = false) {
       persist();
       applyPreferences();
       if (!$("discovery").hidden && key === "minimumMinutes") void searchYouTube(discoveryQuery);
-      if (key === "speechQuality" && source) {
+      if (key === "speechQuality" && source && source.type !== "netflix") {
         requestGeneration++;
         clearTimeout(pollTimer);
         prefetchedWindow = -1;
@@ -1474,7 +1479,7 @@ function setting(body, label, description, key, options, isExtra = false) {
 function showSettings() {
   const body = showPanel("Settings");
   body.append(button("Version history", showHistory));
-  if (source && cues.length)
+  if (source && source.type !== "netflix" && cues.length)
     body.append(button("Compare speech models", compareTranscript));
   setting(body, "Dark mode", "", "dark");
   setting(
@@ -1544,7 +1549,7 @@ function showSettings() {
     true,
   );
   setting(body, "Read captions from video", "Match Japanese text visible in the video. Uses small frame downloads.", "screenCaptionCheck", null, true);
-  setting(
+  if (source?.type !== "netflix") setting(
     body,
     "Speech model",
     "Turbo is the default. The alternate large-v3 model can produce different spelling or more kana and is not always more accurate. Its first use downloads model weights.",
@@ -1810,7 +1815,7 @@ async function sampleCoverage() {
   updateCoverage();
 }
 function updateCoverage() {
-  if (!coverageTokens.length) return;
+  if (!coverageTokens.length) { $("understanding").hidden = true; return; }
   const coverage = ImmersedLearning.estimateVocabulary(
     levels,
     coverageTokens,
@@ -1824,9 +1829,15 @@ function updateCoverage() {
       coverage.unrated +
       " unlisted"
     : "";
+  $("understanding").hidden = !coverage;
+  if (coverage) {
+    $("understanding").textContent = coverage.lower + "%";
+    $("understanding").title = "Estimated known vocabulary in this video: " + coverage.lower + "% · " + coverage.unrated + " unlisted words in the sample. Based on your level and word choices, not a fluency test.";
+    $("understanding").setAttribute("aria-label", "Estimated vocabulary coverage: " + coverage.lower + "%");
+  }
 }
 async function compareTranscript() {
-  if (!source || !cues.length) return;
+  if (!source || source.type === "netflix" || !cues.length) return;
   const generation = requestGeneration,
     baseline = [...cues],
     quality = extras.speechQuality === "accurate" ? "balanced" : "accurate",

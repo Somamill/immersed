@@ -1,6 +1,12 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { matchScreenCaption } = require('../server/screen-captions.cjs');
+test('caption-band homophones align to a cue without adding the following spoken block',async()=>{
+  const result=await matchScreenCaption('神によってつながるという公共権が',['紙によって繋がるという公共圏がすごい好き']);
+  assert.equal(result?.text,'紙によって繋がるという公共圏が');
+  assert.equal(result.method,'aligned-caption-span');
+  assert.equal(await matchScreenCaption('神によってつながるという公共権が',['写真集と映画と本についての番組です']),null);
+});
 test('visible caption can match a homophone mistake while excluding unrelated video labels', async () => {
   const result = await matchScreenCaption('市場の境界という概念があるんですよ', ['受験競争のメディア史', '「紙の教会」という概念がある']);
   assert.equal(result?.text, '「紙の教会」という概念がある');

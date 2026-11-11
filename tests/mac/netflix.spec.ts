@@ -49,6 +49,11 @@ test('Netflix original subtitles support hover, block navigation, speed and full
   expect(commands).toContainEqual({action:'netflixCommand',command:'rate',value:1.5});
   expect(commands).toContainEqual({action:'netflixFullscreen'});
   expect(commands).toContainEqual({action:'netflixCommand',command:'original',value:false});
+  await page.getByRole('button',{name:'Settings',exact:true}).click();
+  await expect(page.getByLabel('Speech model',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('button',{name:'Compare speech models',exact:true})).toHaveCount(0);
+  await page.evaluate(()=>(window as any).eval('beginTranscript()'));
+  await page.getByRole('button',{name:'Close panel',exact:true}).click();
   expect(speech).toEqual([]);
   await page.screenshot({path:'work/netflix-study-preview.png'});
   await page.getByRole('button',{name:'Back to immersed',exact:true}).click();

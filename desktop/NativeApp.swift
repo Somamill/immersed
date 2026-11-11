@@ -3,14 +3,16 @@ import WebKit
 import MediaPlayer
 import UniformTypeIdentifiers
 import Vision
+import QuartzCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
     var window: NSWindow!
     var web: WKWebView!
     var service: Process?
-    var loading: NSTextField!
+    var loading: NSView!
     var attempts = 0
+    var startupErrorShown = false
     var browserWindows: [NSWindow] = []
     var webViews: [WKWebView] = []
     var adRules: WKContentRuleList?
@@ -63,17 +65,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         window.center()
         window.setFrameAutosaveName("immersed.main")
         window.makeKeyAndOrderFront(nil)
-        loading = NSTextField(labelWithString: "Preparing your local study library…")
-        loading.frame = NSRect(x: 30, y: 30, width: 1000, height: 60)
-        web.addSubview(loading)
+        showStartupAnimation()
         NSApp.activate(ignoringOtherApps: true)
+        connect()
         let rules = #"[{"trigger":{"url-filter":"^https?://([^/]+\\.)?(doubleclick\\.net|googlesyndication\\.com|googleadservices\\.com)/"},"action":{"type":"block"}},{"trigger":{"url-filter":"^https?://[^/]*youtube\\.com/(pagead/|api/stats/ads)"},"action":{"type":"block"}}]"#
         WKContentRuleListStore.default().compileContentRuleList(forIdentifier: "immersed.ads.v1", encodedContentRuleList: rules) { [weak self] list, error in
             guard let self else { return }
             self.adRules = list
             self.updateAdRules()
-            self.connect()
         }
+    }
+    func showStartupAnimation() {
+        loading = NSView(frame: web.bounds)
+        loading.autoresizingMask = [.width, .height]; loading.wantsLayer = true
+        loading.layer?.backgroundColor = NSColor(calibratedRed: 0.025, green: 0.05, blue: 0.035, alpha: 1).cgColor
+        web.addSubview(loading)
+        let ringHost = NSView(); ringHost.translatesAutoresizingMaskIntoConstraints = false; ringHost.wantsLayer = true
+        let logo = NSImageView(); logo.translatesAutoresizingMaskIntoConstraints = false
+        logo.image = NSImage(named: NSImage.applicationIconName); logo.imageScaling = .scaleProportionallyUpOrDown
+        loading.addSubview(ringHost); loading.addSubview(logo)
+        NSLayoutConstraint.activate([
+            ringHost.centerXAnchor.constraint(equalTo: loading.centerXAnchor), ringHost.centerYAnchor.constraint(equalTo: loading.centerYAnchor),
+            ringHost.widthAnchor.constraint(equalToConstant: 112), ringHost.heightAnchor.constraint(equalToConstant: 112),
+            logo.centerXAnchor.constraint(equalTo: loading.centerXAnchor), logo.centerYAnchor.constraint(equalTo: loading.centerYAnchor),
+            logo.widthAnchor.constraint(equalToConstant: 64), logo.heightAnchor.constraint(equalToConstant: 64)
+        ])
+        let ring = CAShapeLayer(); ring.frame = CGRect(x: 0, y: 0, width: 112, height: 112)
+        ring.path = CGPath(ellipseIn: CGRect(x: 8, y: 8, width: 96, height: 96), transform: nil)
+        ring.fillColor = NSColor.clear.cgColor; ring.strokeColor = NSColor(calibratedRed: 0.70, green: 0.87, blue: 0.77, alpha: 0.75).cgColor
+        ring.lineWidth = 2; ring.lineCap = .round; ring.strokeEnd = 0.72
+        ringHost.layer?.addSublayer(ring)
+        if !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            let spin = CABasicAnimation(keyPath: "transform.rotation.z"); spin.toValue = Double.pi * 2; spin.duration = 1.6; spin.repeatCount = .infinity
+            ring.add(spin, forKey: "startup.rotation")
+            logo.wantsLayer = true
+            let pulse = CABasicAnimation(keyPath: "opacity"); pulse.fromValue = 0.65; pulse.toValue = 1; pulse.duration = 0.9; pulse.autoreverses = true; pulse.repeatCount = .infinity
+            logo.layer?.add(pulse, forKey: "startup.pulse")
+        }
+    }
+    func startupFailed(_ detail: String) {
+        guard !startupErrorShown else { return }
+        startupErrorShown = true
+        loading.layer?.removeAllAnimations()
+        alert("immersed could not start", detail)
     }
     func buildMenu() {
         let menu = NSMenu()
@@ -112,6 +146,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         config.mediaTypesRequiringUserActionForPlayback = []
         config.preferences.isElementFullscreenEnabled = true
         config.userContentController.add(self, name: "immersed")
+        config.userContentController.add(self, name: "immersedPlayer")
+        if let file = Bundle.main.url(forResource: "player-bridge", withExtension: "js"), let code = try? String(contentsOf: file, encoding: .utf8) {
+            config.userContentController.addUserScript(WKUserScript(source: code, injectionTime: .atDocumentStart, forMainFrameOnly: false))
+        }
         if blockAds, let rules = adRules { config.userContentController.add(rules) }
         let view = WKWebView(frame: .zero, configuration: config)
         view.uiDelegate = self; view.navigationDelegate = self
@@ -171,6 +209,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         let alert = NSAlert(); alert.messageText = title; alert.informativeText = detail; alert.beginSheetModal(for: window)
     }
     func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+        if message.name == "immersedPlayer" {
+            guard message.webView === web, ["www.youtube.com", "www.youtube-nocookie.com"].contains(message.frameInfo.request.url?.host ?? ""),
+                  message.frameInfo.request.url?.path.hasPrefix("/embed/") == true,
+                  let object = message.body as? [String: Any], let direction = object["direction"] as? Int, [-1,1].contains(direction) else { return }
+            web.evaluateJavaScript("window.immersedPlayback?.('skip',\(direction))", completionHandler: nil)
+            return
+        }
         if message.name == "immersedNetflix" {
             guard message.frameInfo.isMainFrame, message.webView === netflixView,
                   ["www.netflix.com", "netflix.com"].contains(message.frameInfo.request.url?.host ?? ""),
@@ -254,13 +299,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
                 for encoded in frames.prefix(3) {
                     guard let imageData = Data(base64Encoded: encoded), imageData.count < 2_000_000,
                           let image = NSImage(data: imageData), let cg = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { continue }
+                    // Isolate the caption band before recognition. Dense book
+                    // covers and signage can otherwise suppress the bottom line.
+                    let strip = cg.cropping(to: CGRect(x: 0, y: CGFloat(cg.height) * 0.80, width: CGFloat(cg.width), height: CGFloat(cg.height) * 0.20)) ?? cg
                     let request = VNRecognizeTextRequest()
                     request.recognitionLevel = .accurate
                     request.recognitionLanguages = ["ja-JP", "en-US"]
                     request.usesLanguageCorrection = true
                     request.minimumTextHeight = 0.025
-                    request.regionOfInterest = CGRect(x: 0, y: 0, width: 1, height: 0.4)
-                    do { try VNImageRequestHandler(cgImage: cg).perform([request]) } catch { }
+                    do { try VNImageRequestHandler(cgImage: strip).perform([request]) } catch { }
                     var confidence = 1.0
                     let lines = (request.results ?? []).sorted { $0.boundingBox.midY > $1.boundingBox.midY }.compactMap { observation -> String? in
                         guard let candidate = observation.topCandidates(1).first, candidate.confidence >= 0.45,
@@ -351,6 +398,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if webView === web, webView.url?.host == "127.0.0.1" {
             ready = true
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.22
+                self.loading.animator().alphaValue = 0
+            }, completionHandler: { [weak self] in self?.loading.removeFromSuperview() })
             let files = pendingFiles; pendingFiles.removeAll()
             for file in files { importMedia(file) }
         }
@@ -363,22 +414,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
             Task { @MainActor in
                 guard let self else { return }
                 if error == nil, (response as? HTTPURLResponse)?.statusCode == 200 {
-                    self.loading.removeFromSuperview(); self.web.load(URLRequest(url: url)); return
+                    self.web.load(URLRequest(url: url)); return
                 }
                 if let service = self.service, !service.isRunning {
-                    self.loading.stringValue = "Local setup stopped. See Library/Application Support/Immersed Mac/startup.log for details."
+                    self.startupFailed("Local setup stopped. See Library/Application Support/Immersed Mac/startup.log for details.")
                     return
                 }
                 if self.service == nil { self.startService() }
                 self.attempts += 1
-                if self.attempts < 900 { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self.connect() } }
-                else { self.loading.stringValue = "Startup is taking longer than expected. Check the startup log in Application Support/Immersed Mac." }
+                if self.attempts < 900 { DispatchQueue.main.asyncAfter(deadline: .now() + (self.attempts < 20 ? 0.15 : 0.5)) { self.connect() } }
+                else { self.startupFailed("Startup is taking longer than expected. Check the startup log in Application Support/Immersed Mac.") }
             }
         }.resume()
     }
     func startService() {
         guard let launcher = ["/opt/homebrew/bin/immersed-mac", "/usr/local/bin/immersed-mac"].first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
-            loading.stringValue = "Install with Homebrew: brew install --HEAD Somamill/immersed/immersed-mac"; attempts = 900; return
+            startupFailed("Install with Homebrew: brew install --HEAD Somamill/immersed/immersed-mac"); attempts = 900; return
         }
         let process = Process(); process.executableURL = URL(fileURLWithPath: launcher); process.arguments = ["--service"]
         do {
@@ -388,7 +439,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
             let handle = try FileHandle(forWritingTo: log)
             process.standardOutput = handle; process.standardError = handle
             try process.run(); service = process
-        } catch { loading.stringValue = error.localizedDescription; attempts = 900 }
+        } catch { startupFailed(error.localizedDescription); attempts = 900 }
     }
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters, initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping ([URL]?) -> Void) {
         let panel = NSOpenPanel(); panel.allowsMultipleSelection = parameters.allowsMultipleSelection

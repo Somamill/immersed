@@ -537,7 +537,7 @@ dialog::backdrop {
   background: #edf3e8;
 }
 .uncertain {
-  border-bottom: 1px dashed #d9ad67;
+  border-bottom: none;
 }
 .storageError {
   color: #e8b8a8;
@@ -1051,6 +1051,10 @@ body.light .recentMeaning { color: #365945; }
 .fullscreenStudy .line { font-size: clamp(24px, 2.4vw, 40px); line-height: 1.75; text-shadow: 0 2px 5px #000; }
 body.light .word rt { color: #476b54; }
 .wordUnit { display: inline-block; white-space: nowrap; vertical-align: baseline; line-height: inherit; max-width: 100%; }
+.understanding { font-variant-numeric: tabular-nums; color: #b6dfc6; font-size: 15px; font-weight: 600; letter-spacing: -.02em; padding: 0 5px; white-space: nowrap; }
+.understanding[hidden] { display: none; }
+body.light .understanding { color: #315e44; }
+@media (max-width: 900px) { header .brand { display: flex; gap: 4px; } }
 
 /* Netflix owns playback in the adjacent native pane; this web view owns study. */
 body.netflixMode { min-width: 0; }
@@ -1059,6 +1063,8 @@ body.netflixMode { min-width: 0; }
 .netflixMode #watchButton, .netflixMode #netflixButton, .netflixMode #openFile,
 .netflixMode #libraryButton, .netflixMode .videoCard { display: none; }
 .netflixMode header nav { width: 100%; justify-content: flex-end; }
+.netflixMode header .brand { display: flex; min-width: 0; gap: 4px; }
+.netflixMode header .brand strong { display: none; }
 .netflixMode #watchPage { display: block; margin: 12px; padding: 0; }
 .netflixMode .studyCard { width: 100%; min-width: 0; min-height: calc(100dvh - 110px); }
 .netflixMode .subtitles { padding: 22px; min-height: 200px; }

@@ -35,3 +35,14 @@ test("near-N1 study highlights N1 vocabulary while leaving familiar words and gr
     true,
   );
 });
+test('N2 and N1 assume katakana vocabulary known while respecting explicit choices',()=>{
+  const {familiarity,shouldHighlightToken,estimateVocabulary}=require('../src/learning-core');
+  for(const level of [2,1])for(const word of ['ポッドキャスト','コミュニケーション','エーアイ','ﾎﾟｯﾄﾞｷｬｽﾄ']){
+    assert.equal(familiarity({},word,'',level,{}),'known');
+    assert.equal(shouldHighlightToken({[word]:1},{word:true,pos:'noun',lemma:word,reading:''},level,{}),false);
+    assert.equal(familiarity({},word,'',level,{[word]:false}),'unknown');
+  }
+  assert.equal(familiarity({'ポッドキャスト':1},'ポッドキャスト','',3,{}),'unknown');
+  assert.equal(familiarity({},'片仮名','かたかな',2,{}),'unlisted');
+  assert.equal(estimateVocabulary({},[{word:true,pos:'noun',lemma:'ポッドキャスト',reading:''}],2,{}).lower,100);
+});

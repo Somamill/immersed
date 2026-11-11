@@ -56,6 +56,11 @@ function remember(cache,key,run,max=600){
   const value=Promise.resolve().then(run).catch(error=>{cache.delete(key);throw error;});cache.set(key,value);if(cache.size>max)cache.delete(cache.keys().next().value);return value;
 }
 function lookup(word,options={}){return remember(lookupCache,JSON.stringify([word.normalize('NFKC').trim(),options.pos,options.proper,options.reading]),()=>lookupUncached(word,options));}
+function honorificBase(word,index){
+  if(index.has(word)||!/^([おご御])(.{2,})$/u.test(word))return null;
+  const base=word.slice(1), entries=(index.get(base)||[]).filter(e=>e.sense.some(s=>s.partOfSpeech.some(p=>['n','vs','adj-na'].includes(p))));
+  return entries.length?{base,entries}:null;
+}
 function verbBase(lemma,index){
   if(index.has(lemma))return null;
   const rows={え:'う',け:'く',げ:'ぐ',せ:'す',て:'つ',ね:'ぬ',べ:'ぶ',め:'む',れ:'る'};
@@ -72,6 +77,7 @@ async function lookupUncached(word, options = {}) {
   if (grammatical) return [grammatical];
   const { index, tags, stems, tokenizer } = await initialize();
   let matches=(index.get(word)||index.get(hira(word))||[]).map(entry=>({entry,lemma:word,by:'exact'}));
+  if(!matches.length&&!options.proper){const base=honorificBase(word,index);if(base)matches=base.entries.map(entry=>({entry,lemma:base.base,by:'honorific'}));}
   if(!matches.length)matches=(stems.get(word)||stems.get(hira(word))||[]).map(x=>({...x,by:'inflection'}));
   if(!matches.length){
     const tokens=await analyze(word);
@@ -204,12 +210,15 @@ async function analyzeUncached(text, grouped = true) {
     } else if (head.pos === 'noun' || head.pos === 'prefix') {
       let best = end;
       for (let j = end; j < Math.min(tokens.length, i + 5) && tokens[j].pos === 'noun' && tokens[j].start === tokens[j - 1].end; j++) {
-        if (index.has(text.slice(head.start, tokens[j].end)) || (head.proper && tokens.slice(i, j + 1).every(t => t.proper) && names.has(text.slice(head.start, tokens[j].end)))) best = j + 1;
+        const surface=text.slice(head.start,tokens[j].end);
+        if (index.has(surface) || (head.pos==='prefix'&&honorificBase(surface,index)) || (head.proper && tokens.slice(i, j + 1).every(t => t.proper) && names.has(surface))) best = j + 1;
       }
       end = best;
     }
     const compoundNoun = !expression && !pattern && ['noun', 'prefix'].includes(head.pos) && end > i + 1;
-    const nounLemma = expression ? expression.lemma : compoundNoun ? text.slice(head.start, tokens[end - 1].end) : head.lemma;
+    const nominalSurface=text.slice(head.start,tokens[end-1].end), honorific=['noun','prefix'].includes(head.pos)?honorificBase(nominalSurface,index):null;
+    if(honorific)grammar.push('honorific prefix');
+    const nounLemma = expression ? expression.lemma : honorific ? honorific.base : compoundNoun ? nominalSurface : head.lemma;
     const suruVerb = !expression && !pattern && (head.pos === 'noun' || compoundNoun) && tokens[end - 1].detail === 'サ変接続' && tokens[end]?.lemma === 'する';
     if (suruVerb) { end++; grammar.push('suru verb'); }
     if (!pattern && (suruVerb || ['verb', 'adjective'].includes(expression?.pos || head.pos))) {
