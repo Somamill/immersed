@@ -2,6 +2,13 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.12.4 — 2026-11-11
+
+Use stable GitHub Pages player fallback
+
+- Host the HTTPS YouTube fallback player on GitHub Pages and load it from a fixed address instead of the expiring Expo preview tunnel. Keep the player bridge and Japanese caption relay unchanged.
+- The Expo Go app itself still needs a running development server, and YouTube may still block playback in any embedded player. Signed iPhone distribution remains blocked on Apple signing credentials and permanent language-service hosting.
+
 ## 0.12.3 — 2026-11-11
 
 Keep the iPhone preview retrying

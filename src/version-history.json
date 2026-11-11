@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.12.4",
+    "date": "2026-11-11",
+    "title": "Use stable GitHub Pages player fallback",
+    "notes": [
+      "Host the HTTPS YouTube fallback player on GitHub Pages and load it from a fixed address instead of the expiring Expo preview tunnel. Keep the player bridge and Japanese caption relay unchanged.",
+      "The Expo Go app itself still needs a running development server, and YouTube may still block playback in any embedded player. Signed iPhone distribution remains blocked on Apple signing credentials and permanent language-service hosting."
+    ]
+  },
+  {
     "version": "0.12.3",
     "date": "2026-11-11",
     "title": "Keep the iPhone preview retrying",

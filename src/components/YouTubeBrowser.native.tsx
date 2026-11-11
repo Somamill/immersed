@@ -1,6 +1,5 @@
 import React, { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { hostedPlayerSource, watchPlayerSource } from '../player';
-import Constants from 'expo-constants';
 import { WebView } from 'react-native-webview';
 import { japaneseCaptionUrl, parseCaptionTrack, captionSourceRank, type CaptionSource } from '../captions';
 import history from '../version-history.json';
@@ -14,11 +13,10 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
   const [hostedFallback, setHostedFallback] = useState(false);
   const [fillPortrait, setFillPortrait] = useState(true);
   const web = useRef<WebView<object>>(null);
-  const previewHost = Constants.expoConfig?.hostUri;
   const hostedSource = useMemo(() => {
-    if (!playerId || !previewHost) return null;
-    try { return hostedPlayerSource(playerId, previewHost); } catch { return null; }
-  }, [playerId, previewHost]);
+    if (!playerId) return null;
+    try { return hostedPlayerSource(playerId); } catch { return null; }
+  }, [playerId]);
   const source = useMemo(() => playerId ? hostedFallback && hostedSource ? hostedSource : watchPlayerSource(playerId) : { uri }, [playerId, uri, hostedFallback, hostedSource]);
   const optionsScript = `window.__immersedOptions = ${JSON.stringify({ dark, hideShorts, minimumMinutes, fillPortrait })}; window.__immersedApplyOptions?.(); true;`;
   useEffect(() => { web.current?.injectJavaScript(optionsScript); }, [optionsScript]);

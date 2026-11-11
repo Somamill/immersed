@@ -210,9 +210,9 @@ test('selected videos use the normal Japanese YouTube watch page', () => {
 });
 
 test('HTTPS fallback embeds the selected video with an origin referrer', async ({ page, baseURL }) => {
-  const hosted = hostedPlayerSource('M7lc1UVf-VE', 'c-preview.on.expo.app');
-  expect(hosted.uri).toBe('https://c-preview.on.expo.app/youtube-player.html?v=M7lc1UVf-VE');
-  expect(() => hostedPlayerSource('M7lc1UVf-VE', 'evil.example')).toThrow();
+  const hosted = hostedPlayerSource('M7lc1UVf-VE');
+  expect(hosted.uri).toBe('https://somamill.github.io/immersed/player/?v=M7lc1UVf-VE');
+  expect(() => hostedPlayerSource('bad')).toThrow();
   let embedReferer = '';
   await page.route('https://www.youtube.com/embed/**', route => {
     embedReferer = route.request().headers()['referer'] || '';
