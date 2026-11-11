@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.17.1",
+    "date": "2026-11-11",
+    "title": "Refine Japanese subtitle typography",
+    "notes": [
+      "Keep quotes and punctuation with their words, remove artificial token spacing, and preserve hover lookup in normal and fullscreen playback."
+    ]
+  },
+  {
     "version": "0.17.0",
     "date": "2026-11-11",
     "title": "Natural Japanese typography and general word-boundary repair",

@@ -1050,3 +1050,4 @@ body.light .recentMeaning { color: #365945; }
 .word:hover, .word:focus-visible { box-shadow: 0 0 0 3px #b4dec414; }
 .fullscreenStudy .line { font-size: clamp(24px, 2.4vw, 40px); line-height: 1.75; text-shadow: 0 2px 5px #000; }
 body.light .word rt { color: #476b54; }
+.wordUnit { display: inline-block; white-space: nowrap; vertical-align: baseline; line-height: inherit; max-width: 100%; }

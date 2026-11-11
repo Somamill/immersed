@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.17.1 — 2026-11-11
+
+Refine Japanese subtitle typography
+
+- Keep quotes and punctuation with their words, remove artificial token spacing, and preserve hover lookup in normal and fullscreen playback.
+
 ## 0.17.0 — 2026-11-11
 
 Natural Japanese typography and general word-boundary repair

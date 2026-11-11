@@ -779,6 +779,24 @@ function refineNearCue(index) {
   }).catch(()=>{}).finally(()=>readingPending.delete(windowKey));
 }
 
+function bindJapanesePunctuation(line) {
+  const unitFor = node => {
+    if (node.matches(".wordUnit")) return node;
+    const unit=el("span",null,"wordUnit");node.replaceWith(unit);unit.append(node);return unit;
+  };
+  for (const node of [...line.childNodes]) {
+    if (node.nodeType !== Node.TEXT_NODE) continue;
+    const close=node.textContent.match(/^[、。，．？！!?：；:;）］｝〕〉》」』】〙〗〟’”]+/u);
+    const previous=node.previousSibling;
+    if (close && previous?.nodeType===Node.ELEMENT_NODE && previous.matches(".word, .wordUnit")) {
+      unitFor(previous).append(document.createTextNode(close[0]));node.textContent=node.textContent.slice(close[0].length);
+    }
+    const open=node.textContent.match(/[（［｛〔〈《「『【〘〖〝‘“]+$/u), next=node.nextSibling;
+    if(open && next?.nodeType===Node.ELEMENT_NODE && next.matches(".word, .wordUnit")) {
+      node.textContent=node.textContent.slice(0,-open[0].length);unitFor(next).prepend(document.createTextNode(open[0]));
+    }
+  }
+}
 async function renderCue() {
   if (selected && lookupAnchor && lookupCue && (currentTime() < lookupCue.start - .5 || currentTime() > lookupCue.end + .5)) closeLookup();
   if (selected && lookupAnchor && extras.pauseOnHover) return;
@@ -865,6 +883,7 @@ async function renderCue() {
   }
   if (offset < text.length)
     line.append(document.createTextNode(text.slice(offset)));
+  bindJapanesePunctuation(line);
   $("subtitles").replaceChildren(line);
   const next = cues[i + 1]?.text;
   if (next && !pendingAnalysis.size) void analyze(next).catch(() => {});

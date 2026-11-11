@@ -936,3 +936,14 @@ test('unmatched OCR attempts and a busy scanner do not permanently exhaust capti
  await page.evaluate(()=>(window as any).immersedVideoText((window as any).__key,['日本語の文章を読んでいます'],1));
  expect(await page.evaluate(()=>(window as any).eval('screenFrames.get(window.__key).confirmations'))).toBe(0);
 });
+
+test('Japanese quotes stay attached to words without changing subtitle text',async({page})=>{
+ await page.goto('/');
+ await page.evaluate(()=>(window as any).eval(`youtube={getCurrentTime:()=>.2,getPlayerState:()=>2,pauseVideo:()=>{}};cues=[{start:0,end:4,text:'それこそ『ルポ 国威発揚』という本で'}];cueIndex=-1;renderCue();`));
+ await expect(page.getByRole('button',{name:'Look up 国威発揚',exact:true})).toBeVisible();
+ const unit=page.locator('.wordUnit').filter({has:page.getByRole('button',{name:'Look up 国威発揚',exact:true})});
+ await expect(unit).toContainText('』');
+ const text=await page.locator('.line').evaluate(node=>{const copy=node.cloneNode(true) as HTMLElement;copy.querySelectorAll('rt').forEach(x=>x.remove());return copy.textContent;});
+ expect(text).toBe('それこそ『ルポ 国威発揚』という本で');
+ await page.screenshot({path:'work/japanese-quotes-preview.png'});
+});
