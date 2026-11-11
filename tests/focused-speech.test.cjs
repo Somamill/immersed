@@ -20,3 +20,14 @@ test('restart continues from checkpoint without retranscribing completed speech 
  assert.equal(measured([[0,10],[28,40]],60),22);
  assert.equal(nextSection(20,0,[[0,20]]),null);
 });
+test('saved subtitle output is immediately available while source audio is preparing',()=>{
+ const fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+ const {withCheckpoint}=require('../desktop/focused-speech.cjs');
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'immersed-checkpoint-')),file=path.join(dir,'partial.json');
+ try{
+  fs.writeFileSync(file,JSON.stringify({duration:3600,processedSeconds:12,cues:[{start:235,end:240,text:'保存済み'}]}));
+  const result=withCheckpoint(file,{status:'processing',stage:'Preparing video audio'});
+  assert.equal(result.status,'processing');assert.equal(result.cues[0].start,235);
+  assert.equal(result.processedSeconds,12);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});

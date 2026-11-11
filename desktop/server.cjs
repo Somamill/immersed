@@ -247,7 +247,7 @@ function state(id, quality = "balanced") {
   const key = id + ":" + quality;
   const active = jobs.get(key);
   if (active && ["processing", "queued", "unavailable"].includes(active.status))
-    return active;
+    return focusedSpeech.withCheckpoint(path.join(cache, id + "-" + quality + ".partial.json"), active);
   try {
     return {
       status: "ready",
@@ -257,7 +257,7 @@ function state(id, quality = "balanced") {
       ),
     };
   } catch {
-    return jobs.get(key) || { status: "idle" };
+    return focusedSpeech.withCheckpoint(path.join(cache, id + "-" + quality + ".partial.json"), jobs.get(key) || { status: "idle" });
   }
 }
 async function transcribe(id, quality = "balanced") {

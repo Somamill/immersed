@@ -1,5 +1,13 @@
 [
   {
+    "version": "0.16.2",
+    "date": "2026-11-11",
+    "title": "Show saved subtitle sections immediately on reopening",
+    "notes": [
+      "Restore prepared subtitle cues while source audio is still downloading so returning to a long video does not hide already-completed output."
+    ]
+  },
+  {
     "version": "0.16.1",
     "date": "2026-11-11",
     "title": "Stabilize native fullscreen idle controls and warm-model progress",

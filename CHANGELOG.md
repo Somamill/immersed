@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.16.2 — 2026-11-11
+
+Show saved subtitle sections immediately on reopening
+
+- Restore prepared subtitle cues while source audio is still downloading so returning to a long video does not hide already-completed output.
+
 ## 0.16.1 — 2026-11-11
 
 Stabilize native fullscreen idle controls and warm-model progress

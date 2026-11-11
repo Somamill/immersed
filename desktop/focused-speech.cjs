@@ -38,4 +38,12 @@ async function prepare({duration,position,slice,checkpoint,initial={}}) {
   }
   return cues;
 }
-module.exports={coverage,nextSection,measured,prepare};
+function withCheckpoint(file, status) {
+  if (status.cues?.length) return status;
+  try {
+    const data = JSON.parse(require('node:fs').readFileSync(file, 'utf8'));
+    if (Array.isArray(data.cues) && Number.isFinite(data.duration)) return {...data, ...status, cues:data.cues};
+  } catch {}
+  return status;
+}
+module.exports={coverage,nextSection,measured,prepare,withCheckpoint};
