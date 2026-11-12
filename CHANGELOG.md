@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.20.1 — 2026-11-12
+
+Match Netflix to immersed’s shared design
+
+- Use immersed’s shared glass toolbar, colors, cards, popups and icons in Netflix, while retaining the minimal reader and transparent fullscreen captions. The layout stays within narrow panes and expands lookup without moving the subtitle. All 32 Netflix browser checks, lint and typecheck passed; the underlying v0.20.0 playback, keyboard and dictionary fixes are retained.
+
 ## 0.20.0 — 2026-11-12
 
 Minimal Netflix reader, transparent captions and reliable hover resume

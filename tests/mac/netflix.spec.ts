@@ -285,3 +285,12 @@ test('opening Netflix lookup keeps the caption anchored while its native viewpor
   expect(Math.abs((190-before.y-before.height)-(520-after.y-after.height))).toBeLessThan(1);
   await expect(page.getByRole('button',{name:'Save word',exact:true})).toBeVisible();
 });
+
+
+test('Netflix shares immersed glass surfaces and icon styling without restoring the info panel',async({page})=>{
+  await page.addInitScript(()=>{(window as any).webkit={messageHandlers:{immersed:{postMessage:()=>{}}}}});await page.goto('/');
+  const surfaces=()=>page.evaluate(()=>{const pick=(selector:string)=>{const s=getComputedStyle(document.querySelector(selector)!);return {background:s.backgroundImage,radius:s.borderRadius,border:s.borderTopColor,blur:s.backdropFilter}};return {header:pick('header'),lookup:pick('#lookup'),card:pick('.studyCard'),icon:pick('#fullscreen')}});
+  const common=await surfaces();await page.getByRole('button',{name:'Netflix',exact:true}).click();expect(await surfaces()).toEqual(common);
+  await expect(page.locator('#netflixOptions')).toBeHidden();await expect(page.locator('.studyHead')).toBeHidden();
+  await page.evaluate(()=>(window as any).immersedNetflixFullscreen(true));expect(await page.locator('body').evaluate(e=>getComputedStyle(e).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+});

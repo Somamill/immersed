@@ -22,7 +22,7 @@ The first command launch creates `~/Applications/immersed.app`. Open **immersed.
 
 ## Netflix original subtitles
 
-Choose **Netflix** in the Mac toolbar or paste an `https://www.netflix.com/watch/…` link. Sign in directly on Netflix and choose audio/subtitles in Netflix’s own menu. The study pane contains a compact toolbar, estimated vocabulary percentage, centered original captions and playback controls. Diagnostic counts, the duplicate track selector and instructional panel are hidden during normal viewing. Advanced display options live in Settings; playback errors reveal **Retry playback** and an explicit **Open in Safari** fallback.
+Choose **Netflix** in the Mac toolbar or paste an `https://www.netflix.com/watch/…` link. Sign in directly on Netflix and choose audio/subtitles in Netflix’s own menu. The study pane uses immersed’s shared glass surfaces, colors and icons, with a compact toolbar, estimated vocabulary percentage, centered original captions and playback controls. Diagnostic counts, the duplicate track selector and instructional panel are hidden during normal viewing. Advanced display options live in Settings; playback errors reveal **Retry playback** and an explicit **Open in Safari** fallback.
 
 The reader uses original Netflix subtitles, without Whisper, OCR, audio extraction or downloads. Hover lookup, furigana, level highlighting, saved words, speed and subtitle navigation remain available. Complete original tracks supply previous/next boundaries; visible-only tracks can navigate only encountered blocks. Displayed captions and clears follow Netflix’s renderer directly, rather than relying on a track-clock estimate. Playback commands prefer Netflix’s own player controller, whose seek positions use milliseconds.
 

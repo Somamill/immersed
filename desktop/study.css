@@ -1093,36 +1093,27 @@ body.netflixMode { min-width: 0; }
 #netflixRecovery { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; }
 #netflixRecovery[hidden] { display: none; }
 
-/* Netflix study chrome follows the player: compact, neutral and predictable. */
-body.netflixMode { background: #141414; color: #fff; color-scheme: dark; }
-.netflixMode header { display: flex; flex-wrap: nowrap; align-items: center; gap: 10px; height: 64px; min-height: 64px; margin: 0; padding: 12px 16px; border: 0; border-bottom: 1px solid #333; border-radius: 0; background: #141414; backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: none; }
+/* Netflix uses the shared immersed glass surfaces, with a compact pane layout. */
+body.netflixMode { display: flex; flex-direction: column; height: 100dvh; min-height: 0; overflow: hidden; }
+.netflixMode header { display: flex; flex: 0 0 auto; flex-wrap: nowrap; align-items: center; gap: 10px; height: auto; min-height: 64px; margin: 12px; padding: 10px; }
 .netflixMode header .brand { flex: 0 1 auto; min-width: 0; gap: 8px; }
 .netflixMode header .brand img { width: 28px; height: 28px; border-radius: 6px; }
-.netflixMode .understanding { margin: 0; font-size: 14px; color: #ccc; white-space: nowrap; }
+.netflixMode .understanding { margin: 0; font-size: 14px; white-space: nowrap; }
 .netflixMode header nav { flex: 1 1 0; width: auto; min-width: 0; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
-.netflixMode header .iconButton { width: 36px; height: 36px; padding: 7px !important; border: 0; border-radius: 6px; background: transparent; color: white; box-shadow: none; }
-.netflixMode header .iconButton:hover { background: #ffffff1a; }
-.netflixMode #watchPage { height: calc(100dvh - 64px); margin: 0; padding: 0; }
-.netflixMode .studyCard { height: 100%; min-height: 0; border: 0; border-radius: 0; background: #141414; box-shadow: none; }
-.netflixMode #netflixOptions { padding: 14px 18px; border-color: #333; }
+.netflixMode header .iconButton { width: 36px; height: 36px; padding: 7px !important; }
+.netflixMode #watchPage { flex: 1 1 auto; min-height: 0; height: auto; margin: 0 12px 12px; padding: 0; }
+.netflixMode .studyCard { height: 100%; min-height: 0; }
+.netflixMode #netflixOptions { padding: 14px 18px; }
 .netflixMode .netflixTools { gap: 8px; }
-.netflixMode .netflixTools strong { color: #e50914; letter-spacing: .04em; }
-.netflixMode #netflixStatus { color: #aaa; margin: 10px 0; font-size: 12px; }
-.netflixMode #netflixOptions button { background: #292929; color: #eee; border: 0; border-radius: 5px; padding: 8px 12px; font-size: 12px; }
+.netflixMode #netflixStatus { margin: 10px 0; font-size: 12px; }
+.netflixMode #netflixOptions button { padding: 8px 12px; font-size: 12px; }
 .netflixMode #netflixSubtitles { width: 100%; text-align: left; }
-.netflixMode #netflixOptions label { color: #aaa; font-size: 11px; }
-.netflixMode #netflixOptions input { accent-color: #e50914; }
-.netflixMode .studyHead { padding: 12px 18px; background: transparent; border-color: #333; }
+.netflixMode #netflixOptions label { font-size: 11px; }
+.netflixMode .studyHead { padding: 12px 18px; }
 .netflixMode .studyHead strong { font-size: 14px; }
-.netflixMode .studyHead small { color: #aaa; font-size: 11px; }
+.netflixMode .studyHead small { font-size: 11px; }
 .netflixMode .subtitles { min-height: 0; flex: 1; padding: 20px; align-items: center; }
 .netflixMode .line { width: 100%; text-align: center; font-size: clamp(23px, 5vw, 30px); line-height: 1.8; }
-.netflixMode .controls { border: 0; border-radius: 8px; background: #222; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-.netflixMode .control, .netflixMode .speedButton { color: white; background: #333; border-color: #444; border-radius: 6px; }
-.netflixMode .control.play { background: #eee; color: #141414; }
-.netflixMode .lookup, .netflixMode dialog, .netflixMode .speedMenu { background: #202020f5; border-color: #555; border-radius: 10px; backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-.netflixMode .lookup .iconButton { background: #333; color: #fff; border-color: #555; border-radius: 6px; }
-.netflixMode .hint, .netflixMode .reading, .netflixMode .word rt { color: #bbb; }
 .wordStates { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; padding: 8px 12px; flex: none; border-top: 1px solid #ffffff1f; }
 .wordStates button { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; padding: 8px 2px; font-size: 11px; border: 1px solid transparent; border-radius: 6px; background: #ffffff08; color: inherit; }
 .wordStates button[aria-pressed="true"] { border-color: currentColor; background: #ffffff1a; }
