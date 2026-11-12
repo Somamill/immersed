@@ -2,6 +2,15 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.20.0 — 2026-11-12
+
+Minimal Netflix reader, transparent captions and reliable hover resume
+
+- Remove the unsigned Mac build’s WebCrypto Keychain dependency using in-memory session keys and renew Netflix playback caches. Native encrypted-key reload and transparent backing checks passed without a Keychain prompt; picture and fullscreen playback were confirmed in the current Mac session. Netflix remains dependent on its embedded-player support, and encrypted web sessions may require sign-in again after restart.
+- Replace Netflix’s information panel with a compact toolbar and centered captions. Fullscreen captions have a transparent background, and expanding lookup keeps the hovered text stationary. Subtitle tracks are selected in Netflix itself.
+- Add persistent 1 Unknown, 2 Learning, 3 Known and 4 Ignored word actions. Move hover pause/resume ownership into Netflix’s player, retain manual pauses, and navigate original subtitle blocks through its controller.
+- Improve dictionary-backed spoken contractions, omitted particles and expressive endings, including しら切んな, 気回さなくて and ふんっ. Context sense selection receives validated grammar and preserves prohibitions. All 106 Mac browser tests, native session checks, language tests, lint, typecheck and Apple Silicon build passed.
+
 ## 0.19.3 — 2026-11-12
 
 Keep Netflix fullscreen lookup inside every window size

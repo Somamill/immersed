@@ -4,6 +4,51 @@ import MediaPlayer
 import UniformTypeIdentifiers
 import Vision
 import QuartzCore
+import Security
+
+// GitHub builds have no stable Developer ID. WebKit's default WebCrypto
+// wrapping key otherwise consults Keychain after every native binary update.
+// Keep wrapping keys in memory instead; never read or change the user's Keychain.
+// WebKit SPI is checked before use; unsupported systems use a private store.
+@MainActor
+final class BrowserSession: NSObject {
+    let store: WKWebsiteDataStore
+    private let cryptoKey: Data
+    private var netflixPrepared = false
+    private(set) var keyRequests = 0
+    override init() {
+        var bytes = [UInt8](repeating: 0, count: 16)
+        precondition(SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes) == errSecSuccess)
+        cryptoKey = Data(bytes)
+        let persistent = WKWebsiteDataStore.default()
+        if #available(macOS 15.0, *), persistent.responds(to: NSSelectorFromString("set_delegate:")) {
+            store = persistent
+        } else { store = .nonPersistent() }
+        super.init()
+        if store.isPersistent { store.perform(NSSelectorFromString("set_delegate:"), with: self) }
+    }
+    @objc(webCryptoMasterKey:)
+    func webCryptoMasterKey(_ completion: @escaping (Data) -> Void) {
+        keyRequests += 1
+        completion(cryptoKey)
+    }
+    func prepareNetflix(completion: @escaping () -> Void) {
+        guard !netflixPrepared else { completion(); return }
+        netflixPrepared = true
+        // Old encrypted player databases cannot be opened with this session's
+        // key. Renew just Netflix's playback caches; keep cookies and app data.
+        var types: Set<String> = [WKWebsiteDataTypeIndexedDBDatabases, WKWebsiteDataTypeDiskCache,
+            WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache, WKWebsiteDataTypeServiceWorkerRegistrations]
+        if #available(macOS 14.0, *) { types.insert(WKWebsiteDataTypeMediaKeys) }
+        store.fetchDataRecords(ofTypes: types) { [weak self] records in
+            guard let self else { return }
+            let netflix = records.filter { $0.displayName == "netflix.com" || $0.displayName.hasSuffix(".netflix.com") || $0.displayName == "nflxvideo.net" || $0.displayName.hasSuffix(".nflxvideo.net") }
+            guard !netflix.isEmpty else { completion(); return }
+            self.store.removeData(ofTypes: types, for: netflix, completionHandler: completion)
+        }
+    }
+    func renewNetflix() { netflixPrepared = false }
+}
 
 @MainActor
 final class NetflixFocusView: NSView {
@@ -59,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     var gestureX: CGFloat = 0
     var gestureY: CGFloat = 0
     var gestureFired = false
+    let browserSession = BrowserSession()
     var netflixView: WKWebView?
     var netflixSplit: NSSplitView?
     var netflixFocus: NetflixFocusView?
@@ -181,16 +227,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     }
     func makeWebView(configuration: WKWebViewConfiguration? = nil) -> WKWebView {
         let config = configuration ?? WKWebViewConfiguration()
-        config.websiteDataStore = .default()
+        config.websiteDataStore = browserSession.store
         config.mediaTypesRequiringUserActionForPlayback = []
         config.preferences.isElementFullscreenEnabled = true
         config.userContentController.add(self, name: "immersed")
         config.userContentController.add(self, name: "immersedPlayer")
+        let backup = UserDefaults.standard.dictionary(forKey: "studyStorageBackup") as? [String: String] ?? [:]
+        if let data = try? JSONSerialization.data(withJSONObject: backup), let json = String(data: data, encoding: .utf8) {
+            let storageBridge = """
+            (() => {
+              if (location.hostname !== '127.0.0.1' || location.port !== '4765') return;
+              try { for (const [key,value] of Object.entries(\(json))) if (localStorage.getItem(key) === null) localStorage.setItem(key,value); } catch {}
+              let timer;
+              const save = () => { try { const values={}; for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key.startsWith('immersed.'))values[key]=localStorage.getItem(key);} window.webkit.messageHandlers.immersed.postMessage({action:'studyStorage',values}); } catch {} };
+              for (const name of ['setItem','removeItem','clear']) {
+                const original=Storage.prototype[name];
+                Storage.prototype[name]=function(...args){const result=original.apply(this,args);if(this===localStorage){clearTimeout(timer);timer=setTimeout(save,150);}return result;};
+              }
+              window.addEventListener('pagehide',save); document.addEventListener('DOMContentLoaded',save,{once:true});
+            })();
+            """
+            config.userContentController.addUserScript(WKUserScript(source: storageBridge, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        }
         if let file = Bundle.main.url(forResource: "player-bridge", withExtension: "js"), let code = try? String(contentsOf: file, encoding: .utf8) {
             config.userContentController.addUserScript(WKUserScript(source: code, injectionTime: .atDocumentStart, forMainFrameOnly: false))
         }
         if blockAds, let rules = adRules { config.userContentController.add(rules) }
         let view = WKWebView(frame: .zero, configuration: config)
+        // CSS controls opacity; the study WKWebView must not paint an opaque
+        // backing rectangle over Netflix in fullscreen.
+        view.underPageBackgroundColor = .clear
+        if view.responds(to: NSSelectorFromString("_setDrawsBackground:")) { view.setValue(false, forKey: "drawsBackground") }
         view.uiDelegate = self; view.navigationDelegate = self
         view.allowsBackForwardNavigationGestures = false
         webViews.append(view)
@@ -263,13 +330,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
                   let data = try? JSONSerialization.data(withJSONObject: payload), data.count <= 8 * 1024 * 1024,
                   let json = String(data: data, encoding: .utf8) else { return }
             if payload["event"] as? String == "shortcut" {
-                if payload["command"] as? String == "fullscreen" { toggleNetflixFullscreen() }
+                if payload["command"] as? String == "wordStatus", let key = payload["key"] as? String, ["1","2","3","4"].contains(key) { web.evaluateJavaScript("window.immersedWordShortcut?.(\(key.debugDescription))", completionHandler: nil) }
+                else if payload["command"] as? String == "fullscreen" { toggleNetflixFullscreen() }
                 else if payload["command"] as? String == "exitFullscreen" { exitNetflixFullscreen() }
                 else if let command = payload["command"] as? String, ["previous", "next"].contains(command) {
                     web.evaluateJavaScript("window.immersedPlayback?.('skip',\(command == "previous" ? -1 : 1))", completionHandler: nil)
                 }
                 return
             }
+            if payload["event"] as? String == "error", netflixFocus != nil { exitNetflixFullscreen() }
             web.evaluateJavaScript("window.immersedNetflixEvent?.(\(json))", completionHandler: nil)
             return
         }
@@ -279,19 +348,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         if action == "openNetflix" {
             openNetflix(object["url"] as? String)
         } else if action == "closeNetflix" {
-            restoreNetflixLayout()
+            closeNetflixPlayer()
+        } else if action == "netflixRepair" {
+            let url = netflixView?.url?.absoluteString
+            closeNetflixPlayer(); browserSession.renewNetflix(); openNetflix(url)
+        } else if action == "netflixSafari" {
+            guard let url = netflixView?.url, url.scheme == "https", ["netflix.com", "www.netflix.com"].contains(url.host ?? ""),
+                  let safari = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Safari") else { return }
             netflixView?.evaluateJavaScript("window.immersedNetflixCommand?.({command:'pause'})", completionHandler: nil)
-            netflixView?.stopLoading()
-            netflixView?.configuration.userContentController.removeScriptMessageHandler(forName: "immersedNetflix")
-            netflixView?.removeFromSuperview(); web.removeFromSuperview(); window.contentView = web
-            netflixSplit = nil; netflixView = nil
+            NSWorkspace.shared.open([url], withApplicationAt: safari, configuration: NSWorkspace.OpenConfiguration())
+        } else if action == "studyStorage", let values = object["values"] as? [String: String],
+                  values.count <= 64, values.keys.allSatisfy({ $0.hasPrefix("immersed.") }),
+                  let encoded = try? JSONSerialization.data(withJSONObject: values), encoded.count <= 6_000_000 {
+            UserDefaults.standard.set(values, forKey: "studyStorageBackup")
         } else if action == "netflixFullscreen" {
             toggleNetflixFullscreen()
         } else if action == "netflixLookup", let open = object["open"] as? Bool, let focus = netflixFocus {
             focus.expanded = open; focus.needsLayout = true
             focus.layoutSubtreeIfNeeded()
         } else if action == "netflixCommand", let command = object["command"] as? String,
-                  ["play", "pause", "seek", "rate", "language", "original", "snapshot"].contains(command),
+                  ["play", "pause", "seek", "rate", "language", "original", "snapshot", "subtitles", "hoverStart", "hoverEnd", "hoverCancel"].contains(command),
                   let data = try? JSONSerialization.data(withJSONObject: object), let json = String(data: data, encoding: .utf8) {
             netflixView?.evaluateJavaScript("window.immersedNetflixCommand?.(\(json))", completionHandler: nil)
         } else if action == "blockAds", let enabled = object["enabled"] as? Bool {
@@ -372,6 +448,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
             }
         }.resume()
     }
+    func closeNetflixPlayer() {
+        restoreNetflixLayout()
+        netflixView?.evaluateJavaScript("window.immersedNetflixCommand?.({command:'pause'})", completionHandler: nil)
+        netflixView?.stopLoading()
+        netflixView?.configuration.userContentController.removeScriptMessageHandler(forName: "immersedNetflix")
+        netflixView?.removeFromSuperview(); web.removeFromSuperview(); window.contentView = web
+        netflixSplit = nil; netflixView = nil
+    }
+    func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        if webView === netflixView {
+            if netflixFocus != nil { exitNetflixFullscreen() }
+            web.evaluateJavaScript("window.immersedNetflixEvent?.({event:'error',message:'The Netflix player stopped. Retry playback.'})", completionHandler: nil)
+        }
+    }
     @objc func browseNetflix() { web.evaluateJavaScript("window.openNetflix?.()", completionHandler: nil) }
     func openNetflix(_ value: String?) {
         var url = URL(string: "https://www.netflix.com/browse")!
@@ -380,7 +470,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
            candidate.path.range(of: "^/watch/[0-9]+/?$", options: .regularExpression) != nil { url = candidate }
         if let netflixView { netflixView.load(URLRequest(url: url)); return }
         let config = WKWebViewConfiguration()
-        config.websiteDataStore = .default()
+        config.websiteDataStore = browserSession.store
         config.mediaTypesRequiringUserActionForPlayback = []
         // The bridge routes fullscreen requests to our video/lookup layout.
         config.preferences.isElementFullscreenEnabled = true
@@ -400,7 +490,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         split.addArrangedSubview(view); split.addArrangedSubview(web)
         window.contentView = split; netflixSplit = split
         split.adjustSubviews(); split.setPosition(split.bounds.width * 0.65, ofDividerAt: 0)
-        view.load(URLRequest(url: url))
+        browserSession.prepareNetflix { [weak view] in view?.load(URLRequest(url: url)) }
     }
     func enterNetflixFullscreen() {
         guard netflixFocus == nil, let movie = netflixView else { return }

@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const language = require('./language.cjs');
-const VERSION = 4;
+const VERSION = 5;
 const MODEL = 'Qwen3 4B · on-device';
 let worker, idle, counter = 0;
 const pending = new Map(), cache = new Map();
@@ -57,7 +57,9 @@ function selectedMeaning(result, choices, data) {
   if (result.status !== 'ready') return result;
   if (!Number.isInteger(result.choice) || !choices[result.choice]) return { status: 'unclear' };
   const choice = choices[result.choice];
-  return { status: 'ready', gloss: choice.gloss, phrase: data.sentence, source: 'Dictionary sense', model: MODEL };
+  const gloss = data.grammar?.includes('contracted prohibition: ～るな') && /^to /i.test(choice.gloss)
+    ? 'Don’t ' + choice.gloss.replace(/^to /i,'') : choice.gloss;
+  return { status: 'ready', gloss, phrase: data.sentence, source: 'Dictionary sense', model: MODEL };
 }
 async function contextMeaning(data) {
   if (!validContext(data)) return { status: 'invalid' };
@@ -78,7 +80,9 @@ async function contextMeaning(data) {
     }
   }
   if (!choices.length) return { status: 'unavailable' };
-  const input = { word: data.word, selectedRange: [data.start, data.end], dictionaryForm: data.lemma || data.word,
+  const selected = (await language.analyze(data.sentence)).find(t=>t.start===data.start&&t.end===data.end);
+  const grammar = selected?.grammar || [];
+  const input = { word: data.word, grammar, selectedRange: [data.start, data.end], dictionaryForm: data.lemma || data.word,
     sentence: data.sentence, before: data.before, after: data.after, choices };
   const key = crypto.createHash('sha256').update(JSON.stringify({ version: VERSION, ...input })).digest('hex');
   const root = path.resolve(process.env.IMMERSED_DATA_ROOT || path.join(__dirname, '../.data'), 'context-meanings');
@@ -86,7 +90,7 @@ async function contextMeaning(data) {
   if (cache.has(key)) return cache.get(key);
   try { const value = JSON.parse(await fs.promises.readFile(file, 'utf8')); if (['ready', 'unclear'].includes(value.status)) return value; } catch { /* First lookup. */ }
   const result = infer(input).then(async result => {
-    const value = selectedMeaning(result, choices, data);
+    const value = selectedMeaning(result, choices, {...data,grammar});
     cache.delete(key);
     if (['ready', 'unclear'].includes(value.status)) {
       if (cache.size >= 200) cache.delete(cache.keys().next().value);

@@ -19,6 +19,7 @@
         /><button class="primary">Search</button>
       </form>
       <nav aria-label="Navigation">
+<button id="netflixBack" aria-label="Back to immersed" title="Back to immersed" hidden>←</button>
         <button id="discoverButton" aria-pressed="false">Discover</button>
         <button id="watchButton" aria-pressed="true">Watch</button>
 <button id="netflixButton">Netflix</button>
@@ -64,7 +65,8 @@
 <div id="netflixOptions" hidden>
 <div class="netflixTools"><button id="leaveNetflix" aria-label="Back to immersed" title="Back to immersed">←</button><strong>Netflix</strong><button id="netflixBrowse" title="Browse Netflix">Browse</button></div>
 <p id="netflixStatus" role="status">Sign in to Netflix and choose a title. Select subtitles in Netflix’s Audio &amp; Subtitles menu.</p>
-<label>Subtitle track <select id="netflixTrack"><option value="">Choose in Netflix</option></select></label>
+<div id="netflixRecovery" hidden><button id="netflixRetry">Retry playback</button><button id="netflixSafari">Open in Safari</button></div>
+<button id="netflixSubtitles" title="Choose audio and subtitles in Netflix" aria-label="Netflix audio and subtitles">Audio &amp; subtitles ↗</button>
 <label><input id="netflixOriginal" type="checkbox" checked /> Also show subtitles on the video</label>
 </div>
         <div class="studyHead">
@@ -93,6 +95,7 @@
           <div class="definitions" id="definitions"></div>
           <div id="alternatives" class="hint"></div>
           </div>
+          <div id="wordStates" class="wordStates" role="group" aria-label="Word status"></div>
           <div class="lookupActions"><button id="known">Mark known</button
           ><button id="saveWord">Save word</button
           ><button id="speak">Pronounce</button></div>

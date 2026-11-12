@@ -6,11 +6,13 @@
   window.__immersedNetflixBridge = true;
   const post = data => window.webkit?.messageHandlers?.immersedNetflix?.postMessage(data);
   let titleID = '', lastLine = '', lastTrack = '', lastPayload = null, candidates = [];
+  let hoverSession = null;
+  let reportedError = '', loadingSince = performance.now();
   let showOriginal = true, selectedLanguage = '', currentLanguage = '', reportedTracks = '', observedLine = false, lastState = '', lastStateAt = 0, lastTracksAt = 0, observedVideo = null, focusMode = false, captionDirty = false;
   const emit = payload => { lastPayload = payload; post(payload); };
   function resetTitle() {
     const id = location.pathname.match(/\/watch\/(\d+)/)?.[1] || '';
-    if (id !== titleID) { titleID = id; lastTrack = ''; lastLine = ''; lastPayload = null; candidates = []; currentLanguage = ''; selectedLanguage = ''; observedLine = false; lastState = ''; post({ event: 'reset', id }); }
+    if (id !== titleID) { titleID = id; hoverSession = null; lastTrack = ''; lastLine = ''; lastPayload = null; candidates = []; currentLanguage = ''; selectedLanguage = ''; observedLine = false; lastState = ''; reportedError = ''; loadingSince = performance.now(); post({ event: 'reset', id }); }
     return id;
   }
   function receive(text) {
@@ -44,16 +46,70 @@
     }, { once: true });
     return send.apply(this, args);
   };
+  function netflixPlayer() {
+    try {
+      const api = window.netflix?.appContext?.state?.playerApp?.getAPI?.().videoPlayer;
+      const ids = api?.getAllPlayerSessionIds?.() || [];
+      const id = ids.find(id => String(id).includes('watch')) || ids[0];
+      return id == null ? null : api.getVideoPlayerBySessionId(id);
+    } catch { return null; }
+  }
+  function playbackError(video) {
+    // Netflix can replace <video> with an error page; report it even without media.
+    const error = document.querySelector('[data-uia="error-code"], .nfp-error-code, .error-page, .watch-video--error');
+    const text = (error?.innerText || (!video ? document.body?.innerText : '') || '').replace(/\uFEFF/gu, '');
+    const code = text.match(/\b[SMDFU]\d{4}[-–]\d{3,5}(?:[-–]\d+)?\b/u)?.[0];
+    const reason = code ? 'Netflix playback failed (' + code + '). Retry playback or open this title in Safari.' : video?.error ? 'Netflix could not play this title. Retry playback or open it in Safari.' : '';
+    if (reason && reason !== reportedError) { reportedError = reason; post({event:'error', code:code || 'media', message:reason}); }
+    if (video?.readyState > 0 && !reason) { loadingSince = performance.now(); reportedError = ''; }
+    if (!reason && !reportedError && performance.now() - loadingSince > 30000) {
+      reportedError = 'loading'; post({event:'error',code:'loading',message:'Netflix is not starting. Retry playback or open this title in Safari.'});
+    }
+  }
   window.immersedNetflixCommand = command => {
     const video = document.querySelector('video');
     if (command.command === 'fullscreenState') { focusMode = Boolean(command.value); sync(true); return; }
     if (command.command === 'snapshot') { if (lastPayload) post(lastPayload); return; }
     if (command.command === 'original') { showOriginal = Boolean(command.value); sync(true); return; }
+    if (command.command === 'subtitles') {
+      document.querySelector('[data-uia="control-audio-subtitle"], [data-uia="control-audio-subtitles"], button[aria-label="音声・字幕"], button[aria-label="Audio & Subtitles"]')?.click();
+      return;
+    }
     if (!video) return;
-    if (command.command === 'play') video.play().catch(() => post({ event: 'error', message: 'Use the Netflix play button to start this title.' }));
-    if (command.command === 'pause') video.pause();
-    if (command.command === 'seek' && Number.isFinite(command.value)) video.currentTime = Math.max(0, command.value);
-    if (command.command === 'rate' && Number.isFinite(command.value)) video.playbackRate = Math.max(.5, Math.min(2, command.value));
+    const player = netflixPlayer();
+    const start = () => typeof player?.play === 'function' ? player.play() : video.play();
+    const halt = () => typeof player?.pause === 'function' ? player.pause() : video.pause();
+    try {
+      if (command.command === 'hoverStart') {
+        if (hoverSession?.id === command.value) return;
+        const wasRunning = hoverSession?.resume || (!video.paused && !video.ended);
+        hoverSession = {id:command.value,resume:wasRunning,title:titleID}; halt(); return;
+      }
+      if (command.command === 'hoverEnd' || command.command === 'hoverCancel') {
+        if (hoverSession?.id !== command.value) return;
+        const resume = command.command === 'hoverEnd' && hoverSession.resume && hoverSession.title === titleID;
+        hoverSession = null;
+        if (resume) start()?.catch?.(()=>post({event:'error',message:'Use Netflix’s play button to resume this title.'}));
+        return;
+      }
+      if (['play','pause','seek'].includes(command.command)) hoverSession = null;
+      if (command.command === 'play') {
+        const result = start();
+        result?.catch?.(() => post({event:'error',message:'Use the Netflix play button to start this title.'}));
+      }
+      if (command.command === 'pause') halt();
+      if (command.command === 'seek' && Number.isFinite(command.value)) {
+        // Netflix controls its MediaSource/DRM timeline in milliseconds. Seeking
+        // the media element directly can leave that controller out of sync.
+        if (typeof player?.seek === 'function') player.seek(Math.max(0, command.value) * 1000);
+        else video.currentTime = Math.max(0, command.value);
+      }
+      if (command.command === 'rate' && Number.isFinite(command.value)) {
+        const rate = Math.max(.5, Math.min(2, command.value));
+        if (typeof player?.setPlaybackRate === 'function') player.setPlaybackRate(rate);
+        else video.playbackRate = rate;
+      }
+    } catch { post({event:'error',message:'Netflix could not complete playback. Retry this title.'}); }
     if (command.command === 'language' && typeof command.value === 'string') {
       selectedLanguage = command.value;
       for (const track of Array.from(video.textTracks)) if (track.kind === 'subtitles' || track.kind === 'captions') track.mode = track.language === selectedLanguage ? 'showing' : 'disabled';
@@ -62,6 +118,8 @@
   };
   document.addEventListener('keydown', event => {
     if (event.ctrlKey || event.metaKey || event.altKey || event.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
+    if (/^[1-4]$/.test(event.key) && !event.shiftKey && !event.repeat && !event.isComposing) { event.preventDefault(); event.stopImmediatePropagation(); post({event:'shortcut',command:'wordStatus',key:event.key}); return; }
+    if (event.code === 'Space' || event.key.toLowerCase() === 'k') hoverSession = null;
     const command = event.key === 'ArrowLeft' ? 'previous' : event.key === 'ArrowRight' ? 'next' : event.key.toLowerCase() === 'f' ? 'fullscreen' : event.key === 'Escape' && focusMode ? 'exitFullscreen' : '';
     if (!command || !location.pathname.includes('/watch/')) return;
     event.preventDefault(); event.stopImmediatePropagation(); post({ event: 'shortcut', command });
@@ -69,7 +127,9 @@
   function sync(force = false) {
     const id = resetTitle();
     const video = document.querySelector('video');
-    if (!video || !id) return;
+    if (!id) return;
+    playbackError(video);
+    if (!video) return;
     if (video !== observedVideo) {
       if (observedVideo) for (const name of mediaEvents) observedVideo.removeEventListener(name, mediaChanged);
       observedVideo = video;
@@ -123,6 +183,7 @@
     const button = event.target.closest?.('button');
     if (!button) return;
     const name = (button.getAttribute('data-uia') || '') + ' ' + (button.getAttribute('aria-label') || '');
+    if (/control-(?:play|pause)|再.?生|一時停止|\b(?:play|pause)\b/iu.test(name)) hoverSession = null;
     if (/fullscreen|full.screen|全画面|フルスクリーン/iu.test(name) && fullscreen()) { event.preventDefault(); event.stopImmediatePropagation(); }
   }, true);
   // Keep the video in the app's fullscreen layout so the study overlay remains

@@ -215,3 +215,22 @@ test('reading reflow handles compounds, kana, inflections and three/four-way wor
   assert.deepEqual(await reflowCaptions(cues,{maxDuration:12,maxCharacters:80}),[{start:0,end:parts.length,text:parts.join('')}],parts.join('/'));
  }
 });
+
+
+test('spoken expression omission and contracted prohibitions keep the original glyphs',async()=>{
+  for(const [text,gloss] of [['しら切んな！',/feign ignorance|play innocent/],['気回さなくていいから',/read too much|wrong ideas/]]) {
+    const tokens=await analyze(text);assert.equal(tokens.map(t=>t.text).join(''),text);
+    const token=tokens[0];assert.ok(token.grammar.includes('spoken particle omission'));
+    const entries=await lookup(token.lemma,token);assert.ok(entries[0].senses.some(s=>s.english_definitions.some(d=>gloss.test(d))));
+  }
+  for(const text of ['ふざけんな！','切んな！'])assert.ok((await analyze(text))[0].grammar.includes('contracted prohibition: ～るな'));
+  assert.equal((await analyze('みんなで行こう'))[0].lemma,'みんな');
+});
+
+test('expressive interjection endings do not become unrelated verbs or noun homophones',async()=>{
+  const token=(await analyze('ふんっ！'))[0];assert.equal(token.text,'ふんっ');assert.equal(token.lemma,'ふん');assert.equal(token.pos,'interjection');
+  const entries=await lookup(token.lemma,token);assert.ok(entries[0].senses[0].english_definitions.some(x=>/humph|hmm/.test(x)));
+  for(const text of ['ああー！','うんっ！']) { const t=(await analyze(text))[0];assert.equal(t.text,text.slice(0,-1));assert.equal(t.pos,'interjection');assert.ok((await lookup(t.lemma,t)).length); }
+  const direct=await lookup('ふんっ！');assert.ok(direct[0].senses[0].english_definitions.some(x=>/humph|hmm/.test(x)));
+  assert.ok((await lookup('分',{pos:'noun',reading:'ふん'}))[0].senses[0].english_definitions.includes('minute (unit of time)'));
+});

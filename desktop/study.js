@@ -65,6 +65,7 @@ let extras = {
     screenCaptionCheck: true,
     pauseOnHover: true,
     netflixOriginal: true,
+    wordStates: {},
     speechQuality: "balanced",
     playbackRate: 1,
     ...read("immersed.mac.options", {}),
@@ -93,6 +94,7 @@ let localMedia = null,
   hoverCooldownUntil = 0,
   cueSeek = null,
   hoverTimer = null,
+  hoverSequence = 0,
   leaveTimer = null,
   levels = {},
   library = [],
@@ -181,6 +183,7 @@ function persist() {
   }
 }
 function applyPreferences() {
+  if (netflix) netflixCommand("original", extras.netflixOriginal !== false);
   document.body.classList.toggle("light", !prefs.dark);
   window.webkit?.messageHandlers?.immersed?.postMessage({
     action: "blockAds",
@@ -254,8 +257,12 @@ function analyze(text) {
   pendingAnalysis.set(text, task);
   return task;
 }
+const wordStates = { '1': 'unknown', '2': 'learning', '3': 'known', '4': 'ignored' };
+const stateLabel = state => ({unknown:'Unknown',learning:'Learning',known:'Known',ignored:'Ignored'})[state];
+if (!extras.wordStates || typeof extras.wordStates !== 'object' || Array.isArray(extras.wordStates)) extras.wordStates = {};
+extras.wordStates = Object.fromEntries(Object.entries(extras.wordStates).filter(([key,value])=>key.length<=120 && Object.values(wordStates).includes(value)));
 const familiarity = (t) =>
-  ImmersedLearning.familiarity(
+  extras.wordStates[t.lemma] === 'ignored' ? 'ignored' : extras.wordStates[t.lemma] === 'learning' ? 'learning' : ImmersedLearning.familiarity(
     levels,
     t.lemma,
     t.reading,
@@ -292,7 +299,7 @@ function pause() {
   else youtube?.pauseVideo?.();
 }
 function play() {
-  if (netflix) { netflix.paused = false; netflixCommand("play"); return; }
+  if (netflix) { netflix.navigationCue = null; netflix.paused = false; netflixCommand("play"); return; }
   if (!localMedia) youtubePlaybackIntent = true;
   if (localMedia) localMedia.play().catch((e) => status(e.message, true));
   else youtube?.playVideo?.();
@@ -304,7 +311,7 @@ function seekTo(t) {
     try { localStorage.setItem("immersed.positions", JSON.stringify(positions)); } catch {}
   }
   cueSeek = { index: cues.findIndex(c => c.start <= t + 0.02 && t < c.end), until: performance.now() + 1600 };
-  if (netflix) { netflix.time = Math.max(0, t); netflixCommand("seek", netflix.time); }
+  if (netflix) { netflix.navigationCue = netflix.paused && cueSeek.index >= 0 ? {index:cueSeek.index,cue:cues[cueSeek.index]} : null; netflix.time = Math.max(0, t); netflixCommand("seek", netflix.time); }
   else if (localMedia) localMedia.currentTime = Math.max(0, t);
   else youtube?.seekTo?.(Math.max(0, t), true);
   cueIndex = -1;
@@ -323,7 +330,7 @@ function stopMedia() {
   pause();
   if (netflix) {
     window.webkit?.messageHandlers?.immersed?.postMessage({ action: "closeNetflix" });
-    netflix = null; document.body.classList.remove("netflixMode", "netflixFocus", "lookupOpen"); $("netflixOptions").hidden = true;
+    netflix = null; $("netflixBack").hidden = true; document.body.classList.remove("netflixError"); document.documentElement.classList.remove("netflixFocus"); document.body.classList.remove("netflixMode", "netflixFocus", "lookupOpen"); $("netflixOptions").hidden = true;
   }
   if (localMedia) {
     for (const event of [
@@ -384,10 +391,11 @@ function openNetflix(url = null) {
     return;
   }
   stopMedia(); closePanel(); showWatch();
+  $("netflixRecovery").hidden = true; $("netflixBack").hidden = false; document.body.classList.remove("netflixError");
   netflix = { time: 0, paused: true, duration: 0, id: "", language: "", fullTrack: false, liveCue: null };
   document.body.classList.add("netflixMode"); $("netflixOptions").hidden = false;
   $("netflixOriginal").checked = extras.netflixOriginal !== false;
-  $("netflixTrack").replaceChildren(new Option("Choose in Netflix", ""));
+
   $("netflixStatus").textContent = "Sign in and choose a title. Select subtitles in Netflix’s Audio & Subtitles menu. Playback depends on Netflix’s embedded-player support.";
   $("count").textContent = "Original subtitles"; $("subtitles").textContent = "Choose subtitles in Netflix to begin.";
   window.webkit.messageHandlers.immersed.postMessage({ action: "openNetflix", url: ImmersedNetflix.netflixURL(url) });
@@ -399,10 +407,12 @@ window.immersedNetflixEvent = data => {
     closeLookup(false); cues = []; cueIndex = -1; renderGeneration++; requestGeneration++;
     coverageTokens = []; updateCoverage();
     netflix.id = String(data.id || ""); netflix.fullTrack = false; netflix.liveCue = null; netflix.originalSent = false;
-    netflix.visibleObserved = false; netflix.visibleCue = null; netflix.visibleIndex = -1;
+    netflix.visibleObserved = false; netflix.visibleCue = null; netflix.visibleIndex = -1; netflix.navigationCue = null;
     source = null; $("subtitles").textContent = "Choose subtitles in Netflix to begin.";
     $("count").textContent = "Original subtitles"; $("coverage").textContent = "";
   } else if (data.event === "state" && Number.isFinite(data.time)) {
+    if (data.duration > 0 && !data.paused) { $("netflixRecovery").hidden = true; document.body.classList.remove("netflixError"); }
+    if (!data.paused) netflix.navigationCue = null;
     netflix.time = Math.max(0, data.time); netflix.paused = Boolean(data.paused); netflix.duration = Number(data.duration) || 0;
     if (Number.isFinite(data.rate) && data.rate >= .5 && data.rate <= 2 && extras.playbackRate !== data.rate) {
       extras.playbackRate = data.rate; updateSpeedButton(); persist();
@@ -411,8 +421,7 @@ window.immersedNetflixEvent = data => {
     source = { type: "netflix", id: netflix.id, title: String(data.title || "Netflix") };
     if (!netflix.originalSent) { netflix.originalSent = true; netflixCommand("original", extras.netflixOriginal !== false); }
     // A delayed pause acknowledgement must not undo a hover-resume command.
-    if (resumePending && !selected && netflix.paused) netflixCommand("play");
-    if (!netflix.paused) { resumePending = false; if (selected && resumeAfterLookup && extras.pauseOnHover) netflixCommand("pause"); }
+    if (!netflix.paused) resumePending = false;
     void renderCue();
     if (!netflix.reportedAt || performance.now() - netflix.reportedAt > 1000) { netflix.reportedAt = performance.now(); playbackChanged(); }
   } else if (data.event === "cues" && Array.isArray(data.cues)) {
@@ -436,6 +445,7 @@ window.immersedNetflixEvent = data => {
       const delta = at < cues[i].start ? cues[i].start - at : at > cues[i].end ? at - cues[i].end : 0;
       if (delta < distance) { index=i; distance=delta; }
     }
+    if (netflix.navigationCue && (text || Math.abs(at - netflix.navigationCue.cue.start) > .15)) netflix.navigationCue = null;
     netflix.visibleObserved = true; netflix.visibleIndex = distance < 20 ? index : -1;
     netflix.visibleCue = text ? { start: at, end: Infinity, text } : null;
     netflix.time = at; cueIndex = -1;
@@ -453,18 +463,18 @@ window.immersedNetflixEvent = data => {
       if (cues.length === 1 || cues.length % 10 === 0) void sampleCoverage();
     }
     cueIndex = -1; void renderCue();
-  } else if (data.event === "tracks" && Array.isArray(data.tracks)) {
-    const tracks = data.tracks.filter(t => typeof t.language === "string" && typeof t.label === "string");
-    const key = JSON.stringify(tracks);
-    if ($("netflixTrack").dataset.tracks !== key) {
-      $("netflixTrack").dataset.tracks = key;
-      $("netflixTrack").replaceChildren(new Option("Choose in Netflix", ""), ...tracks.map(t => new Option(t.label || t.language, t.language, false, Boolean(t.selected))));
-    }
   } else if (data.event === "error") {
     resumePending = false; netflix.paused = true;
     $("netflixStatus").textContent = String(data.message || "Netflix playback is unavailable.");
+    $("netflixRecovery").hidden = false; document.body.classList.add("netflixError");
   }
 };
+$("netflixRetry").onclick = () => {
+  $("netflixRecovery").hidden = true;
+  $("netflixStatus").textContent = "Restarting Netflix playback…"; document.body.classList.remove("netflixError");
+  window.webkit?.messageHandlers?.immersed?.postMessage({action:"netflixRepair"});
+};
+$("netflixSafari").onclick = () => window.webkit?.messageHandlers?.immersed?.postMessage({action:"netflixSafari"});
 $("netflixButton").onclick = () => openNetflix();
 $("netflixBrowse").onclick = () => openNetflix();
 $("leaveNetflix").onclick = () => {
@@ -472,10 +482,13 @@ $("leaveNetflix").onclick = () => {
   $("video").append(el("div", "Open a YouTube video, local video or audiobook to begin.", "placeholder"));
   $("sourceBadge").textContent = "LOCAL STUDY"; status("Ready when you are");
 };
+$("netflixBack").onclick = $("leaveNetflix").onclick;
+decorateButton($("netflixBack"), "Back to immersed", "close");
 $("netflixOriginal").onchange = () => { extras.netflixOriginal = $("netflixOriginal").checked; persist(); netflixCommand("original", extras.netflixOriginal); };
-$("netflixTrack").onchange = () => { if ($("netflixTrack").value) { closeLookup(); cues=[]; cueIndex=-1; netflix.fullTrack=false; netflix.liveCue=null; netflixCommand("language", $("netflixTrack").value); } };
+$("netflixSubtitles").onclick = () => netflixCommand("subtitles");
 window.immersedNetflixFullscreen = enabled => {
   document.body.classList.toggle("netflixFocus", Boolean(enabled));
+  document.documentElement.classList.toggle("netflixFocus", Boolean(enabled));
   if (!enabled) document.body.classList.remove("lookupOpen");
   requestAnimationFrame(positionLookup);
 };
@@ -934,6 +947,7 @@ async function renderCue() {
   let i = cueIndex >= 0 && cues[cueIndex]?.start <= t && t < cues[cueIndex]?.end && (!cues[cueIndex + 1] || cues[cueIndex + 1].start > t) ? cueIndex : cues.findLastIndex((c) => c.start <= t && t < c.end);
   let cue = cues[i];
   if (netflix?.visibleObserved) { i = netflix.visibleIndex ?? -1; cue = netflix.visibleCue; }
+  if (netflix?.paused && netflix.navigationCue) { i = netflix.navigationCue.index; cue = netflix.navigationCue.cue; }
   if (cueSeek) {
     if (i === cueSeek.index || performance.now() > cueSeek.until) cueSeek = null;
     else if (!netflix?.visibleObserved) { i = cueSeek.index; cue = cues[i]; }
@@ -975,7 +989,7 @@ async function renderCue() {
       line.append(document.createTextNode(token.text));
       continue;
     }
-    const unknown = ImmersedLearning.shouldHighlightToken(
+    const unknown = familiarity(token) !== "ignored" && ImmersedLearning.shouldHighlightToken(
         levels,
         token,
         prefs.level,
@@ -993,7 +1007,7 @@ async function renderCue() {
       ruby.append(el("rt", token.reading));
       button.append(ruby);
     } else button.textContent = token.text;
-    button.dataset.lemma = token.lemma;
+    button.dataset.lemma = token.lemma; button.dataset.wordState = extras.wordStates[token.lemma] || familiarity(token);
     button.onclick = () => openLookup(token, false, button);
     button.onmouseenter = () => {
       clearTimeout(leaveTimer); leaveTimer = null;
@@ -1057,7 +1071,10 @@ function closeLookup(resume = true) {
   lookupCue = null;
   lookupAnchor = null;
   lookupPinned = false;
-  if (resume && resumeAfterLookup) {
+  if (netflix?.hoverSession != null) {
+    const id = netflix.hoverSession; netflix.hoverSession = null; resumePending = false;
+    netflixCommand(resume ? 'hoverEnd' : 'hoverCancel', id);
+  } else if (resume && resumeAfterLookup) {
     resumePending = !localMedia;
     play();
   }
@@ -1066,6 +1083,12 @@ function closeLookup(resume = true) {
   cueIndex = -1;
   for (const cue of cues) if (cue.screenText && cue.text !== cue.screenText) { cue.text = cue.screenText; cueIndex = -1; }
 }
+function pauseForLookup() {
+  if (!netflix) { pause(); return; }
+  resumePending = false;
+  if (netflix.hoverSession == null) netflix.hoverSession = ++hoverSequence;
+  netflixCommand('hoverStart', netflix.hoverSession);
+}
 async function openLookup(token, pinned = false, anchor = null) {
   clearTimeout(hoverTimer);
   lookupAnchor = anchor || lookupAnchor;
@@ -1073,12 +1096,12 @@ async function openLookup(token, pinned = false, anchor = null) {
   if (selected === token) { positionLookup(); return; }
   if (!selected) {
     resumeAfterLookup = resumePending || playbackWasRunning();
-    if (pinned || extras.pauseOnHover) pause();
+    if (pinned || extras.pauseOnHover) pauseForLookup();
     else resumeAfterLookup = false;
   }
   if (pinned && playing()) {
     resumeAfterLookup = true;
-    pause();
+    pauseForLookup();
   }
   lookupPinned = pinned;
   selected = token;
@@ -1247,8 +1270,30 @@ function renderDefinitions() {
   }
 }
 function updateKnown() {
-  if (selected) decorateButton($("known"), familiarity(selected) === "known" ? "Mark unknown" : "Mark known", "check");
+  if (!selected) return;
+  decorateButton($("known"), familiarity(selected) === "known" ? "Mark unknown" : "Mark known", "check");
+  const active = extras.wordStates[selected.lemma] || familiarity(selected);
+  for (const item of $("wordStates").children) item.setAttribute("aria-pressed", String(item.dataset.state === active));
 }
+function setWordState(state) {
+  if (!selected || !Object.values(wordStates).includes(state)) return;
+  const lemma = selected.lemma;
+  extras.wordStates[lemma] = state;
+  if (state === 'ignored') delete prefs.knowledge[lemma];
+  else prefs.knowledge[lemma] = state === 'known';
+  persist(); updateKnown(); updateCoverage();
+  for (const node of $("subtitles").querySelectorAll('.word')) if (node.dataset.lemma === lemma) {
+    node.classList.toggle('unknown', state !== 'ignored' && state !== 'known'); node.dataset.wordState = state;
+  }
+  // Keep the hovered node and popup stable; redraw after lookup closes.
+  cueIndex = -1;
+}
+for (const [key,state] of Object.entries(wordStates)) {
+  const item = button('', () => setWordState(state)); item.dataset.state = state;
+  item.setAttribute('aria-label','Mark '+state); item.title = stateLabel(state)+' · '+key;
+  item.append(el('kbd',key),el('span',stateLabel(state))); $("wordStates").append(item);
+}
+window.immersedWordShortcut = key => { if (!selected) return false; const state=wordStates[key]; if (!state) return false; setWordState(state); return true; };
 
 function lookupWordRecord() {
   if (!selected || !lookupEntries[0]) return null;
@@ -1422,7 +1467,7 @@ function showWords() {
     clearTimeout(dictionaryTimer);
     dictionaryTimer = setTimeout(() => void searchDictionary(), 180);
   };
-  const summary = ImmersedWordHistory.progress(saved, prefs.knowledge);
+  const summary = ImmersedWordHistory.progress(saved.filter(w=>extras.wordStates[w.word]!=="ignored"), prefs.knowledge);
   const dashboard = el("div", null, "wordProgress");
   for (const [label, count] of [["Saved", summary.saved], ["Learning", summary.learning], ["Known", summary.known]]) {
     const metric = el("div"); metric.append(el("strong", String(count)), el("span", label)); dashboard.append(metric);
@@ -1452,7 +1497,7 @@ function showWords() {
   for (const word of saved) {
     const entry = el("article", null, "entry savedWord");
     const known = prefs.knowledge[word.word] === true;
-    entry.append(el("h3", word.word), el("p", word.reading), el("p", word.meaning), el("p", word.sentence), el("small", known ? "Known" : "Learning", "wordState"));
+    entry.append(el("h3", word.word), el("p", word.reading), el("p", word.meaning), el("p", word.sentence), el("small", stateLabel(extras.wordStates[word.word]) || (known ? "Known" : "Learning"), "wordState"));
     const actions = el("div", null, "wordActions");
     actions.append(iconButton(known ? "Mark " + word.word + " learning" : "Mark " + word.word + " known", "check", () => {
       prefs.knowledge[word.word] = !known; persist(); applyPreferences(); showWords();
@@ -1585,6 +1630,10 @@ function showSettings() {
     null,
     true,
   );
+  if (netflix) {
+    setting(body, "Also show Netflix’s original subtitles", "", "netflixOriginal", null, true);
+    body.append(button("Choose audio and subtitles in Netflix", () => { closePanel(); netflixCommand("subtitles"); }));
+  }
   setting(body, "Read captions from video", "Match Japanese text visible in the video. Uses small frame downloads.", "screenCaptionCheck", null, true);
   if (source?.type !== "netflix") setting(
     body,
@@ -1855,7 +1904,7 @@ function updateCoverage() {
   if (!coverageTokens.length) { $("understanding").hidden = true; return; }
   const coverage = ImmersedLearning.estimateVocabulary(
     levels,
-    coverageTokens,
+    coverageTokens.filter(t => extras.wordStates[t.lemma] !== "ignored"),
     prefs.level,
     prefs.knowledge,
   );
@@ -1953,7 +2002,7 @@ async function compareTranscript() {
 function skip(direction) {
   if (!cues.length) return;
   const t = currentTime();
-  const active = cueSeek?.index >= 0 ? cueSeek.index : netflix?.visibleIndex >= 0 ? netflix.visibleIndex : cues.findLastIndex(c => c.start <= t && t < c.end);
+  const active = netflix?.navigationCue ? netflix.navigationCue.index : cueSeek?.index >= 0 ? cueSeek.index : netflix?.visibleIndex >= 0 ? netflix.visibleIndex : cues.findLastIndex(c => c.start <= t && t < c.end);
   const index = active >= 0
     ? Math.max(0, Math.min(cues.length - 1, active + direction))
     : direction < 0 ? cues.findLastIndex(c => c.end <= t) : cues.findIndex(c => c.start > t);
@@ -2103,15 +2152,7 @@ document.addEventListener("pointerdown", event => {
 $("closeLookup").onclick = () => { hoverCooldownUntil = performance.now() + 350; closeLookup(); };
 $("lookup").onmouseenter = () => { clearTimeout(leaveTimer); leaveTimer = null; };
 $("lookup").onmouseleave = scheduleLookupLeave;
-$("known").onclick = () => {
-  if (!selected) return;
-  prefs.knowledge[selected.lemma] = familiarity(selected) !== "known";
-  persist();
-  updateKnown();
-  for (const node of $("subtitles").querySelectorAll(".word")) if (node.dataset.lemma === selected.lemma) node.classList.toggle("unknown", ImmersedLearning.shouldHighlightToken(levels, selected, prefs.level, prefs.knowledge));
-  cueIndex = -1;
-  void renderCue();
-};
+$("known").onclick = () => { if (selected) setWordState(familiarity(selected) === "known" ? "unknown" : "known"); };
 $("saveWord").onclick = saveWord;
 $("speak").onclick = () => {
   if (!selected) return;
@@ -2185,6 +2226,10 @@ $("settingsInput").onchange = async () => {
   }
 };
 document.addEventListener("keydown", (e) => {
+  if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.isComposing && !e.repeat &&
+      !e.target.closest?.('input,textarea,select,[contenteditable="true"]') && !$("panel").open &&
+      window.immersedWordShortcut(e.key)) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+
   if (
     e.key.toLowerCase() === "f" &&
     !e.metaKey &&

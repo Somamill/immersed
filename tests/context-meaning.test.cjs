@@ -38,3 +38,10 @@ test('context results can only display supplied meanings and literal caption evi
   assert.deepEqual(selectedMeaning({ status: 'ready', choice: 100 }, choices, data), { status: 'unclear' });
   assert.equal(selectedMeaning({ status: 'ready', choice: 0, phrase: 'not present' }, choices, data).phrase, data.sentence);
 });
+
+
+test('a validated contracted prohibition is expressed as a prohibition, not a plain infinitive',()=>{
+  const {selectedMeaning}=require('../server/context-meaning.cjs');
+  const value=selectedMeaning({status:'ready',choice:0},[{form:'しらを切る',gloss:'to play innocent'}],{sentence:'しら切んな！',grammar:['contracted prohibition: ～るな']});
+  assert.equal(value.gloss,'Don’t play innocent');assert.equal(value.phrase,'しら切んな！');
+});

@@ -19,7 +19,7 @@ test('Netflix original subtitles support hover, block navigation, speed and full
   page.on('request',req=>{if (/transcrib|local-transcript|caption-frames/.test(req.url())) speech.push(req.url());});
   await page.addInitScript(()=>{(window as any).__commands=[];(window as any).webkit={messageHandlers:{immersed:{postMessage:(x:any)=>{
     (window as any).__commands.push(x);
-    if(x.action==='netflixCommand' && ['pause','play'].includes(x.command)) setTimeout(()=>(window as any).immersedNetflixEvent({event:'state',id:'123',time:1.5,paused:x.command==='pause',duration:300,title:'日本語の番組'}),20);
+    if(x.action==='netflixCommand' && ['pause','play','hoverStart','hoverEnd'].includes(x.command)) setTimeout(()=>(window as any).immersedNetflixEvent({event:'state',id:'123',time:1.5,paused:['pause','hoverStart'].includes(x.command),duration:300,title:'日本語の番組'}),20);
   }}}};});
   await page.goto('/');
   await page.getByRole('button',{name:'Netflix',exact:true}).click();
@@ -34,9 +34,9 @@ test('Netflix original subtitles support hover, block navigation, speed and full
   await word.hover();
   await expect(page.locator('#lookup')).toHaveClass(/show/);
   await expect(page.locator('#definitions')).toContainText(/politic|government/i);
-  await page.locator('#count').hover();
+  await page.locator('header').hover();
   await expect(page.locator('#lookup')).not.toHaveClass(/show/);
-  await expect.poll(()=>page.evaluate(()=>(window as any).__commands.filter((x:any)=>x.action==='netflixCommand'&&x.command==='play').length)).toBeGreaterThan(0);
+  await expect.poll(()=>page.evaluate(()=>(window as any).__commands.filter((x:any)=>x.action==='netflixCommand'&&x.command==='hoverEnd').length)).toBeGreaterThan(0);
   await page.getByRole('button',{name:'Next subtitle',exact:true}).click();
   await expect.poll(()=>page.evaluate(()=>(window as any).__commands.filter((x:any)=>x.command==='seek').at(-1)?.value)).toBeCloseTo(3.015,2);
   await page.getByRole('button',{name:'Previous subtitle',exact:true}).click();
@@ -44,7 +44,7 @@ test('Netflix original subtitles support hover, block navigation, speed and full
   await page.getByRole('button',{name:'Playback speed',exact:true}).click();
   await page.getByRole('menuitemradio',{name:'1.5×',exact:true}).click();
   await page.getByRole('button',{name:'Video fullscreen',exact:true}).click();
-  await page.getByLabel('Also show subtitles on the video').uncheck();
+  await page.locator('#netflixOriginal').evaluate((node:HTMLInputElement)=>{node.checked=false;node.dispatchEvent(new Event('change'));});
   const commands=await page.evaluate(()=>(window as any).__commands);
   expect(commands).toContainEqual({action:'netflixCommand',command:'rate',value:1.5});
   expect(commands).toContainEqual({action:'netflixFullscreen'});
@@ -163,4 +163,125 @@ test('Netflix DOM changes and playback-rate events are forwarded immediately, in
   expect(await page.evaluate(()=>(window as any).__events.filter((x:any)=>x.event==='shortcut').at(-1)?.command)).toBe('exitFullscreen');
   await page.evaluate(()=>(window as any).immersedNetflixCommand({command:'fullscreenState',value:false}));
   await expect(page.locator('.player-timedtext')).toHaveCSS('opacity','1');
+});
+
+
+test('Netflix commands use its player controller and millisecond timeline', async ({page}) => {
+  await page.route('https://www.netflix.com/**', route=>route.fulfill({contentType:'text/html',body:'<video></video><div class="player-timedtext">日本語</div>'}));
+  await page.goto('https://www.netflix.com/watch/123');
+  await page.evaluate(()=>{
+    (window as any).__events=[];(window as any).__controls=[];
+    (window as any).webkit={messageHandlers:{immersedNetflix:{postMessage:(data:any)=>(window as any).__events.push(data)}}};
+    Object.defineProperty(document.querySelector('video'),'currentTime',{value:1.5,writable:true});
+    const player=Object.fromEntries(['play','pause','seek','setPlaybackRate'].map(name=>[name,(value:any)=>(window as any).__controls.push([name,value])]));
+    (window as any).netflix={appContext:{state:{playerApp:{getAPI:()=>({videoPlayer:{getAllPlayerSessionIds:()=>['preview','watch_main'],getVideoPlayerBySessionId:(id:string)=>id==='watch_main'?player:null}})}}}};
+  });
+  await page.addScriptTag({content:fs.readFileSync('desktop/netflix.js','utf8')});
+  await page.addScriptTag({content:fs.readFileSync('desktop/netflix-bridge.js','utf8')});
+  await page.evaluate(()=>{for(const command of [{command:'play'},{command:'pause'},{command:'seek',value:45.25},{command:'rate',value:1.5}])(window as any).immersedNetflixCommand(command)});
+  expect(await page.evaluate(()=>(window as any).__controls)).toEqual([['play',undefined],['pause',undefined],['seek',45250],['setPlaybackRate',1.5]]);
+  expect(await page.locator('video').evaluate((v:HTMLVideoElement)=>v.currentTime)).toBe(1.5);
+});
+
+test('Netflix error pages report their error even after the video was removed', async ({page}) => {
+  await page.route('https://www.netflix.com/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<meta charset="utf-8"><div class="error-page">エラーコード S7\uFEFF353-5101</div>'}));
+  await page.goto('https://www.netflix.com/watch/123');
+  await page.evaluate(()=>{(window as any).__events=[];(window as any).webkit={messageHandlers:{immersedNetflix:{postMessage:(data:any)=>(window as any).__events.push(data)}}}});
+  await page.addScriptTag({content:fs.readFileSync('desktop/netflix.js','utf8')});
+  await page.addScriptTag({content:fs.readFileSync('desktop/netflix-bridge.js','utf8')});
+  await expect.poll(()=>page.evaluate(()=>(window as any).__events.find((x:any)=>x.event==='error')?.code)).toBe('S7353-5101');
+  await page.locator('.error-page').evaluate(e=>e.append(document.createTextNode('。')));
+  expect(await page.evaluate(()=>(window as any).__events.filter((x:any)=>x.event==='error').length)).toBe(1);
+});
+
+test('Netflix recovery is explicit and never opens another browser automatically', async ({page}) => {
+  await page.addInitScript(()=>{(window as any).__commands=[];(window as any).webkit={messageHandlers:{immersed:{postMessage:(data:any)=>(window as any).__commands.push(data)}}}});
+  await page.goto('/');await page.getByRole('button',{name:'Netflix',exact:true}).click();
+  await expect(page.getByRole('button',{name:'Retry playback',exact:true})).toBeHidden();
+  await page.evaluate(()=>(window as any).immersedNetflixEvent({event:'error',code:'S7353-5101',message:'Netflix playback failed (S7353-5101).'}));
+  await expect(page.locator('#netflixStatus')).toContainText('S7353-5101');
+  await expect(page.getByRole('button',{name:'Retry playback',exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>(window as any).__commands.filter((x:any)=>x.action==='netflixSafari'))).toEqual([]);
+  await page.getByRole('button',{name:'Open in Safari',exact:true}).click();
+  expect(await page.evaluate(()=>(window as any).__commands.at(-1))).toEqual({action:'netflixSafari'});
+  await page.getByRole('button',{name:'Retry playback',exact:true}).click();
+  expect(await page.evaluate(()=>(window as any).__commands.at(-1))).toEqual({action:'netflixRepair'});
+  await expect(page.getByRole('button',{name:'Retry playback',exact:true})).toBeHidden();
+});
+
+test('Netflix toolbar stays inside narrow panes and fullscreen has no opaque caption bar',async({page})=>{
+  await page.addInitScript(()=>{(window as any).webkit={messageHandlers:{immersed:{postMessage:()=>{}}}}});
+  await page.goto('/');await page.getByRole('button',{name:'Netflix',exact:true}).click();
+  await page.evaluate(()=>(window as any).immersedNetflixEvent({event:'state',id:'123',time:1,paused:true,duration:300}));
+  for(const width of [300,420,768]) {
+    await page.setViewportSize({width,height:800});
+    for(const label of ['Back to immersed','Video fullscreen','Words','Settings']) {
+      const bounds=await page.getByRole('button',{name:label,exact:true}).boundingBox();expect(bounds).not.toBeNull();expect(bounds!.x).toBeGreaterThanOrEqual(0);expect(bounds!.x+bounds!.width).toBeLessThanOrEqual(width);
+    }
+    expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+  }
+  await expect(page.locator('#netflixOptions')).toBeHidden();await expect(page.locator('.studyHead')).toBeHidden();
+  await expect(page.getByRole('combobox',{name:'Subtitle track'})).toHaveCount(0);
+  await page.evaluate(()=>(window as any).immersedNetflixFullscreen(true));
+  for(const selector of ['html','body','.studyCard','.subtitles'])expect(await page.locator(selector).evaluate(e=>getComputedStyle(e).backgroundColor)).toBe('rgba(0, 0, 0, 0)');
+  await expect(page.locator('header')).toBeHidden();
+});
+
+test('word shortcuts 1–4 persist distinct states, preserve hover and never seek Netflix',async({page})=>{
+  await page.addInitScript(()=>{(window as any).__commands=[];(window as any).webkit={messageHandlers:{immersed:{postMessage:(x:any)=>(window as any).__commands.push(x)}}}});
+  const load=async()=>{await page.goto('/');await page.getByRole('button',{name:'Netflix',exact:true}).click();await page.evaluate(()=>{const event=(window as any).immersedNetflixEvent;event({event:'state',id:'123',time:1.5,paused:true,duration:300});event({event:'cues',language:'ja',cues:[{start:1,end:3,text:'政治について話します。'}]});event({event:'line',id:'123',time:1.5,text:'政治について話します。'});});};
+  await load();const word=page.getByRole('button',{name:'Look up 政治',exact:true});await word.hover();await expect(page.locator('#lookup')).toHaveClass(/show/);
+  for(const [key,state] of [['1','unknown'],['2','learning'],['3','known'],['4','ignored']]) {
+    await page.keyboard.press(key);await expect(page.locator('#wordStates button[data-state="'+state+'"]').first()).toHaveAttribute('aria-pressed','true');
+    await expect(page.locator('#lookup')).toHaveClass(/show/);await expect(word).toHaveAttribute('data-word-state',state);
+  }
+  expect(await page.evaluate(()=>(window as any).__commands.filter((x:any)=>x.command==='seek'))).toEqual([]);
+  await load();await expect(page.getByRole('button',{name:'Look up 政治',exact:true})).toHaveAttribute('data-word-state','ignored');
+  await expect(page.getByRole('button',{name:'Look up 政治',exact:true})).not.toHaveClass(/unknown/);
+});
+
+
+test('paused Netflix block navigation displays the original target until the renderer catches up',async({page})=>{
+  await page.addInitScript(()=>{localStorage.setItem('immersed.preferences',JSON.stringify({readings:false}));(window as any).__commands=[];(window as any).webkit={messageHandlers:{immersed:{postMessage:(x:any)=>(window as any).__commands.push(x)}}}});
+  await page.goto('/');await page.getByRole('button',{name:'Netflix',exact:true}).click();
+  await page.evaluate(()=>{const e=(window as any).immersedNetflixEvent;e({event:'state',id:'123',time:5.5,paused:true,duration:300});e({event:'cues',language:'ja',cues:[{start:1,end:3,text:'最初の字幕。'},{start:5,end:7,text:'次の字幕。'},{start:9,end:12,text:'最後の字幕。'}]});e({event:'line',id:'123',time:5.5,text:'次の字幕。'});});
+  await page.getByRole('button',{name:'Previous subtitle',exact:true}).click();
+  await page.evaluate(()=>(window as any).immersedNetflixEvent({event:'line',id:'123',time:1.015,text:''}));
+  await expect(page.locator('#subtitles')).toHaveText('最初の字幕。');
+  await page.getByRole('button',{name:'Next subtitle',exact:true}).click();await expect(page.locator('#subtitles')).toHaveText('次の字幕。');
+  const commands=await page.evaluate(()=>(window as any).__commands.filter((x:any)=>x.command==='seek').map((x:any)=>x.value));expect(commands[0]).toBeCloseTo(1.015,3);expect(commands[1]).toBeCloseTo(5.015,3);
+  await page.getByRole('button',{name:'Play or pause',exact:true}).click();
+  await page.evaluate(()=>(window as any).immersedNetflixEvent({event:'line',id:'123',time:5.015,text:''}));await expect(page.locator('#subtitles')).toBeEmpty();
+});
+
+
+test('Netflix owns hover pause and resumes once, while manual pauses and cancelled lookups stay paused',async({page})=>{
+  await page.route('https://www.netflix.com/**',route=>route.fulfill({contentType:'text/html',body:'<video></video>'}));await page.goto('https://www.netflix.com/watch/123');
+  await page.evaluate(()=>{
+    (window as any).__events=[];(window as any).__controls=[];(window as any).__paused=false;
+    (window as any).webkit={messageHandlers:{immersedNetflix:{postMessage:(data:any)=>(window as any).__events.push(data)}}};
+    const video=document.querySelector('video')!;Object.defineProperty(video,'paused',{get:()=>(window as any).__paused});
+    const player={play:()=>{(window as any).__controls.push('play');(window as any).__paused=false},pause:()=>{(window as any).__controls.push('pause');(window as any).__paused=true}};
+    (window as any).netflix={appContext:{state:{playerApp:{getAPI:()=>({videoPlayer:{getAllPlayerSessionIds:()=>['watch_main'],getVideoPlayerBySessionId:()=>player}})}}}};
+  });
+  await page.addScriptTag({content:fs.readFileSync('desktop/netflix.js','utf8')});await page.addScriptTag({content:fs.readFileSync('desktop/netflix-bridge.js','utf8')});
+  const send=async(command:string,value:number)=>page.evaluate(({command,value})=>(window as any).immersedNetflixCommand({command,value}),{command,value});
+  await send('hoverStart',1);await send('hoverStart',1);await send('hoverEnd',1);await send('hoverEnd',1);
+  expect(await page.evaluate(()=>(window as any).__controls)).toEqual(['pause','play']);
+  await page.evaluate(()=>(window as any).__paused=true);await send('hoverStart',2);await send('hoverEnd',2);
+  expect(await page.evaluate(()=>(window as any).__paused)).toBe(true);expect(await page.evaluate(()=>(window as any).__controls.filter((x:string)=>x==='play').length)).toBe(1);
+  await page.evaluate(()=>(window as any).__paused=false);await send('hoverStart',3);await send('hoverCancel',3);await send('hoverEnd',3);
+  expect(await page.evaluate(()=>(window as any).__paused)).toBe(true);
+  await page.evaluate(()=>(window as any).__paused=false);await send('hoverStart',4);await send('pause',0);await send('hoverEnd',4);
+  expect(await page.evaluate(()=>(window as any).__controls.filter((x:string)=>x==='play').length)).toBe(1);
+});
+
+test('opening Netflix lookup keeps the caption anchored while its native viewport expands',async({page})=>{
+  await page.addInitScript(()=>{(window as any).webkit={messageHandlers:{immersed:{postMessage:()=>{}}}}});
+  await page.setViewportSize({width:960,height:190});await page.goto('/');await page.getByRole('button',{name:'Netflix',exact:true}).click();
+  await page.evaluate(()=>{const e=(window as any).immersedNetflixEvent;e({event:'state',id:'123',time:1,paused:true,duration:100});e({event:'cues',language:'ja',cues:[{start:0,end:3,text:'政治について話します。'}]});e({event:'line',id:'123',time:1,text:'政治について話します。'});(window as any).immersedNetflixFullscreen(true)});
+  const word=page.getByRole('button',{name:'Look up 政治',exact:true});const before=(await word.boundingBox())!;
+  await word.click();await page.setViewportSize({width:960,height:520});const after=(await word.boundingBox())!;
+  expect(Math.abs((190-before.y-before.height)-(520-after.y-after.height))).toBeLessThan(1);
+  await expect(page.getByRole('button',{name:'Save word',exact:true})).toBeVisible();
 });

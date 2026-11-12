@@ -9,7 +9,7 @@ let englishIndex;
 const normalizeEnglish = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/^(?:to|an?|the)\s+/, '').replace(/\s+/g, ' ').trim();
 const englishTerms = text => normalizeEnglish(text).match(/[a-z0-9]+/g) || [];
 const hira = text => (text || '').replace(/[ァ-ヶ]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
-const posLabels = { 名詞: 'noun', 動詞: 'verb', 形容詞: 'adjective', 助詞: 'particle', 助動詞: 'auxiliary', 副詞: 'adverb', 接続詞: 'conjunction', 連体詞: 'determiner', 記号: 'punctuation', 接頭詞: 'prefix', 感動詞: 'interjection' };
+const posLabels = { 名詞: 'noun', 動詞: 'verb', 形容詞: 'adjective', 助詞: 'particle', 助動詞: 'auxiliary', 副詞: 'adverb', 接続詞: 'conjunction', 連体詞: 'determiner', 記号: 'punctuation', 接頭詞: 'prefix', 感動詞: 'interjection', フィラー: 'interjection' };
 async function initialize() {
   if (!ready) ready = (async () => {
     const dictionary = JSON.parse(await fs.promises.readFile(path.join(__dirname, '../.data/jmdict.json'), 'utf8'));
@@ -18,6 +18,23 @@ async function initialize() {
       for (const form of new Set([...entry.kanji, ...entry.kana].map(k => k.text))) {
         const matches = index.get(form) || [];
         matches.push(entry); index.set(form, matches);
+      }
+    }
+    // Spoken Japanese often drops を inside dictionary-attested expressions.
+    // Build reversible aliases from actual written/read forms, never invent a gloss.
+    const spoken = new Map();
+    for (const entry of dictionary.words) {
+      if (!entry.sense.some(s=>s.partOfSpeech.some(p=>/^v/.test(p)))) continue;
+      for (const form of [...entry.kanji,...entry.kana].map(x=>x.text)) {
+        if (!/^[^を\s]+を[^を\s]+$/u.test(form)) continue;
+        const [prefix,verb]=form.split('を');
+        const aliases = [prefix+verb];
+        for (const kana of entry.kana) if (kana.text.includes('を')) aliases.push(kana.text.split('を')[0]+verb);
+        for (const alias of aliases) {
+          const matches=spoken.get(alias)||[];
+          if (!matches.some(x=>x.entry.id===entry.id)) matches.push({entry,lemma:form});
+          spoken.set(alias,matches);
+        }
       }
     }
     const stems = new Map();
@@ -34,7 +51,7 @@ async function initialize() {
       }
     }
     const tokenizer = await new Promise((resolve, reject) => kuromoji.builder({ dicPath: path.join(path.dirname(require.resolve('kuromoji/package.json')), 'dict') }).build((error, value) => error ? reject(error) : resolve(value)));
-    return { index, forms: [...index.keys()].sort(), words: dictionary.words, tokenizer, stems, tags: dictionary.tags };
+    return { index, forms: [...index.keys()].sort(), words: dictionary.words, tokenizer, stems, spoken, tags: dictionary.tags };
   })().catch(error => { ready = null; throw error; });
   return ready;
 }
@@ -72,11 +89,17 @@ function verbBase(lemma,index){
   return candidates.find(([base,,pos])=>(index.get(base)||[]).some(entry=>entry.sense.some(s=>s.partOfSpeech.some(p=>pos.test(p)))))||null;
 }
 async function lookupUncached(word, options = {}) {
-  word=word.normalize('NFKC').trim();
+  word=word.normalize('NFKC').trim().replace(/[!！?？。、…]+$/u, '');
   const grammatical = grammarEntry(word, options);
   if (grammatical) return [grammatical];
-  const { index, tags, stems, tokenizer } = await initialize();
+  const { index, tags, stems, tokenizer, spoken } = await initialize();
   let matches=(index.get(word)||index.get(hira(word))||[]).map(entry=>({entry,lemma:word,by:'exact'}));
+  if(!matches.length&&!options.proper) {
+    const emphatic = word.replace(/[っッー〜～]+$/u,'');
+    const interjections = (index.get(emphatic)||[]).filter(e=>e.sense.some(s=>s.partOfSpeech.includes('int')));
+    if(emphatic!==word&&interjections.length) matches=interjections.map(entry=>({entry,lemma:emphatic,by:'spoken ending'}));
+    if(!matches.length&&spoken.get(word)?.length===1) matches=spoken.get(word).map(x=>({...x,by:'omitted particle'}));
+  }
   if(!matches.length&&!options.proper){const base=honorificBase(word,index);if(base)matches=base.entries.map(entry=>({entry,lemma:base.base,by:'honorific'}));}
   if(!matches.length)matches=(stems.get(word)||stems.get(hira(word))||[]).map(x=>({...x,by:'inflection'}));
   if(!matches.length){
@@ -93,7 +116,9 @@ async function lookupUncached(word, options = {}) {
   const matchingReading=(entry)=>entry.kana.some(k=>k.text===requestedReading)?requestedReading:(stems.get(requestedReading)||[]).find(x=>x.entry.id===entry.id)?.lemma||'';
   const pronounced = requestedReading ? matches.filter(x => matchingReading(x.entry)) : [];
   if (pronounced.length) matches = pronounced;
-  matches.sort((a,b)=>Number(!!matchingReading(b.entry))-Number(!!matchingReading(a.entry)));
+  const fitsPOS = entry => entry.sense.some(s=>s.partOfSpeech.some(p=>options.pos==='interjection'?p==='int':options.pos==='verb'?/^v/.test(p):options.pos==='adjective'?/^adj/.test(p):options.pos==='noun'?/^n/.test(p):false));
+  if(options.pos==='interjection'&&matches.some(x=>fitsPOS(x.entry)))matches=matches.filter(x=>fitsPOS(x.entry));
+  matches.sort((a,b)=>Number(fitsPOS(b.entry))-Number(fitsPOS(a.entry))||Number(!!matchingReading(b.entry))-Number(!!matchingReading(a.entry)));
   const seen=new Set();
   const general=matches.filter(x=>!seen.has(x.entry.id)&&seen.add(x.entry.id)).slice(0,5).map(({entry,lemma,by})=>({...dictionaryEntry(entry,tags,lemma,matchingReading(entry)),matchedBy:by,matchedForm:lemma}));
   const named = options.proper || !general.length ? names.lookup(word, options.reading) : [];
@@ -153,7 +178,7 @@ const auxiliaries = { ます: 'polite', た: 'past', ない: 'negative', ぬ: 'n
 const patterns = [ ['について', 'about / concerning'], ['として', 'as / in the role of'], ['なければならない', 'must / have to'], ['かもしれない', 'might / may'], ['わけではない', 'does not necessarily mean'], ['ことができる', 'can / be able to'] ];
 function analyze(text,grouped=true){return remember(analysisCache,JSON.stringify([text,grouped]),()=>analyzeUncached(text,grouped));}
 async function analyzeUncached(text, grouped = true) {
-  const { index, tokenizer, stems } = await initialize();
+  const { index, tokenizer, stems, spoken } = await initialize();
   const raw = tokenizer.tokenize(text);
   let offset = 0;
   const tokens = raw.map(t => {
@@ -173,15 +198,17 @@ async function analyzeUncached(text, grouped = true) {
     // Longest dictionary-backed expression, including an inflected final verb.
     // Require an internal particle so ordinary noun grouping keeps its rules.
     let expression = null;
-    for (let j = i + 2; j < Math.min(tokens.length, i + 9); j++) {
+    for (let j = i + 1; j < Math.min(tokens.length, i + 9); j++) {
       const part = tokens.slice(i, j + 1);
       if (part.some(t => !t.word || /\s/.test(t.text)) || part.some((t, n) => n && t.start !== part[n - 1].end)) break;
-      if (!part.slice(1, -1).some(t => t.pos === 'particle')) continue;
       const last = tokens[j];
       const surface = text.slice(head.start, last.end);
       const normalized = text.slice(head.start, last.start) + last.lemma;
-      const lemma = index.has(surface) ? surface : index.has(normalized) ? normalized : '';
-      if (lemma) expression = { lemma, end: j + 1, pos: last.pos };
+      const alias = spoken.get(normalized);
+      const omitted = alias?.length===1 ? alias[0].lemma : '';
+      const internalParticle = part.slice(1,-1).some(t=>t.pos==='particle');
+      const lemma = omitted || (internalParticle && (index.has(surface)?surface:index.has(normalized)?normalized:''));
+      if (lemma) expression = { lemma, end: j + 1, pos: last.pos, omitted:!!omitted };
     }
     // Continuative compound verbs can be split into a verb plus nominal suffix
     // (すくい + 取り). Join only dictionary-attested stems; keep surface glyphs.
@@ -204,7 +231,7 @@ async function analyzeUncached(text, grouped = true) {
       }
     }
     const pattern = !expression && patterns.find(([surface]) => remaining.startsWith(surface) && tokens.some(t => t.end === head.start + surface.length));
-    if (expression) { end = expression.end; grammar.push('expression'); } else if (pattern) {
+    if (expression) { end = expression.end; grammar.push('expression'); if(expression.omitted)grammar.push('spoken particle omission'); } else if (pattern) {
       while (end < tokens.length && tokens[end - 1].end < head.start + pattern[0].length) end++;
       grammar.push(pattern[1]);
     } else if (head.pos === 'noun' || head.pos === 'prefix') {
@@ -231,8 +258,20 @@ async function analyzeUncached(text, grouped = true) {
         else break;
       }
     }
+    let interjectionLemma = '';
+    if (head.pos === 'interjection') {
+      for (let j=end;j<Math.min(tokens.length,i+5);j++) {
+        if(tokens[j].start!==tokens[j-1].end || !(tokens[j].pos==='interjection' || /^[っッー〜～]+$/u.test(tokens[j].text))) break;
+        const surface=text.slice(head.start,tokens[j].end), base=index.has(surface)?surface:surface.replace(/[っッー〜～]+$/u,'');
+        if((index.get(base)||[]).some(e=>e.sense.some(s=>s.partOfSpeech.includes('int')))) { end=j+1;interjectionLemma=base;grammar.push('expressive ending'); }
+      }
+    }
+    const verbal = suruVerb || (expression?.pos || head.pos) === 'verb';
+    if (verbal && tokens[end]?.text==='な' && tokens[end].start===tokens[end-1].end && /ん$/u.test(tokens[end-1].text) && /る$/u.test(nounLemma)) {
+      end++; grammar.push('contracted prohibition: ～るな');
+    }
     const part = tokens.slice(i, end);
-    result.push({ ...head, pos: expression ? expression.pos : suruVerb ? 'verb' : compoundNoun ? 'noun' : head.pos, text: text.slice(head.start, part.at(-1).end), end: part.at(-1).end, lemma: pattern ? pattern[0] : nounLemma, reading: part.map(t => t.reading || t.text).join(''), grammar: [...new Set(grammar)] });
+    result.push({ ...head, pos: expression ? expression.pos : suruVerb ? 'verb' : compoundNoun ? 'noun' : head.pos, text: text.slice(head.start, part.at(-1).end), end: part.at(-1).end, lemma: pattern ? pattern[0] : interjectionLemma || nounLemma, reading: part.map(t => t.reading || t.text).join(''), grammar: [...new Set(grammar)] });
     i = end;
   }
   return result;
@@ -255,7 +294,7 @@ async function homophones(word, reading) {
 // Exact dictionary-attested expressions around a selected span, including
 // ambiguous te-form stems (通っ may be 通る, 通う, or 通つ). Never alter captions.
 async function contextPhrases(sentence, start, end) {
-  const { index, tags, tokenizer } = await initialize();
+  const { index, tags, tokenizer, spoken } = await initialize();
   const raw = tokenizer.tokenize(sentence);
   let offset = 0;
   const tokens = raw.map(t => {
@@ -288,6 +327,7 @@ async function contextPhrases(sentence, start, end) {
         const replacements = { 'っ': ['う', 'つ', 'る'], 'ん': ['む', 'ぶ', 'ぬ'], 'い': ['く', 'ぐ'] }[ending] || [];
         for (const suffix of replacements) forms.push(prefix + last.surface_form.slice(0, -1) + suffix);
       }
+      for (const alias of [...forms]) if (spoken.get(alias)?.length===1) forms.push(spoken.get(alias)[0].lemma);
       for (const form of forms) {
         if (!index.has(form) || results.has(form)) continue;
         const entries = index.get(form);
