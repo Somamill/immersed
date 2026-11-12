@@ -6,20 +6,9 @@
   "build": {
     "native-check": {
       "distribution": "internal",
-      "ios": { "simulator": true }
-    },
-    "production": {
-      "distribution": "store",
-      "environment": "production",
-      "autoIncrement": true,
       "ios": {
-        "credentialsSource": "remote"
+        "simulator": true
       }
-    }
-  },
-  "submit": {
-    "production": {
-      "ios": {}
     }
   }
 }

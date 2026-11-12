@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.21.3",
+    "date": "2026-11-13",
+    "title": "Add a separate imported-media Store edition",
+    "notes": [
+      "Prepare an isolated App Store edition for local videos and SRT/VTT subtitles, offline JMdict lookup, and saved words; retain the full community app. Store builds and Apple review remain pending."
+    ],
+    "changelogFormat": 1
+  },
+  {
     "version": "0.21.2",
     "date": "2026-11-12",
     "title": "Part of dot.",

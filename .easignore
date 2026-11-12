@@ -61,3 +61,12 @@ desktop/
 tests/
 docs/
 .github/
+
+# Nested Store project: always regenerate native projects and dictionary data.
+**/ios/**
+**/android/**
+**/credentials.json
+**/*.provisionprofile
+**/assets/dictionary.db
+**/assets/dictionary.tmp
+**/assets/jmdict.tgz

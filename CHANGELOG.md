@@ -4,6 +4,14 @@ Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Rel
 
 ## [Unreleased]
 
+## [0.21.3] - 2026-11-13
+
+Add a separate imported-media Store edition
+
+### Changed
+
+- Prepare an isolated App Store edition for local videos and SRT/VTT subtitles, offline JMdict lookup, and saved words; retain the full community app. Store builds and Apple review remain pending.
+
 ## [0.21.2] - 2026-11-12
 
 Part of dot.
