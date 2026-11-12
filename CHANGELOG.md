@@ -4,15 +4,23 @@ Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Rel
 
 ## [Unreleased]
 
-## [0.21.1] - 2026-11-12
+## [0.21.2] - 2026-11-12
 
 Part of dot.
 
 ### Changed
 
-- Apply shared dot. surfaces, typography, controls and indigo accents to desktop and mobile chrome while preserving the video stage, learning states and subtitle replay.
-- Add accessible suite discovery and companion project links in Settings, with runtime tokens refreshed by the brand-kit sync workflow.
+- Apply shared dot. surfaces, typography, controls and indigo accents while preserving the video stage, subtitle replay, spoken-verb lookup and learning states.
+- Add accessible suite discovery and companion links in Settings; refresh runtime tokens through the shared brand-kit workflow.
 - Improve narrow-screen desktop layout, keyboard focus and contrast.
+
+## [0.21.1] - 2026-11-12
+
+Resolve spoken Japanese verb lookups
+
+### Changed
+
+- Recover dictionary-attested katakana verbs and spoken conjugations across tokenizer boundaries, including シメてる and 粋がってんじゃねえ. Preserve original captions, spaces, punctuation and offsets; keep nouns and names distinct. Improve dictionary part-of-speech ranking. Unsupported fictional names still have no invented definition.
 
 ## [0.21.0] - 2026-11-12
 
