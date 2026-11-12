@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.19.3 — 2026-11-12
+
+Keep Netflix fullscreen lookup inside every window size
+
+- Let the floating Netflix subtitle and dictionary panel shrink within smaller windows while preserving full video bounds. Native layout checks passed at 800×600, 1320×860 and 1850×1000, including expanded lookup. Original subtitle timing and playback-rate synchronization are retained. Netflix returned S7353-5101 during a live seek check; protected playback remains dependent on Netflix’s embedded-player support.
+
 ## 0.19.2 — 2026-11-12
 
 Fix Netflix fullscreen native layout

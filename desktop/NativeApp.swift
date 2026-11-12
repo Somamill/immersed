@@ -19,9 +19,9 @@ final class NetflixFocusView: NSView {
             addSubview(view)
         }
         let width = study.widthAnchor.constraint(equalToConstant: 960)
-        width.priority = .defaultHigh
+        width.priority = .defaultLow
         let height = study.heightAnchor.constraint(equalToConstant: 190)
-        height.priority = .defaultHigh; studyHeight = height
+        height.priority = .defaultLow; studyHeight = height
         NSLayoutConstraint.activate([
             movie.leadingAnchor.constraint(equalTo: leadingAnchor), movie.trailingAnchor.constraint(equalTo: trailingAnchor),
             movie.topAnchor.constraint(equalTo: topAnchor), movie.bottomAnchor.constraint(equalTo: bottomAnchor),
