@@ -105,3 +105,62 @@ test('visible-only Netflix subtitles close at gaps, retain navigation history an
   expect(await page.evaluate(()=>(window as any).eval('cues.length'))).toBe(0);
   await expect(page.locator('#subtitles')).toContainText('Choose subtitles');
 });
+
+test('Netflix displayed captions override track-clock drift and clear immediately at original gaps',async({page})=>{
+  await page.addInitScript(()=>{(window as any).__commands=[];(window as any).webkit={messageHandlers:{immersed:{postMessage:(x:any)=>(window as any).__commands.push(x)}}};});
+  await page.goto('/');await page.getByRole('button',{name:'Netflix',exact:true}).click();
+  await page.evaluate(()=>{
+    const event=(window as any).immersedNetflixEvent;
+    event({event:'state',id:'123',time:1.2,paused:true,rate:1.5,title:'日本語'});
+    event({event:'cues',language:'ja',cues:[{start:1,end:3,text:'政治について話します。'},{start:3,end:6,text:'本を読みます。'}]});
+    event({event:'line',id:'123',time:1.2,text:'本を読みます。'});
+  });
+  await expect(page.getByRole('button',{name:'Look up 本',exact:true})).toBeVisible();
+  await expect(page.locator('#subtitles')).not.toContainText('政治');
+  await expect(page.locator('#speedValue')).toHaveText('1.5×');
+  await page.evaluate(()=>(window as any).immersedNetflixEvent({event:'state',id:'123',time:1.4,paused:true,rate:1.5}));
+  await expect(page.getByRole('button',{name:'Look up 本',exact:true})).toBeVisible();
+  await page.getByRole('button',{name:'Previous subtitle',exact:true}).click();
+  expect(await page.evaluate(()=>(window as any).__commands.filter((x:any)=>x.command==='seek').at(-1).value)).toBeCloseTo(1.015,2);
+  await page.evaluate(()=>(window as any).immersedNetflixEvent({event:'line',id:'123',time:1.5,text:''}));
+  await expect(page.locator('#subtitles')).toBeEmpty();
+});
+
+test('Netflix fullscreen keeps lookup available and hides browsing and transport chrome',async({page})=>{
+  await page.addInitScript(()=>{(window as any).__commands=[];(window as any).webkit={messageHandlers:{immersed:{postMessage:(x:any)=>(window as any).__commands.push(x)}}};});
+  await page.goto('/');await page.getByRole('button',{name:'Netflix',exact:true}).click();
+  await page.setViewportSize({width:960,height:520});
+  await page.evaluate(()=>{
+    const event=(window as any).immersedNetflixEvent;
+    event({event:'state',id:'123',time:1,paused:true,rate:1});
+    event({event:'cues',language:'ja',cues:[{start:0,end:4,text:'政治について話します。'}]});
+    event({event:'line',id:'123',time:1,text:'政治について話します。'});
+    (window as any).immersedNetflixFullscreen(true);
+  });
+  await expect(page.locator('header')).toBeHidden();await expect(page.locator('#controls')).toBeHidden();
+  await page.getByRole('button',{name:'Look up 政治',exact:true}).click();
+  await expect(page.locator('#definitions')).toContainText(/politic|government/);
+  await expect(page.getByRole('button',{name:'Save word',exact:true})).toBeVisible();
+  expect(await page.evaluate(()=>(window as any).__commands)).toContainEqual({action:'netflixLookup',open:true});
+  await page.keyboard.press('Escape');await expect(page.locator('#lookup')).not.toHaveClass(/show/);
+  await page.keyboard.press('Escape');
+  expect(await page.evaluate(()=>(window as any).__commands)).toContainEqual({action:'netflixFullscreen'});
+});
+
+test('Netflix DOM changes and playback-rate events are forwarded immediately, including fullscreen requests',async({page})=>{
+  await page.route('https://www.netflix.com/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<meta charset="utf-8"><video></video><div class="player-timedtext">最初の字幕</div><button data-uia="control-fullscreen-enter">Fullscreen</button>'}));
+  await page.goto('https://www.netflix.com/watch/123');
+  await page.evaluate(()=>{(window as any).__events=[];(window as any).webkit={messageHandlers:{immersedNetflix:{postMessage:(data:any)=>(window as any).__events.push(data)}}};});
+  await page.addScriptTag({content:fs.readFileSync('desktop/netflix.js','utf8')});await page.addScriptTag({content:fs.readFileSync('desktop/netflix-bridge.js','utf8')});
+  await page.evaluate(async()=>{(window as any).__events=[];document.querySelector('.player-timedtext')!.textContent='次の字幕';await new Promise(r=>setTimeout(r,0));});
+  expect(await page.evaluate(()=>(window as any).__events.filter((x:any)=>x.event==='line').at(-1)?.text)).toBe('次の字幕');
+  await page.evaluate(async()=>{document.querySelector('video')!.playbackRate=1.5;await new Promise(r=>setTimeout(r,0));});
+  expect(await page.evaluate(()=>(window as any).__events.filter((x:any)=>x.event==='state').at(-1)?.rate)).toBe(1.5);
+  await page.getByRole('button',{name:'Fullscreen',exact:true}).click();
+  expect(await page.evaluate(()=>(window as any).__events.filter((x:any)=>x.event==='shortcut').at(-1)?.command)).toBe('fullscreen');
+  await page.evaluate(()=>(window as any).immersedNetflixCommand({command:'fullscreenState',value:true}));await page.keyboard.press('Escape');
+  await expect(page.locator('.player-timedtext')).toHaveCSS('opacity','0');
+  expect(await page.evaluate(()=>(window as any).__events.filter((x:any)=>x.event==='shortcut').at(-1)?.command)).toBe('exitFullscreen');
+  await page.evaluate(()=>(window as any).immersedNetflixCommand({command:'fullscreenState',value:false}));
+  await expect(page.locator('.player-timedtext')).toHaveCSS('opacity','1');
+});

@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.19.1 — 2026-11-12
+
+Enable Netflix video fullscreen and synchronize original captions
+
+- Netflix fullscreen fills the video area with a floating interactive subtitle and word-lookup panel; its fullscreen control, F and Escape use the same layout. Subtitle changes and clears follow Netflix’s displayed caption events instead of timer-only track estimates, and the speed icon follows Netflix playback rate. Original timed tracks remain available for subtitle navigation. Verified fixtures and native build; live playback check follows installation.
+
 ## 0.19.0 — 2026-11-12
 
 Bring vocabulary and subtitle improvements to iPhone

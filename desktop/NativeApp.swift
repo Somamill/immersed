@@ -6,7 +6,29 @@ import Vision
 import QuartzCore
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler {
+final class NetflixFocusView: NSView {
+    weak var movie: WKWebView?
+    weak var study: WKWebView?
+    var expanded = false
+    var exitButton: NSButton?
+    var hideChrome: DispatchWorkItem?
+    override func layout() {
+        super.layout()
+        movie?.frame = bounds
+        let width = min(960, bounds.width - 48)
+        let height = min(expanded ? 520 : 190, bounds.height * (expanded ? 0.72 : 0.32))
+        study?.frame = NSRect(x: (bounds.width-width)/2, y: min(95, bounds.height * 0.10), width: width, height: height)
+        exitButton?.frame = NSRect(x: bounds.width-64, y: bounds.height-60, width: 40, height: 40)
+    }
+    func revealControls() {
+        hideChrome?.cancel(); exitButton?.alphaValue = 1
+        let work = DispatchWorkItem { [weak self] in self?.exitButton?.alphaValue = 0 }
+        hideChrome = work; DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: work)
+    }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNavigationDelegate, WKScriptMessageHandler, NSWindowDelegate {
     var window: NSWindow!
     var web: WKWebView!
     var service: Process?
@@ -26,15 +48,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     var gestureFired = false
     var netflixView: WKWebView?
     var netflixSplit: NSSplitView?
+    var netflixFocus: NetflixFocusView?
+    var netflixWasFullscreen = false
     let home = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/Immersed Mac")
     var blockAds: Bool { UserDefaults.standard.object(forKey: "blockAds") as? Bool ?? true }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
         setupPlaybackCommands()
-        gestureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .swipe]) { [weak self] event in
+        gestureMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .swipe, .mouseMoved]) { [weak self] event in
             guard let self, event.window === self.window,
                   self.web?.url?.host == "127.0.0.1" else { return event }
+            if event.type == .mouseMoved { self.netflixFocus?.revealControls(); return event }
             if event.type == .swipe {
                 guard abs(event.deltaX) > abs(event.deltaY) else { return event }
                 self.web.evaluateJavaScript("window.immersedTrackpad?.(\(event.deltaX < 0 ? 1 : -1))", completionHandler: nil)
@@ -53,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         web = makeWebView()
         window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1320, height: 860), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         window.title = "immersed."
+        window.delegate = self; window.acceptsMouseMovedEvents = true
         window.styleMask.insert(.fullSizeContentView)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
@@ -224,7 +250,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
                   let data = try? JSONSerialization.data(withJSONObject: payload), data.count <= 8 * 1024 * 1024,
                   let json = String(data: data, encoding: .utf8) else { return }
             if payload["event"] as? String == "shortcut" {
-                if payload["command"] as? String == "fullscreen" { window.toggleFullScreen(nil) }
+                if payload["command"] as? String == "fullscreen" { toggleNetflixFullscreen() }
+                else if payload["command"] as? String == "exitFullscreen" { exitNetflixFullscreen() }
                 else if let command = payload["command"] as? String, ["previous", "next"].contains(command) {
                     web.evaluateJavaScript("window.immersedPlayback?.('skip',\(command == "previous" ? -1 : 1))", completionHandler: nil)
                 }
@@ -239,13 +266,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         if action == "openNetflix" {
             openNetflix(object["url"] as? String)
         } else if action == "closeNetflix" {
+            restoreNetflixLayout()
             netflixView?.evaluateJavaScript("window.immersedNetflixCommand?.({command:'pause'})", completionHandler: nil)
             netflixView?.stopLoading()
             netflixView?.configuration.userContentController.removeScriptMessageHandler(forName: "immersedNetflix")
             netflixView?.removeFromSuperview(); web.removeFromSuperview(); window.contentView = web
             netflixSplit = nil; netflixView = nil
         } else if action == "netflixFullscreen" {
-            window.toggleFullScreen(nil)
+            toggleNetflixFullscreen()
+        } else if action == "netflixLookup", let open = object["open"] as? Bool, let focus = netflixFocus {
+            focus.expanded = open; focus.needsLayout = true
+            focus.layoutSubtreeIfNeeded()
         } else if action == "netflixCommand", let command = object["command"] as? String,
                   ["play", "pause", "seek", "rate", "language", "original", "snapshot"].contains(command),
                   let data = try? JSONSerialization.data(withJSONObject: object), let json = String(data: data, encoding: .utf8) {
@@ -338,9 +369,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         let config = WKWebViewConfiguration()
         config.websiteDataStore = .default()
         config.mediaTypesRequiringUserActionForPlayback = []
-        // Keep the study pane visible in fullscreen. Netflix's own element
-        // fullscreen would hide word lookup.
-        config.preferences.isElementFullscreenEnabled = false
+        // The bridge routes fullscreen requests to our video/lookup layout.
+        config.preferences.isElementFullscreenEnabled = true
         config.userContentController.add(self, name: "immersedNetflix")
         for name in ["netflix", "netflix-bridge"] {
             if let file = Bundle.main.url(forResource: name, withExtension: "js"), let code = try? String(contentsOf: file, encoding: .utf8) {
@@ -359,6 +389,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         split.adjustSubviews(); split.setPosition(split.bounds.width * 0.65, ofDividerAt: 0)
         view.load(URLRequest(url: url))
     }
+    func enterNetflixFullscreen() {
+        guard netflixFocus == nil, let movie = netflixView else { return }
+        let focus = NetflixFocusView(frame: window.contentView!.bounds)
+        focus.wantsLayer = true; focus.layer?.backgroundColor = NSColor.black.cgColor
+        movie.removeFromSuperview(); web.removeFromSuperview()
+        focus.movie = movie; focus.study = web; focus.addSubview(movie); focus.addSubview(web)
+        let button = NSButton(image: NSImage(systemSymbolName: "arrow.down.right.and.arrow.up.left", accessibilityDescription: "Exit Netflix fullscreen")!, target: self, action: #selector(exitNetflixFullscreen))
+        button.bezelStyle = .texturedRounded; button.setAccessibilityLabel("Exit Netflix fullscreen")
+        focus.exitButton = button; focus.addSubview(button)
+        web.wantsLayer = true; web.layer?.cornerRadius = 22; web.layer?.masksToBounds = true
+        netflixFocus = focus; window.contentView = focus; focus.needsLayout = true; focus.layoutSubtreeIfNeeded(); focus.revealControls()
+        web.evaluateJavaScript("window.immersedNetflixFullscreen?.(true)", completionHandler: nil)
+        movie.evaluateJavaScript("window.immersedNetflixCommand?.({command:'fullscreenState',value:true})", completionHandler: nil)
+    }
+    func toggleNetflixFullscreen() {
+        if netflixFocus != nil { exitNetflixFullscreen(); return }
+        netflixWasFullscreen = window.styleMask.contains(.fullScreen)
+        enterNetflixFullscreen()
+        if !netflixWasFullscreen { window.toggleFullScreen(nil) }
+    }
+    func restoreNetflixLayout() {
+        guard let focus = netflixFocus, let split = netflixSplit, let movie = netflixView else { return }
+        focus.hideChrome?.cancel(); movie.removeFromSuperview(); web.removeFromSuperview()
+        web.layer?.cornerRadius = 0; web.layer?.masksToBounds = false
+        split.addArrangedSubview(movie); split.addArrangedSubview(web)
+        window.contentView = split; netflixFocus = nil
+        split.adjustSubviews(); split.setPosition(split.bounds.width * 0.65, ofDividerAt: 0)
+        web.evaluateJavaScript("window.immersedNetflixFullscreen?.(false)", completionHandler: nil)
+        movie.evaluateJavaScript("window.immersedNetflixCommand?.({command:'fullscreenState',value:false})", completionHandler: nil)
+    }
+    @objc func exitNetflixFullscreen() {
+        let leaveWindow = !netflixWasFullscreen && window.styleMask.contains(.fullScreen)
+        restoreNetflixLayout()
+        if leaveWindow { window.toggleFullScreen(nil) }
+    }
+    func windowWillExitFullScreen(_ notification: Notification) { restoreNetflixLayout() }
+    func windowWillEnterFullScreen(_ notification: Notification) {
+        if netflixView != nil && netflixFocus == nil { netflixWasFullscreen = false; enterNetflixFullscreen() }
+    }
+    func windowDidResize(_ notification: Notification) { netflixFocus?.needsLayout = true }
     @objc func browseYouTube() { openBrowser(URL(string: "https://www.youtube.com/?hl=ja&gl=JP")!) }
     func openBrowser(_ url: URL) {
         if let existing = browserWindows.first {

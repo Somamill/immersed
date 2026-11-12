@@ -6,11 +6,11 @@
   window.__immersedNetflixBridge = true;
   const post = data => window.webkit?.messageHandlers?.immersedNetflix?.postMessage(data);
   let titleID = '', lastLine = '', lastTrack = '', lastPayload = null, candidates = [];
-  let showOriginal = true, selectedLanguage = '', currentLanguage = '', reportedTracks = '';
+  let showOriginal = true, selectedLanguage = '', currentLanguage = '', reportedTracks = '', observedLine = false, lastState = '', lastStateAt = 0, lastTracksAt = 0, observedVideo = null, focusMode = false, captionDirty = false;
   const emit = payload => { lastPayload = payload; post(payload); };
   function resetTitle() {
     const id = location.pathname.match(/\/watch\/(\d+)/)?.[1] || '';
-    if (id !== titleID) { titleID = id; lastTrack = ''; lastLine = ''; lastPayload = null; candidates = []; currentLanguage = ''; selectedLanguage = ''; post({ event: 'reset', id }); }
+    if (id !== titleID) { titleID = id; lastTrack = ''; lastLine = ''; lastPayload = null; candidates = []; currentLanguage = ''; selectedLanguage = ''; observedLine = false; lastState = ''; post({ event: 'reset', id }); }
     return id;
   }
   function receive(text) {
@@ -21,6 +21,7 @@
     if (candidates.some(c => c.key === key)) return;
     candidates.push({ key, ...result });
     if (candidates.length > 4) candidates.shift();
+    captionDirty = true; sync(true);
   }
   const originalFetch = window.fetch;
   window.fetch = function (...args) {
@@ -45,8 +46,9 @@
   };
   window.immersedNetflixCommand = command => {
     const video = document.querySelector('video');
+    if (command.command === 'fullscreenState') { focusMode = Boolean(command.value); sync(true); return; }
     if (command.command === 'snapshot') { if (lastPayload) post(lastPayload); return; }
-    if (command.command === 'original') { showOriginal = Boolean(command.value); return; }
+    if (command.command === 'original') { showOriginal = Boolean(command.value); sync(true); return; }
     if (!video) return;
     if (command.command === 'play') video.play().catch(() => post({ event: 'error', message: 'Use the Netflix play button to start this title.' }));
     if (command.command === 'pause') video.pause();
@@ -60,21 +62,31 @@
   };
   document.addEventListener('keydown', event => {
     if (event.ctrlKey || event.metaKey || event.altKey || event.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
-    const command = event.key === 'ArrowLeft' ? 'previous' : event.key === 'ArrowRight' ? 'next' : event.key.toLowerCase() === 'f' ? 'fullscreen' : '';
+    const command = event.key === 'ArrowLeft' ? 'previous' : event.key === 'ArrowRight' ? 'next' : event.key.toLowerCase() === 'f' ? 'fullscreen' : event.key === 'Escape' && focusMode ? 'exitFullscreen' : '';
     if (!command || !location.pathname.includes('/watch/')) return;
     event.preventDefault(); event.stopImmediatePropagation(); post({ event: 'shortcut', command });
   }, true);
-  setInterval(() => {
+  function sync(force = false) {
     const id = resetTitle();
     const video = document.querySelector('video');
     if (!video || !id) return;
-    post({ event: 'state', id, title: document.title.replace(/\s*[-|]\s*Netflix\s*$/, ''), time: video.currentTime, duration: Number.isFinite(video.duration) ? video.duration : 0, paused: video.paused, rate: video.playbackRate });
+    if (video !== observedVideo) {
+      if (observedVideo) for (const name of mediaEvents) observedVideo.removeEventListener(name, mediaChanged);
+      observedVideo = video;
+      for (const name of mediaEvents) video.addEventListener(name, mediaChanged);
+    }
+    const now = performance.now();
+    const state = { event: 'state', id, title: document.title.replace(/\s*[-|]\s*Netflix\s*$/, ''), time: video.currentTime, duration: Number.isFinite(video.duration) ? video.duration : 0, paused: video.paused, rate: video.playbackRate };
+    const stateKey = JSON.stringify(state);
+    if (stateKey !== lastState && (force || now - lastStateAt >= 100)) { lastState = stateKey; lastStateAt = now; post(state); }
+
     const tracks = Array.from(video.textTracks).filter(t => ['subtitles', 'captions'].includes(t.kind));
     const trackInfo = tracks.map(t => ({ language: t.language, label: t.label, selected: t.mode === 'showing' }));
     const trackKey = JSON.stringify(trackInfo);
     if (trackKey !== reportedTracks) { reportedTracks = trackKey; post({ event: 'tracks', tracks: trackInfo }); }
     const track = tracks.find(t => selectedLanguage ? t.language === selectedLanguage && t.mode !== 'disabled' : t.mode === 'showing');
-    if (track?.cues?.length) {
+    if (track?.cues?.length && (force || now - lastTracksAt > 1000)) {
+      lastTracksAt = now;
       const cues = Array.from(track.cues).map(c => ({ start: c.startTime, end: c.endTime, text: c.text })).filter(c => c.text && c.end > c.start);
       const key = JSON.stringify([track.language, cues.length, cues[0], cues.at(-1)]);
       if (key !== lastTrack) { lastTrack = key; currentLanguage = track.language; emit({ event: 'cues', cues, language: track.language, label: track.label }); }
@@ -84,13 +96,44 @@
     // Netflix may preload more than one language. Only adopt a downloaded track
     // once its timed text matches the subtitle actually selected in its player.
     const normalize = value => value.replace(/\s/gu, '');
-    const candidate = text && candidates.find(c => c.cues.some(cue => cue.start <= video.currentTime + .25 && cue.end > video.currentTime - .25 && normalize(cue.text) === normalize(text)));
+    const candidate = (text !== lastLine || captionDirty || !lastPayload) && text && candidates.find(c => c.cues.some(cue => cue.start <= video.currentTime + .25 && cue.end > video.currentTime - .25 && normalize(cue.text) === normalize(text)));
+    captionDirty = false;
     if (candidate && candidate.key !== lastTrack) {
       lastTrack = candidate.key; currentLanguage = candidate.language;
       emit({ event: 'cues', cues: candidate.cues, language: candidate.language });
     }
     // Retain the accessible subtitle text; only hide its visual duplicate on request.
-    if (container) container.style.opacity = showOriginal ? '' : '0';
-    if (text !== lastLine) { lastLine = text; post({ event: 'line', text, time: video.currentTime, language: currentLanguage }); }
-  }, 200);
+    const opacity = showOriginal && !focusMode ? '' : '0';
+    if (container && container.style.opacity !== opacity) container.style.opacity = opacity;
+    if ((container || observedLine) && (text !== lastLine || !observedLine)) { observedLine = true; lastLine = text; post({ event: 'line', id, text, time: video.currentTime, language: currentLanguage }); }
+  }
+  const mediaEvents = ['play', 'pause', 'seeking', 'seeked', 'ratechange', 'timeupdate', 'loadedmetadata'];
+  const mediaChanged = () => sync(true);
+  let queued = false;
+  new MutationObserver(() => {
+    if (queued) return;
+    queued = true; queueMicrotask(() => { queued = false; sync(); });
+  }).observe(document, { childList: true, characterData: true, subtree: true });
+  // DOM changes carry the exact displayed line immediately; polling is only a
+  // clock/discovery fallback, not the subtitle display cadence.
+  setInterval(sync, 100);
+  sync(true);
+  const fullscreen = () => { if (!location.pathname.includes('/watch/')) return false; post({ event: 'shortcut', command: 'fullscreen' }); return true; };
+  document.addEventListener('click', event => {
+    const button = event.target.closest?.('button');
+    if (!button) return;
+    const name = (button.getAttribute('data-uia') || '') + ' ' + (button.getAttribute('aria-label') || '');
+    if (/fullscreen|full.screen|全画面|フルスクリーン/iu.test(name) && fullscreen()) { event.preventDefault(); event.stopImmediatePropagation(); }
+  }, true);
+  // Keep the video in the app's fullscreen layout so the study overlay remains
+  // interactive rather than being covered by WebKit's separate fullscreen view.
+  for (const method of ['requestFullscreen', 'webkitRequestFullscreen', 'webkitRequestFullScreen']) {
+    const original = Element.prototype[method];
+    if (typeof original !== 'function') continue;
+    Element.prototype[method] = function (...args) {
+      if ((this.matches?.('video') || this.querySelector?.('video')) && fullscreen()) return Promise.resolve();
+      return original.apply(this, args);
+    };
+  }
+
 })();
