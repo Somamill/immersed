@@ -8,7 +8,7 @@
       ...items.filter(item => item.key !== word.key)].slice(0, 100);
   }
   function progress(saved, knowledge) {
-    const known = saved.filter(word => knowledge[word.word] === true).length;
+    const known = saved.filter(word => knowledge[word.lemma || word.word] === true).length;
     return { saved: saved.length, known, learning: saved.length - known };
   }
   const api = { record, progress };

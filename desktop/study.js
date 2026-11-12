@@ -64,6 +64,7 @@ let extras = {
     hoverLookup: true,
     screenCaptionCheck: true,
     pauseOnHover: true,
+    pauseAfterSubtitle: false,
     netflixOriginal: true,
     wordStates: {},
     speechQuality: "balanced",
@@ -299,12 +300,14 @@ function pause() {
   else youtube?.pauseVideo?.();
 }
 function play() {
+  subtitlePauseCue = null;
   if (netflix) { netflix.navigationCue = null; netflix.paused = false; netflixCommand("play"); return; }
   if (!localMedia) youtubePlaybackIntent = true;
   if (localMedia) localMedia.play().catch((e) => status(e.message, true));
   else youtube?.playVideo?.();
 }
 function seekTo(t) {
+  subtitleBoundary.reset(); subtitlePauseCue = null;
   closeLookup();
   if (source) {
     positions[source.type + ":" + source.id] = Math.max(0, t);
@@ -318,6 +321,7 @@ function seekTo(t) {
   void renderCue();
 }
 function stopMedia() {
+  subtitleBoundary.reset(); subtitlePauseCue = null;
   speechProgress();
   void flushPlayback();
   clearTimeout(pollTimer);
@@ -384,7 +388,7 @@ function idFrom(input) {
 function netflixCommand(command, value) {
   window.webkit?.messageHandlers?.immersed?.postMessage({ action: "netflixCommand", command, value: value ?? null });
 }
-function openNetflix(url = null) {
+function openNetflix(url = null, startAt = null) {
   if (!window.webkit?.messageHandlers?.immersed) {
     const body = showPanel("Netflix");
     body.append(el("p", "Open the immersed Mac app to use Netflix. Netflix needs an account and may restrict playback in embedded players."));
@@ -393,12 +397,15 @@ function openNetflix(url = null) {
   stopMedia(); closePanel(); showWatch();
   $("netflixRecovery").hidden = true; $("netflixBack").hidden = false; document.body.classList.remove("netflixError");
   netflix = { time: 0, paused: true, duration: 0, id: "", language: "", fullTrack: false, liveCue: null };
+  const targetURL = ImmersedNetflix.netflixURL(url);
+  if (targetURL && Number.isFinite(startAt) && startAt >= 0)
+    netflix.contextReplay = { id: targetURL.split('/').at(-1), time: startAt };
   document.body.classList.add("netflixMode"); $("netflixOptions").hidden = false;
   $("netflixOriginal").checked = extras.netflixOriginal !== false;
 
   $("netflixStatus").textContent = "Sign in and choose a title. Select subtitles in Netflix’s Audio & Subtitles menu. Playback depends on Netflix’s embedded-player support.";
   $("count").textContent = "Original subtitles"; $("subtitles").textContent = "Choose subtitles in Netflix to begin.";
-  window.webkit.messageHandlers.immersed.postMessage({ action: "openNetflix", url: ImmersedNetflix.netflixURL(url) });
+  window.webkit.messageHandlers.immersed.postMessage({ action: "openNetflix", url: targetURL });
 }
 window.openNetflix = openNetflix;
 window.immersedNetflixEvent = data => {
@@ -420,6 +427,10 @@ window.immersedNetflixEvent = data => {
     netflix.id = String(data.id || netflix.id);
     source = { type: "netflix", id: netflix.id, title: String(data.title || "Netflix") };
     if (!netflix.originalSent) { netflix.originalSent = true; netflixCommand("original", extras.netflixOriginal !== false); }
+    if (netflix.contextReplay?.id === netflix.id && netflix.duration > 0) {
+      const replay = netflix.contextReplay; netflix.contextReplay = null;
+      seekTo(Math.min(replay.time, Math.max(0, netflix.duration - .05))); play();
+    }
     // A delayed pause acknowledgement must not undo a hover-resume command.
     if (!netflix.paused) resumePending = false;
     void renderCue();
@@ -645,6 +656,7 @@ window.immersedPlayback = (action, value) => {
   else if (action === "toggle") playing() ? pause() : play();
   else if (action === "seek") seekTo(value);
   else if (action === "skip") skip(value < 0 ? -1 : 1);
+  else if (action === "replay") replaySubtitle();
 };
 function playbackChanged(force = false) {
   if (localMedia && extras.playbackRate !== localMedia.playbackRate) {
@@ -952,6 +964,7 @@ async function renderCue() {
     if (i === cueSeek.index || performance.now() > cueSeek.until) cueSeek = null;
     else if (!netflix?.visibleObserved) { i = cueSeek.index; cue = cues[i]; }
   }
+  if (subtitlePauseCue && !playing()) { cue = subtitlePauseCue; i = cues.indexOf(cue); }
   if (i === cueIndex && renderedCue?.text === cue?.text) { if (!cue && $("subtitles").hasChildNodes()) $("subtitles").replaceChildren(); return; }
   cueIndex = i;
   renderedCue = cue || null;
@@ -1300,11 +1313,12 @@ function lookupWordRecord() {
   const entry = lookupEntries[0], j = entry.japanese?.[0] || {},
     hasContext = selected.start !== undefined && source;
   return { key: (entry.slug || selected.lemma) + ":" + (j.reading || ""),
+    lemma: selected.lemma,
     word: j.word || selected.lemma, reading: j.reading || selected.reading || "",
     meaning: lookupMeaning || entry.senses?.[0]?.english_definitions?.join("; ") || "",
     sentence: hasContext ? lookupCue?.text || "" : "", title: hasContext ? source.title : "",
 url: hasContext ? source.type === "local" ? "local:" + source.id : source.type === "netflix" ? "https://www.netflix.com/watch/" + source.id : "https://www.youtube.com/watch?v=" + source.id : "",
-    time: hasContext ? currentTime() : 0 };
+    time: hasContext ? (Number.isFinite(lookupCue?.start) ? lookupCue.start : currentTime()) : 0 };
 }
 function recordLookup() {
   const word = lookupWordRecord();
@@ -1316,7 +1330,9 @@ function saveWord() {
   const word = lookupWordRecord();
   if (!word) return;
   const old = saved.find(w => w.key === word.key);
-  if (!old) saved.unshift({ ...word, savedAt: Date.now() });
+  const recent = recentWords.find(w => w.key === word.key);
+  const context = !word.url && recent?.url ? { url: recent.url, time: recent.time, sentence: recent.sentence, title: recent.title } : {};
+  if (!old) saved.unshift({ ...word, ...context, savedAt: Date.now() });
   persist();
   decorateButton($("saveWord"), "Saved", "check");
 }
@@ -1397,6 +1413,24 @@ async function showLibrary() {
   }
 }
 function showWords() {
+  function replayContext(word) {
+    closePanel();
+    const time = Number.isFinite(word.time) && word.time >= 0 ? word.time : 0;
+    const netflixURL = ImmersedNetflix.netflixURL(word.url);
+    if (netflixURL) {
+      if (netflix?.id === netflixURL.split('/').at(-1)) { seekTo(time); play(); }
+      else openNetflix(netflixURL, time);
+    } else if (word.url.startsWith("local:")) {
+      if (source?.type === "local" && source.id === word.url.slice(6)) { seekTo(time); play(); }
+      else void openLocal(word.url.slice(6), time).catch(e => status(e.message, true));
+    } else {
+      const id = idFrom(word.url);
+      if (id) {
+        if (source?.type === "youtube" && source.id === id) { seekTo(time); play(); }
+        else void loadVideo(id, word.title, time);
+      }
+    }
+  }
   const body = showPanel("Words"),
     form = el("form"),
     input = el("input");
@@ -1467,7 +1501,7 @@ function showWords() {
     clearTimeout(dictionaryTimer);
     dictionaryTimer = setTimeout(() => void searchDictionary(), 180);
   };
-  const summary = ImmersedWordHistory.progress(saved.filter(w=>extras.wordStates[w.word]!=="ignored"), prefs.knowledge);
+  const summary = ImmersedWordHistory.progress(saved.filter(w=>extras.wordStates[w.lemma || w.word]!=="ignored"), prefs.knowledge);
   const dashboard = el("div", null, "wordProgress");
   for (const [label, count] of [["Saved", summary.saved], ["Learning", summary.learning], ["Known", summary.known]]) {
     const metric = el("div"); metric.append(el("strong", String(count)), el("span", label)); dashboard.append(metric);
@@ -1480,7 +1514,7 @@ function showWords() {
   for (const word of recentWords) {
     const row = el("article", null, "recentWord");
     const details = button("", () => {
-      closePanel(); void openLookup({ text: word.word, lemma: word.word, reading: word.reading || "", grammar: [] }, true);
+      closePanel(); void openLookup({ text: word.word, lemma: word.lemma || word.word, reading: word.reading || "", grammar: [] }, true);
     });
     details.className = "recentWordDetail"; details.setAttribute("aria-label", "Look up " + word.word);
     details.append(el("strong", word.word), el("small", word.reading, "hint"), el("span", word.meaning, "recentMeaning"));
@@ -1490,23 +1524,22 @@ function showWords() {
       persist(); showWords();
     });
     add.disabled = isSaved;
-    row.append(details, el("small", (word.lookups || 1) + (word.lookups === 1 ? " lookup" : " lookups"), "hint"), add); recentList.append(row);
+    row.append(details, el("small", (word.lookups || 1) + (word.lookups === 1 ? " lookup" : " lookups"), "hint"), add);
+    if (word.url) row.append(iconButton("Play context for " + word.word, "play", () => replayContext(word)));
+    recentList.append(row);
   }
   body.append(recentList, el("h3", "Saved words"));
   if (!saved.length) body.append(el("p", "Save a recent lookup to start your word collection.", "hint"));
   for (const word of saved) {
     const entry = el("article", null, "entry savedWord");
-    const known = prefs.knowledge[word.word] === true;
-    entry.append(el("h3", word.word), el("p", word.reading), el("p", word.meaning), el("p", word.sentence), el("small", stateLabel(extras.wordStates[word.word]) || (known ? "Known" : "Learning"), "wordState"));
+    const lemma = word.lemma || word.word, known = prefs.knowledge[lemma] === true;
+    entry.append(el("h3", word.word), el("p", word.reading), el("p", word.meaning), el("p", word.sentence), el("small", stateLabel(extras.wordStates[lemma]) || (known ? "Known" : "Learning"), "wordState"));
     const actions = el("div", null, "wordActions");
     actions.append(iconButton(known ? "Mark " + word.word + " learning" : "Mark " + word.word + " known", "check", () => {
-      prefs.knowledge[word.word] = !known; persist(); applyPreferences(); showWords();
+      prefs.knowledge[lemma] = !known; extras.wordStates[lemma] = known ? 'learning' : 'known';
+      persist(); applyPreferences(); showWords();
     }));
-    if (word.url) actions.append(iconButton("Play context for " + word.word, "play", () => {
-      closePanel();
-      if (word.url.startsWith("local:")) void openLocal(word.url.slice(6), word.time).catch(e => status(e.message, true));
-      else { void loadVideo(idFrom(word.url), word.title); pendingSeek = word.time; }
-    }));
+    if (word.url) actions.append(iconButton("Play context for " + word.word, "play", () => replayContext(word)));
     actions.append(iconButton("Remove " + word.word, "trash", () => {
       saved = saved.filter(w => w.key !== word.key); persist(); showWords();
     }));
@@ -1572,6 +1605,7 @@ function showSettings() {
     [5, 4, 3, 2, 1].map((n) => [n, "N" + n]),
   );
   setting(body, "Furigana", "Readings for unfamiliar words.", "readings");
+  setting(body, "Pause after each subtitle", "Pause at each subtitle’s end for reading. Requires timed subtitles; replay the current line with R.", "pauseAfterSubtitle", null, true);
   setting(
     body,
     "Pitch accent",
@@ -2002,11 +2036,19 @@ async function compareTranscript() {
 function skip(direction) {
   if (!cues.length) return;
   const t = currentTime();
-  const active = netflix?.navigationCue ? netflix.navigationCue.index : cueSeek?.index >= 0 ? cueSeek.index : netflix?.visibleIndex >= 0 ? netflix.visibleIndex : cues.findLastIndex(c => c.start <= t && t < c.end);
+  const heldIndex = subtitlePauseCue ? cues.indexOf(subtitlePauseCue) : -1;
+  const active = heldIndex >= 0 ? heldIndex : netflix?.navigationCue ? netflix.navigationCue.index : cueSeek?.index >= 0 ? cueSeek.index : netflix?.visibleIndex >= 0 ? netflix.visibleIndex : cues.findLastIndex(c => c.start <= t && t < c.end);
   const index = active >= 0
     ? Math.max(0, Math.min(cues.length - 1, active + direction))
     : direction < 0 ? cues.findLastIndex(c => c.end <= t) : cues.findIndex(c => c.start > t);
   if (index >= 0) seekTo(cues[index].start + 0.015);
+}
+function replaySubtitle() {
+  const cue = lookupCue || (netflix?.navigationCue?.cue) || renderedCue;
+  if (!cue || !Number.isFinite(cue.start)) return;
+  closeLookup(false);
+  seekTo(cue.start + .015);
+  play();
 }
 
 $("search").onsubmit = (e) => {
@@ -2101,6 +2143,10 @@ $("play").onclick = () => {
   closeLookup(false);
   wasPlaying ? pause() : play();
 };
+decorateButton($("replay"), "Replay subtitle", "refresh");
+$("replay").title = "Replay subtitle · R";
+$("replay").setAttribute("aria-keyshortcuts", "R");
+$("replay").onclick = replaySubtitle;
 window.immersedTrackpad = direction => {
   if (!$("panel").open && $("discovery").hidden && !selected &&
       !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) skip(direction);
@@ -2271,6 +2317,8 @@ document.addEventListener("keydown", (e) => {
   } else if (e.key === "ArrowRight") {
     e.preventDefault();
     skip(1);
+  } else if (e.key.toLowerCase() === "r" && !e.altKey && !e.shiftKey && !e.repeat && !e.isComposing && !e.target.closest?.('[contenteditable="true"]')) {
+    e.preventDefault(); replaySubtitle();
   } else if (e.key.toLowerCase() === "j") skip(-1);
   else if (e.key.toLowerCase() === "l") skip(1);
 });
@@ -2279,10 +2327,19 @@ document.addEventListener("drop", (e) => {
   e.preventDefault();
   if (e.dataTransfer.files.length) void importMedia(e.dataTransfer.files[0]);
 });
+const subtitleBoundary = ImmersedSubtitlePlayback.createBoundary();
+let subtitlePauseCue = null, boundarySource = null;
 let last = 0, lastPlayingState = null;
 function tick(t) {
   if (t - last > 100 && document.visibilityState !== "hidden" && $("discovery").hidden) {
     last = t;
+    const sourceKey = source ? source.type + ":" + source.id : null;
+    if (sourceKey !== boundarySource) { boundarySource = sourceKey; subtitleBoundary.reset(); subtitlePauseCue = null; }
+    if (playing()) subtitlePauseCue = null;
+    const finished = subtitleBoundary.update({time: currentTime(), playing: playing(),
+      enabled: extras.pauseAfterSubtitle && !!source && (!netflix || netflix.fullTrack) && !selected,
+      cues, rate: extras.playbackRate});
+    if (finished) { pause(); subtitlePauseCue = finished; cueIndex = -1; }
     if (source && playing() && t - lastPositionSave > 5000) {
       lastPositionSave = t;
       positions[source.type + ":" + source.id] = currentTime();
@@ -2292,6 +2349,7 @@ function tick(t) {
     }
     void renderCue();
     scanCurrentVideoCaption(t);
+    $("replay").disabled = !(lookupCue || netflix?.navigationCue?.cue || renderedCue);
     const isPlaying = playing();
     if (isPlaying !== lastPlayingState) { lastPlayingState = isPlaying; $("play").textContent = isPlaying ? "Ⅱ" : "▶"; }
     if (pendingSeek && youtube?.getPlayerState) {

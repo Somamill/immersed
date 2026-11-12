@@ -995,6 +995,8 @@ main { height: calc(100vh - 96px); padding-top: 18px; gap: 18px; }
 .studyHead, .videoFooter { background: #a2d3b80a; border-color: #e0ffe521; }
 .controls { width: fit-content; align-self: center; margin: 12px; padding: 8px 12px; border: 1px solid #ffffff28; border-radius: 26px; background: linear-gradient(145deg,#bedac624,#172c2280); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px); box-shadow: 0 6px 22px #0004; }
 .controls .control { border-radius: 18px; }
+.controls #replay { display: inline-flex; align-items: center; justify-content: center; }
+@media (max-width: 600px) { .controls { gap: 8px; padding: 8px; margin: 8px; } .controls .control { width: 42px; height: 44px; } .controls .control.play { width: 48px; height: 48px; } .controls .speedButton { min-width: 70px; } }
 .lookup, dialog, .speedMenu { background: linear-gradient(145deg,#244032eb,#10251cf2); backdrop-filter: blur(30px) saturate(150%); -webkit-backdrop-filter: blur(30px) saturate(150%); border: 1px solid #d9ffe34a; box-shadow: 0 20px 70px #0008, inset 0 1px 0 #ffffff26; border-radius: 24px; }
 .lookupActions { background: #bdd7c60a; }
 .lookupActions .iconButton { width: 100%; }
@@ -1020,6 +1022,11 @@ dialog { background: linear-gradient(145deg,#244032f7,#10251cfc); }
 .recentWordDetail { flex: 1; min-width: 0; text-align: left; padding: 0; background: transparent; border: 0; border-radius: 6px; color: inherit; }
 .recentMeaning { display: block; margin-top: 6px; font-size: 14px; color: #c2d9cc; }
 .recentWordDetail:hover strong { text-decoration: underline; text-underline-offset: 4px; }
+.recentWord > .iconButton { flex-shrink: 0; }
+@media (max-width: 560px) {
+  .recentWord { flex-wrap: wrap; gap: 8px; }
+  .recentWordDetail { flex-basis: 100%; }
+}
 body.light .recentMeaning { color: #365945; }
 /* Idle fullscreen keeps the video and readable, interactive subtitles alone. */
 .video.fullscreenActive .fullscreenStudy .controls,

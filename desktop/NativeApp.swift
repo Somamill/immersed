@@ -333,6 +333,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
                 if payload["command"] as? String == "wordStatus", let key = payload["key"] as? String, ["1","2","3","4"].contains(key) { web.evaluateJavaScript("window.immersedWordShortcut?.(\(key.debugDescription))", completionHandler: nil) }
                 else if payload["command"] as? String == "fullscreen" { toggleNetflixFullscreen() }
                 else if payload["command"] as? String == "exitFullscreen" { exitNetflixFullscreen() }
+                else if payload["command"] as? String == "replay" { web.evaluateJavaScript("window.immersedPlayback?.('replay')", completionHandler: nil) }
                 else if let command = payload["command"] as? String, ["previous", "next"].contains(command) {
                     web.evaluateJavaScript("window.immersedPlayback?.('skip',\(command == "previous" ? -1 : 1))", completionHandler: nil)
                 }

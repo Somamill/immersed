@@ -12,6 +12,9 @@ test('recent lookups deduplicate hover jitter, retain first seen and stay bounde
 test('progress counts only saved words explicitly marked known',()=>{
  assert.deepEqual(progress([{word:'政治'},{word:'猫'}],{'政治':true,'猫':false,'犬':true}),{saved:2,known:1,learning:1});
 });
+test('progress follows the selected lemma when a dictionary supplies another written form',()=>{
+ assert.deepEqual(progress([{word:'気を廻す',lemma:'気を回す'},{word:'猫'}],{'気を回す':true}),{saved:2,known:1,learning:1});
+});
 test('dictionary-only reopening preserves the last source context',()=>{
  const first=record([],{key:'a',word:'政治',url:'https://youtube.com/watch?v=aaaaaaaaaaa',time:40,sentence:'政治です',title:'話'},1000);
  const next=record(first,{key:'a',word:'政治',url:'',time:0,sentence:'',title:''},40000);

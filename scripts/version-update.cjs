@@ -16,11 +16,13 @@ current[index]++;
 for (let i = index + 1; i < 3; i++) current[i] = 0;
 const version = current.join('.');
 const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
-history.unshift({ version, date, title, notes });
+history.unshift({ version, date, title, notes, changelogFormat: 1 });
 const pkg = read('package.json'); pkg.version = version;
 const lock = read('package-lock.json'); lock.version = version; lock.packages[''].version = version;
 const config = read('app.json'); config.expo.version = version;
 write('package.json', pkg); write('package-lock.json', lock); write('app.json', config); write('src/version-history.json', history);
-const changelog = '# Version history\n\nDates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.\n\n' + history.map(r => `## ${r.version} — ${r.date}\n\n${r.title}\n\n${r.notes.map(note => '- ' + note).join('\n')}\n`).join('\n');
+const changelog = '# Version history\n\nDates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.\n\n## [Unreleased]\n\n' + history.map(r => r.changelogFormat === 1
+  ? `## [${r.version}] - ${r.date}\n\n${r.title}\n\n### Changed\n\n${r.notes.map(note => '- ' + note).join('\n')}\n`
+  : `## ${r.version} — ${r.date}\n\n${r.title}\n\n${r.notes.map(note => '- ' + note).join('\n')}\n`).join('\n');
 fs.writeFileSync(path.join(root, 'CHANGELOG.md'), changelog);
 console.log(`Prepared v${version}. Run checks, commit, create tag v${version}, and push main plus the tag.`);

@@ -120,7 +120,7 @@
     if (event.ctrlKey || event.metaKey || event.altKey || event.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
     if (/^[1-4]$/.test(event.key) && !event.shiftKey && !event.repeat && !event.isComposing) { event.preventDefault(); event.stopImmediatePropagation(); post({event:'shortcut',command:'wordStatus',key:event.key}); return; }
     if (event.code === 'Space' || event.key.toLowerCase() === 'k') hoverSession = null;
-    const command = event.key === 'ArrowLeft' ? 'previous' : event.key === 'ArrowRight' ? 'next' : event.key.toLowerCase() === 'f' ? 'fullscreen' : event.key === 'Escape' && focusMode ? 'exitFullscreen' : '';
+    const command = event.key === 'ArrowLeft' ? 'previous' : event.key === 'ArrowRight' ? 'next' : event.key.toLowerCase() === 'r' && !event.shiftKey && !event.repeat && !event.isComposing ? 'replay' : event.key.toLowerCase() === 'f' ? 'fullscreen' : event.key === 'Escape' && focusMode ? 'exitFullscreen' : '';
     if (!command || !location.pathname.includes('/watch/')) return;
     event.preventDefault(); event.stopImmediatePropagation(); post({ event: 'shortcut', command });
   }, true);

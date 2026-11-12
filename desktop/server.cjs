@@ -635,6 +635,7 @@ async function fallback(req, res) {
     url.pathname === "/compare.js" ||
     url.pathname === "/discovery.js" ||
     url.pathname === "/word-history.js" ||
+    url.pathname === "/subtitle-playback.js" ||
     url.pathname === "/reading-cues.js"
     || url.pathname === "/netflix.js"
   ) {

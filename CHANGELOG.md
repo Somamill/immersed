@@ -2,6 +2,16 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## [Unreleased]
+
+## [0.21.0] - 2026-11-12
+
+Subtitle replay and reliable word context
+
+### Changed
+
+- Added current-subtitle replay (R), optional pause after timed subtitles, and context replay from recent lookups. Saved-word progress now uses canonical dictionary forms. Netflix saved context waits for the requested title before seeking. Pause-at-end requires real timed cues and stays off for visible-line-only Netflix subtitles.
+
 ## 0.20.1 — 2026-11-12
 
 Match Netflix to immersed’s shared design
