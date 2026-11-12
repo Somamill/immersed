@@ -32,7 +32,7 @@ Displayed subtitle changes and clears are observed directly from Netflix instead
 
 Netflix account cookies stay in the Mac app’s persistent WebKit store. The bridge accepts messages only from the Netflix main frame and inspects textual subtitle responses already requested by its player. It does not copy browser cookies or fetch DRM media. Automatic speech generation and offline saving are unavailable for Netflix.
 
-**Playback limitation:** [Netflix lists supported Mac browsers](https://help.netflix.com/en/node/30081), including Safari, but does not list embedded WKWebView apps. Signing in and protected playback may therefore be rejected by Netflix. The subtitle bridge and controls are tested with local original-caption fixtures; authenticated playback with a real Netflix subscription has not been verified. This is an experimental integration, not a promise that every Netflix title will play inside immersed.
+**Playback limitation:** [Netflix lists supported Mac browsers](https://help.netflix.com/en/node/30081), including Safari, but does not list embedded WKWebView apps. Signing in and protected playback may therefore be rejected by Netflix. The subtitle bridge and controls are tested with local original-caption fixtures. Authenticated original Japanese caption extraction and playback controls were also exercised on a live episode; Netflix returned S7353-5101 during a later seek check, and protected video frames were unavailable to screen capture. Fullscreen native geometry and lookup sizing were checked separately. This is an experimental integration, not a promise that every Netflix title will play inside immersed.
 
 ## Local video and Japanese audiobooks
 

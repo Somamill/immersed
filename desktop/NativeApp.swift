@@ -7,18 +7,31 @@ import QuartzCore
 
 @MainActor
 final class NetflixFocusView: NSView {
-    weak var movie: WKWebView?
-    weak var study: WKWebView?
-    var expanded = false
+    var studyHeight: NSLayoutConstraint?
+    var expanded = false {
+        didSet { studyHeight?.constant = expanded ? 520 : 190; needsLayout = true }
+    }
     var exitButton: NSButton?
     var hideChrome: DispatchWorkItem?
-    override func layout() {
-        super.layout()
-        movie?.frame = bounds
-        let width = min(960, bounds.width - 48)
-        let height = min(expanded ? 520 : 190, bounds.height * (expanded ? 0.72 : 0.32))
-        study?.frame = NSRect(x: (bounds.width-width)/2, y: min(95, bounds.height * 0.10), width: width, height: height)
-        exitButton?.frame = NSRect(x: bounds.width-64, y: bounds.height-60, width: 40, height: 40)
+    func mount(movie: WKWebView, study: WKWebView, exit button: NSButton) {
+        for view in [movie as NSView, study as NSView, button as NSView] {
+            view.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(view)
+        }
+        let width = study.widthAnchor.constraint(equalToConstant: 960)
+        width.priority = .defaultHigh
+        let height = study.heightAnchor.constraint(equalToConstant: 190)
+        height.priority = .defaultHigh; studyHeight = height
+        NSLayoutConstraint.activate([
+            movie.leadingAnchor.constraint(equalTo: leadingAnchor), movie.trailingAnchor.constraint(equalTo: trailingAnchor),
+            movie.topAnchor.constraint(equalTo: topAnchor), movie.bottomAnchor.constraint(equalTo: bottomAnchor),
+            study.centerXAnchor.constraint(equalTo: centerXAnchor), study.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -80),
+            width, study.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor, constant: -48), height,
+            study.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.75),
+            button.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24), button.topAnchor.constraint(equalTo: topAnchor, constant: 20),
+            button.widthAnchor.constraint(equalToConstant: 40), button.heightAnchor.constraint(equalToConstant: 40)
+        ])
+        exitButton = button
     }
     func revealControls() {
         hideChrome?.cancel(); exitButton?.alphaValue = 1
@@ -392,13 +405,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     func enterNetflixFullscreen() {
         guard netflixFocus == nil, let movie = netflixView else { return }
         let focus = NetflixFocusView(frame: window.contentView!.bounds)
-        focus.wantsLayer = true; focus.layer?.backgroundColor = NSColor.black.cgColor
+        focus.autoresizingMask = [.width, .height]
         movie.removeFromSuperview(); web.removeFromSuperview()
-        focus.movie = movie; focus.study = web; focus.addSubview(movie); focus.addSubview(web)
         let button = NSButton(image: NSImage(systemSymbolName: "arrow.down.right.and.arrow.up.left", accessibilityDescription: "Exit Netflix fullscreen")!, target: self, action: #selector(exitNetflixFullscreen))
         button.bezelStyle = .texturedRounded; button.setAccessibilityLabel("Exit Netflix fullscreen")
-        focus.exitButton = button; focus.addSubview(button)
-        web.wantsLayer = true; web.layer?.cornerRadius = 22; web.layer?.masksToBounds = true
+        focus.mount(movie: movie, study: web, exit: button)
         netflixFocus = focus; window.contentView = focus; focus.needsLayout = true; focus.layoutSubtreeIfNeeded(); focus.revealControls()
         web.evaluateJavaScript("window.immersedNetflixFullscreen?.(true)", completionHandler: nil)
         movie.evaluateJavaScript("window.immersedNetflixCommand?.({command:'fullscreenState',value:true})", completionHandler: nil)
@@ -412,7 +423,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     func restoreNetflixLayout() {
         guard let focus = netflixFocus, let split = netflixSplit, let movie = netflixView else { return }
         focus.hideChrome?.cancel(); movie.removeFromSuperview(); web.removeFromSuperview()
-        web.layer?.cornerRadius = 0; web.layer?.masksToBounds = false
+        movie.translatesAutoresizingMaskIntoConstraints = true; web.translatesAutoresizingMaskIntoConstraints = true
         split.addArrangedSubview(movie); split.addArrangedSubview(web)
         window.contentView = split; netflixFocus = nil
         split.adjustSubviews(); split.setPosition(split.bounds.width * 0.65, ofDividerAt: 0)

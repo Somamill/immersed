@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.19.2 — 2026-11-12
+
+Fix Netflix fullscreen native layout
+
+- Use native constraints for video-filling Netflix fullscreen and an expanding interactive subtitle lookup panel. Match caption changes and clears to Netflix’s displayed original subtitles and reflect playback-rate changes. Lint, typecheck, 90 Mac browser tests and native build passed; native fullscreen geometry was checked at multiple window sizes. Netflix returned S7353-5101 during a live seek test, so protected playback remains dependent on Netflix’s embedded-player support.
+
 ## 0.19.1 — 2026-11-12
 
 Enable Netflix video fullscreen and synchronize original captions
