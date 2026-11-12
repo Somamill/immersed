@@ -2,6 +2,7 @@
 import hashlib, json, os, sqlite3, tarfile, urllib.request
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
+(root/'assets').mkdir(parents=True,exist_ok=True)
 url='https://github.com/scriptin/jmdict-simplified/releases/download/3.6.2%2B20261026175559/jmdict-eng-3.6.2%2B20261026175559.json.tgz'
 sha='809d104fe3c1e0ab328ff265bdc52b5eed1f9b669088fd199ef4e713812958a3'
 source=os.environ.get('JMDICT_JSON')

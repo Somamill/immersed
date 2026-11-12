@@ -1,6 +1,8 @@
 # Immersed Store edition
 
 ## Platform
+ios
+
 Native iOS/iPadOS, with a Mac Catalyst build under validation. Expo SDK 58, TypeScript, local SQLite and Apple-supported video playback.
 
 ## Users and purpose

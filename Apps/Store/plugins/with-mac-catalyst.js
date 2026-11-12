@@ -28,6 +28,9 @@ module.exports = function withMacCatalyst(config) {
       if (!entry || typeof entry !== 'object' || !entry.buildSettings?.PRODUCT_BUNDLE_IDENTIFIER) continue;
       Object.assign(entry.buildSettings, {
         SUPPORTS_MACCATALYST: 'YES',
+        '"CODE_SIGN_STYLE[sdk=macosx*]"': 'Manual',
+        '"CODE_SIGN_IDENTITY[sdk=macosx*]"': '"Apple Distribution"',
+        '"PROVISIONING_PROFILE_SPECIFIER[sdk=macosx*]"': '"dot immersed MAC_CATALYST_APP_STORE"',
         DERIVE_MACCATALYST_PRODUCT_BUNDLE_IDENTIFIER: 'NO',
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: 'NO',
         '"CODE_SIGN_ENTITLEMENTS[sdk=macosx*]"': 'StoreMac.entitlements',

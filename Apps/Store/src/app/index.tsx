@@ -258,6 +258,7 @@ export default function ImmersedStore() {
     }
   };
   const selectMovie = (movie: Movie) => {
+    if (busy) return;
     player.pause();
     setCurrent(movie);
     setTime(movie.position);
@@ -574,7 +575,7 @@ export default function ImmersedStore() {
             <View style={s.search}>
               <TextInput
                 accessibilityLabel="Japanese dictionary search"
-                placeholder="Look up a Japanese word"
+                placeholder="Japanese word"
                 placeholderTextColor={palette.secondaryText}
                 value={query}
                 onChangeText={setQuery}
@@ -630,7 +631,7 @@ export default function ImmersedStore() {
                     <Pressable
                       key={`${row.start}-${index}`}
                       accessibilityRole="button"
-                      accessibilityLabel={`Play caption at ${clock(row.start)}: ${row.text}`}
+                      accessibilityLabel={`Seek to caption at ${clock(row.start)}: ${row.text}`}
                       onPress={() => {
                         player.currentTime = row.start;
                       }}
@@ -659,7 +660,8 @@ export default function ImmersedStore() {
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={`Open ${movie.title}`}
-                      onPress={() => selectMovie(movie)}
+                      disabled={!!busy}
+                        onPress={() => selectMovie(movie)}
                       style={({ pressed }) => [
                         s.movieTitle,
                         pressed && s.pressed,
@@ -819,6 +821,8 @@ function styles(
     safe: { flex: 1, backgroundColor: p.background },
     shell: { flex: 1, width: "100%", maxWidth: 1120, alignSelf: "center" },
     header: {
+      flexWrap: "wrap",
+      gap: 12,
       paddingHorizontal: 24,
       paddingVertical: 16,
       flexDirection: "row",
@@ -835,6 +839,7 @@ function styles(
     suite: { color: p.secondaryText, fontSize: 20 },
     tabs: {
       flexDirection: "row",
+      flexWrap: "wrap",
       borderBottomWidth: 1,
       borderColor: p.border,
       marginHorizontal: 24,
