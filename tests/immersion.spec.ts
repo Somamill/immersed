@@ -280,7 +280,9 @@ test('portrait playback controls appear for a selected video and automatic subti
   const full = (await page.getByTestId('content-surface').boundingBox())!;
   const video = (await page.getByTestId('video-surface').boundingBox())!;
   const reading = (await page.getByTestId('subtitle-panel').boundingBox())!;
-  expect(full.height).toBe(844);
+  const header = (await page.getByTestId('app-header').boundingBox())!;
+  expect(full.height + header.height).toBe(844);
+  expect(video.y).toBe(header.y + header.height);
   expect(video.height).toBeGreaterThanOrEqual(video.width * 9 / 16);
   expect(reading.y).toBe(video.y + video.height);
   expect(reading.x).toBe(0); expect(reading.width).toBe(390);
@@ -1318,4 +1320,33 @@ test('production manifests can select a stable HTTPS API without an Expo tunnel'
   expect(configuredServiceOrigin(undefined)).toBeNull();
   expect(configuredServiceOrigin('http://localhost:8080')).toBe('http://localhost:8080');
   for (const origin of ['http://public.example','https://user:password@public.example','https://public.example/path']) expect(() => configuredServiceOrigin(origin)).toThrow();
+});
+
+
+test('iPhone header carries the coverage estimate and N2 katakana stays quiet with working honorific lookup',async({page})=>{
+  await page.route('**/api/immersion/transcribe?**',route=>route.fulfill({json:{status:'ready',cues:[{start:0,end:3,text:'ポッドキャストにお便りください。'},{start:3,end:6,text:'日本語で話します。'}]}}));
+  await page.goto('/');
+  await page.evaluate(()=>localStorage.setItem('immersed.preferences.v1',JSON.stringify({schema:2,level:2,readings:true})));
+  await page.reload();await page.getByRole('textbox').fill('https://youtu.be/M7lc1UVf-VE');await page.getByRole('button',{name:'Go',exact:true}).click();
+  const word=page.getByRole('button',{name:'Look up お便り',exact:true});await expect(word).toBeVisible({timeout:12000});
+  await expect(page.getByTestId('unknown-ポッドキャスト')).toHaveCount(0);
+  await expect(page.getByTestId('app-header').getByTestId('video-coverage')).toBeVisible();
+  await word.click();await expect(page.getByTestId('lookup-definitions')).toContainText(/letter|correspondence/);
+  await page.getByRole('button',{name:'Close',exact:true}).click();
+  await page.screenshot({path:'work/iphone-study-preview.png'});
+  const scroll=page.getByTestId('caption-scroll');const bounds=(await scroll.boundingBox())!;
+  await page.mouse.move(bounds.x+bounds.width-40,bounds.y+bounds.height-20);await page.mouse.down();await page.mouse.move(bounds.x+40,bounds.y+bounds.height-20,{steps:8});await page.mouse.up();
+  await expect(page.getByRole('button',{name:'Look up 日本語',exact:true})).toBeVisible();
+});
+
+test('the iPhone YouTube adapter routes embedded keys and seek buttons to subtitle blocks',async({page})=>{
+  await page.route('https://m.youtube.com/**',route=>route.fulfill({contentType:'text/html; charset=utf-8',body:'<div id="movie_player"><video></video><button aria-label="Rewind 10 seconds">Back</button><button aria-label="Fast forward 10 seconds">Next</button><input aria-label="Search" /></div>'}));
+  await page.goto('https://m.youtube.com/watch?v=M7lc1UVf-VE');
+  await page.evaluate(()=>{(window as any).messages=[];(window as any).ReactNativeWebView={postMessage:(text:string)=>(window as any).messages.push(JSON.parse(text))};});
+  await page.addScriptTag({content:CAPTION_BRIDGE});
+  await page.getByRole('button',{name:'Rewind 10 seconds',exact:true}).click();await page.getByRole('button',{name:'Fast forward 10 seconds',exact:true}).click();
+  await page.keyboard.press('ArrowLeft');await page.keyboard.press('l');
+  expect(await page.evaluate(()=>(window as any).messages.filter((m:any)=>m.type==='subtitleJump').map((m:any)=>m.direction))).toEqual([-1,1,-1,1]);
+  await page.getByRole('textbox',{name:'Search',exact:true}).focus();await page.keyboard.press('ArrowLeft');
+  expect(await page.evaluate(()=>(window as any).messages.filter((m:any)=>m.type==='subtitleJump').length)).toBe(4);
 });

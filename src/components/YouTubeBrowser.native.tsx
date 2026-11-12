@@ -5,7 +5,7 @@ import { japaneseCaptionUrl, parseCaptionTrack, captionSourceRank, type CaptionS
 import history from '../version-history.json';
 import { CAPTION_BRIDGE, YOUTUBE_BOOTSTRAP, YOUTUBE_CAPTION_PRELOAD, isYouTubeSignInUrl, youtubeUrl } from '../youtube';
 import type { BrowserHandle, BrowserProps } from './YouTubeBrowser';
-export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, minimumMinutes = 0, onCaption, onError, onPage, onClock, onTranscript, onPlaybackDiagnostic }, ref) {
+export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({ uri, dark = true, hideShorts = true, minimumMinutes = 0, onCaption, onError, onPage, onClock, onTranscript, onPlaybackDiagnostic, onSubtitleJump }, ref) {
   // WebView 14 defaults its extra-props generic to undefined, which intersects
   // its props to never under TS 6 strict mode. Explicit object preserves props.
   const initial = youtubeUrl(uri);
@@ -130,6 +130,7 @@ export default forwardRef<BrowserHandle, BrowserProps>(function YouTubeBrowser({
           return;
         }
         if (v.type === 'captionTrack' && v.language === 'ja' && typeof v.url === 'string' && /^[A-Za-z0-9_-]{11}$/.test(v.videoId)) { void loadTrack(v.url, v.videoId, v.source === 'human' || v.source === 'youtube-asr' ? v.source : 'unknown'); return; }
+        if (v.type === 'subtitleJump' && v.videoId === currentVideo.current && (v.direction === -1 || v.direction === 1)) { onSubtitleJump?.(v.direction); return; }
         if (v.type === 'clock' && v.videoId === currentVideo.current && Number.isFinite(v.time) && typeof v.paused === 'boolean') { onClock?.(v.time, v.paused); return; }
         if (v.type === 'reset') { onCaption(null); return; }
         if (v.type !== 'caption' || typeof v.text !== 'string' || v.text.length > 2000 || (v.text && v.language !== 'ja') || !Array.isArray(v.tokens) || v.tokens.length > 1000 || !v.tokens.every((t: { text?: unknown; word?: unknown }) => typeof t.text === 'string' && typeof t.word === 'boolean') || !Number.isFinite(v.time) || typeof v.url !== 'string' || typeof v.title !== 'string') return;

@@ -248,6 +248,22 @@ export const CAPTION_BRIDGE = YOUTUBE_BOOTSTRAP + String.raw`(() => {
     }
   });
   const currentId = () => new URL(location.href).searchParams.get('v') || location.pathname.match(/^\/(?:embed|shorts)\/([^/]+)/)?.[1];
+  const subtitleJump = direction => {
+    const videoId = currentId();
+    if (!videoId) return false;
+    send({ type: 'subtitleJump', videoId, direction }); return true;
+  };
+  document.addEventListener('keydown', event => {
+    if (event.metaKey || event.ctrlKey || event.altKey || event.target.closest?.('input,textarea,select,[contenteditable="true"]')) return;
+    const direction = ['ArrowLeft','j','J'].includes(event.key) ? -1 : ['ArrowRight','l','L'].includes(event.key) ? 1 : 0;
+    if (direction && subtitleJump(direction)) { event.preventDefault(); event.stopImmediatePropagation(); }
+  }, true);
+  document.addEventListener('click', event => {
+    const button = event.target.closest?.('button,[role="button"]');
+    const label = button?.getAttribute('aria-label') || '';
+    const direction = /^(?:Rewind\b|巻き戻し)|\d+\s*秒.*戻/u.test(label) ? -1 : /^(?:Fast forward\b|早送り)|\d+\s*秒.*進/u.test(label) ? 1 : 0;
+    if (direction && subtitleJump(direction)) { event.preventDefault(); event.stopImmediatePropagation(); }
+  }, true);
   const selectVideo = () => {
     const videos = [...document.querySelectorAll('video')].filter(v => v.isConnected && v.getClientRects().length);
     return videos.find(v => !v.paused && v.readyState > 0) || videos.sort((a,b) => b.getBoundingClientRect().width * b.getBoundingClientRect().height - a.getBoundingClientRect().width * a.getBoundingClientRect().height)[0] || null;

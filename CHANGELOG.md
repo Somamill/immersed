@@ -2,6 +2,12 @@
 
 Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Release.
 
+## 0.19.0 — 2026-11-12
+
+Bring vocabulary and subtitle improvements to iPhone
+
+- Add estimated vocabulary coverage beside the iPhone app icon, retain shared N2/N1 katakana familiarity and honorific dictionary lookup, refine Japanese spacing and punctuation, navigate subtitle blocks with swipes and embedded controls, and add a text-free native splash and animated startup. The Expo Go preview is updated; native iPhone playback and the new startup have not been checked on a physical phone. No signed TestFlight update is published by this release.
+
 ## 0.18.1 — 2026-11-12
 
 Improve vocabulary coverage, lookup and subtitle controls

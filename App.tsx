@@ -21,6 +21,7 @@ import StudySubtitles from './src/components/StudySubtitles';
 import SentenceControls, { PlaybackButton } from './src/components/SentenceControls';
 import LookupSheet from './src/components/LookupSheet';
 import VideoCoverage from './src/components/VideoCoverage';
+import StartupOverlay from './src/components/StartupOverlay';
 import { PREFERENCES_SCHEMA, restorePreferences } from './src/preferences';
 import history from './src/version-history.json';
 import YouTubeBrowser, { type BrowserHandle, type PlaybackDiagnostic } from './src/components/YouTubeBrowser';
@@ -84,6 +85,7 @@ export default function App() {
   const { width, height, fontScale } = useWindowDimensions();
   const captionScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const [viewportHeight, setViewportHeight] = useState(height);
+  const [contentHeight, setContentHeight] = useState(height);
   const dockClearance = Math.max(insets.bottom, 12) + 76;
 
   const [dark, setDark] = useState(true);
@@ -124,9 +126,8 @@ export default function App() {
   const [pitchAccent, setPitchAccent] = useState(false);
   const lookupResume = useRef(false);
   const threeRows = Math.max(180, (width < 350 ? 4 : 3) * (34 + (readings ? 16 : 0)) * fontScale + 6);
-  const coverageHeight = Math.max(36, 30 * fontScale);
-  const normalReadingHeight = Math.min(threeRows + 80 + coverageHeight + dockClearance, height * .68);
-  const readingHeight = Math.min(Math.max(normalReadingHeight, height * .48), Math.max(dockClearance + 120, Math.min(height, viewportHeight) - 128));
+  const normalReadingHeight = Math.min(threeRows + 80 + dockClearance, height * .68);
+  const readingHeight = Math.min(Math.max(normalReadingHeight, height * .48), Math.max(dockClearance + 120, Math.min(contentHeight, viewportHeight) - 128));
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [preferencesReady, setPreferencesReady] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -387,11 +388,13 @@ export default function App() {
     const target = sentenceTarget(timeline, pendingSeek.current?.target ?? latestTime.current, direction);
     if (target !== undefined) jumpSentence(target);
   };
+  const subtitleJump = useRef(skipSentence);
+  subtitleJump.current = skipSentence;
   const gestures = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_event, state) => state.numberActiveTouches < 2 && !!swipeAction(state.dx, state.dy),
     onPanResponderRelease: (_event, state) => {
       const action = swipeAction(state.dx, state.dy);
-      if (action === 'forward' || action === 'backward') browser.current?.command('seek', action === 'forward' ? 10 : -10);
+      if (action === 'forward' || action === 'backward') subtitleJump.current(action === 'forward' ? 1 : -1);
     },
   }), []);
   const navigationState = useRef({ panel: panel || '', watching, width });
@@ -477,15 +480,14 @@ export default function App() {
       onKnown={known => { if (lookup) setKnowledge(old => ({ ...old, [lookup.token.lemma]: known })); }}
       canSave={storageReady} saved={!!entries[0] && saved.some(word => word.key === `${entries[0].slug}:${entries[0].japanese[0]?.reading ?? ''}`)} onSave={save}
       controls={<SentenceControls dark={dark} paused={clock.paused} onTogglePlayback={togglePlayback} previous={previousSentence === undefined ? undefined : () => skipSentence(-1)} next={nextSentence === undefined ? undefined : () => skipSentence(1)} />} />;
-  return <DarkContext.Provider value={dark}><KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}><SafeAreaView edges={watching ? [] : ['top', 'left', 'right']} style={s.safe} onLayout={event => { const next = event.nativeEvent.layout.height; setViewportHeight(old => Math.abs(old - next) < 1 ? old : next); }} {...appGestures.panHandlers}><StatusBar hidden={watching} style={dark ? "light" : "dark"} />
-    {!watching && <View style={s.header}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Image source={require('./assets/icon.png')} accessibilityLabel="Immersed app icon" style={{ width: 36, height: 36, borderRadius: 9 }} /><Text style={s.brand}>immersed.</Text></View><Text style={s.hint}>日本語 · N{level}</Text></View>}
+  return <DarkContext.Provider value={dark}><KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}><SafeAreaView edges={['top', 'left', 'right']} style={s.safe} onLayout={event => { const next = event.nativeEvent.layout.height; setViewportHeight(old => Math.abs(old - next) < 1 ? old : next); }} {...appGestures.panHandlers}><StatusBar hidden={watching} style={dark ? "light" : "dark"} />
+    <View testID="app-header" style={[s.header, watching && { minHeight: 44, paddingVertical: 4 }]}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><Image source={require('./assets/icon.png')} accessibilityLabel="Immersed app icon" style={{ width: watching ? 28 : 36, height: watching ? 28 : 36, borderRadius: 9 }} />{watching ? <VideoCoverage cues={rawTimeline} level={level} knowledge={knowledge} dark={dark} compact /> : <Text style={s.brand}>immersed.</Text>}</View><Text style={s.hint}>日本語 · N{level}</Text></View>
     {!watching && <><View style={s.search}><TextInput accessibilityLabel="Search Japanese topics or paste a YouTube link" placeholder="Search a topic or paste a YouTube link" placeholderTextColor={dark ? "#999" : "#70776E"} value={input} onChangeText={setInput} onSubmitEditing={openInput} returnKeyType="search" autoCapitalize="none" style={s.input} /><Button onPress={openInput}>Go</Button></View><View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.topics}>{topics.map(item => <Pressable accessibilityRole="button" key={item.label} onPress={() => { setTopic(item.label); browse(topicUrl(item.query)); }} style={[s.topic, topic === item.label && s.activeTopic]}><Text style={s.topicText}>{item.label}</Text></Pressable>)}</ScrollView></View></>}
     {!!error && <View style={[s.error, watching && { position: 'absolute', top: insets.top + 12, left: 12, right: 12, zIndex: 15, borderRadius: 18 }]}><Text style={s.hint}>{error}</Text></View>}
-    <View testID="content-surface" style={s.contentSurface}>
-      <View testID="video-surface" style={watching ? s.watchVideo : s.browser}><YouTubeBrowser key={browserVersion} ref={browser} uri={uri} dark={dark} hideShorts={hideShorts} minimumMinutes={minimumMinutes} onCaption={receiveCaption} onPage={handlePage} onTranscript={(cues, id, source = 'unknown') => { if (!validCaptionCues(cues) || id !== pageVideo.current || captionSourceRank(source) < transcriptRank.current) return; if (__DEV__) console.info('Immersed Japanese track', id, source, cues.length); transcriptRank.current = captionSourceRank(source); seenSourceCaption.current = true; setSourceTranscript({ videoId: id, cues }); setSubtitleStatus(''); void saveCaptionCache(id, cues, source); }} onClock={receiveClock} onError={setError} onPlaybackDiagnostic={details => { if (details.videoId === pageVideo.current) setPlaybackDiagnostic(details); }} /></View>
+    <View testID="content-surface" style={s.contentSurface} onLayout={event => setContentHeight(event.nativeEvent.layout.height)}>
+      <View testID="video-surface" style={watching ? s.watchVideo : s.browser}><YouTubeBrowser key={browserVersion} ref={browser} uri={uri} dark={dark} hideShorts={hideShorts} minimumMinutes={minimumMinutes} onCaption={receiveCaption} onPage={handlePage} onTranscript={(cues, id, source = 'unknown') => { if (!validCaptionCues(cues) || id !== pageVideo.current || captionSourceRank(source) < transcriptRank.current) return; if (__DEV__) console.info('Immersed Japanese track', id, source, cues.length); transcriptRank.current = captionSourceRank(source); seenSourceCaption.current = true; setSourceTranscript({ videoId: id, cues }); setSubtitleStatus(''); void saveCaptionCache(id, cues, source); }} onClock={receiveClock} onSubtitleJump={direction => subtitleJump.current(direction)} onError={setError} onPlaybackDiagnostic={details => { if (details.videoId === pageVideo.current) setPlaybackDiagnostic(details); }} /></View>
       {watching && <View testID="subtitle-panel" style={[s.study, { height: readingHeight, paddingBottom: panel ? 0 : dockClearance, paddingHorizontal: panel ? 0 : 12, paddingTop: panel ? 0 : 6 }]} {...(!panel && !lookup ? gestures.panHandlers : {})}>
         {settings ? settingsPanel : library ? libraryPanel : <>
-          <View style={{ height: coverageHeight, justifyContent: 'center' }}><VideoCoverage cues={rawTimeline} level={level} knowledge={knowledge} dark={dark} /></View>
           <ScrollView ref={captionScroll} testID="caption-scroll" style={s.captionScroll} contentContainerStyle={{ paddingVertical: 8, flexGrow: 1, justifyContent: 'center' }}>
             {sentence ? <><StudySubtitles tokens={tokens} tail={unparsedTail} dark={dark} level={level} knowledge={knowledge} readings={readings} onWord={tapWord} />{playbackBlocked && <Text style={s.hint}>YouTube cannot play this video here. The Japanese transcript is available to read.</Text>}{!!analysisError && <Text style={s.hint}>{analysisError}</Text>}</> : <Text style={s.captionEmpty}>{playbackBlocked ? 'YouTube cannot play this video here' : subtitleStatus ? 'Captions could not be generated for this video' : '—'}</Text>}
           </ScrollView>
@@ -502,6 +504,7 @@ export default function App() {
     {!watching && library && <SafeAreaView edges={['top', 'left', 'right']} style={[s.safe, s.panelScreen, { paddingBottom: dockClearance }]}>{libraryPanel}</SafeAreaView>}
     {lookupContent}
     <View testID="back-gesture-edge" style={{ position: 'absolute', left: 0, top: 0, bottom: dockClearance, width: 22, zIndex: 70 }} />
+    <StartupOverlay ready={preferencesReady && (storageReady || !!storageError)} />
   </SafeAreaView></KeyboardAvoidingView></DarkContext.Provider>;
 }
 function createStyles(dark: boolean) {

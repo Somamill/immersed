@@ -1,5 +1,17 @@
 # Immersed — development guide
 
+## iPhone parity update — 0.19.0
+
+The watch header now keeps the app icon and an estimated vocabulary percentage visible together. It uses the current subtitle sample, completed JLPT level and explicit known/unknown choices; it does not measure listening fluency. Katakana is automatically familiar at N2/N1 through the shared learning policy, with explicit unknown overrides preserved. Dictionary lookup uses the shared honorific-base fallback, including お便り → 便り.
+
+Horizontal reading-pane swipes, app skip buttons, and supported YouTube embedded seek buttons/keyboard commands all route through subtitle-block navigation. Rapid presses use the pending destination, not a ten-second offset. Source caption text and the original block boundaries remain the navigation source. Native system video controls can still take over when YouTube enters its own fullscreen player.
+
+Typography keeps punctuation attached to the adjacent word, preserves every source glyph, uses smaller muted furigana, and reserves ruby space only when a reading is actually displayed. A compact header leaves the player and reading panel mounted while moving between words/settings. The reading height uses the available content area so the header does not push playback controls off small screens.
+
+Startup uses the SDK 58 splash-screen plugin and a text-free animated logo/ring, with native-driven animation and Reduced Motion support. It waits only for local settings/library restoration, never YouTube or dictionary network requests. Expo Go controls its own outer launch screen; the configured native splash requires a rebuilt standalone app. Native iOS JavaScript export and touch/browser fixtures are verified; physical iPhone playback and startup still need a device check. No newly signed TestFlight build has been published by this update.
+
+Use the currently running Expo Go preview for this update. Its address is written to ignored `.expo/immersed-preview.json`; it depends on the development Mac and tunnel staying available. The preview serves the updated dictionary API on the same HTTPS origin. The unrelated local service on port 8082 is preserved; run browser checks with `IMMERSED_TEST_PORT=8084 npx playwright test` when that port is occupied.
+
 Run all commands from the repository root. For the project introduction and current UI, see [README](../README.md).
 
 iPhone-first Japanese immersion: choose a natural Japanese video, watch in a focused player, and tap words/grammar in Japanese subtitles for dictionary lookup.
