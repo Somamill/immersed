@@ -1,4 +1,4 @@
-name: Send iPhone update to TestFlight
+name: Send Store edition to TestFlight
 
 on:
   workflow_dispatch:
@@ -13,6 +13,9 @@ concurrency:
 jobs:
   testflight:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: Apps/Store
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
       ASC_APP_ID: ${{ vars.ASC_APP_ID }}
@@ -22,6 +25,7 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: Apps/Store/package-lock.json
       - name: Check one-time account setup
         run: |
           node <<'JS'
@@ -32,6 +36,8 @@ jobs:
           if (!/^\d+$/.test(process.env.ASC_APP_ID ?? '')) throw new Error('Add the numeric ASC_APP_ID repository variable. See TESTFLIGHT.md.');
           const eas = JSON.parse(fs.readFileSync('eas.json', 'utf8'));
           eas.submit.production.ios.ascAppId = process.env.ASC_APP_ID;
+          // CI uses credentials configured in EAS; local signing files stay on the maintainer Mac.
+          eas.build.production.ios.credentialsSource = 'remote';
           fs.writeFileSync('eas.json', JSON.stringify(eas, null, 2) + '\n');
           JS
       - run: npm ci
