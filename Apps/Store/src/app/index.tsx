@@ -383,10 +383,10 @@ export default function ImmersedStore() {
       <StatusBar style={dark ? "light" : "dark"} />
       <View style={s.shell}>
         <View style={s.header}>
-          <Text accessibilityRole="header" style={s.brand}>
+          <Text accessibilityRole="header" style={s.brand} maxFontSizeMultiplier={1.2}>
             Immersed<Text style={s.accent}>.</Text>
           </Text>
-          <Text style={s.suite}>dot.</Text>
+          <Text style={s.suite} maxFontSizeMultiplier={1.2}>dot.</Text>
         </View>
         <View accessibilityRole="tablist" style={s.tabs}>
           {(["watch", "words", "about"] as Tab[]).map((value) => (
@@ -401,7 +401,8 @@ export default function ImmersedStore() {
                 pressed && s.pressed,
               ]}
             >
-              <Text style={[s.tabText, tab === value && s.activeTabText]}>
+              <Text style={[s.tabText, tab === value && s.activeTabText]}
+                  maxFontSizeMultiplier={2}>
                 {value === "watch"
                   ? "Watch"
                   : value === "words"
