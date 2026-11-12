@@ -1,0 +1,7 @@
+# Store edition data and software notices
+
+JMdict Japanese–English dictionary © Electronic Dictionary Research and Development Group (EDRDG), under Creative Commons Attribution-ShareAlike 4.0. Source: https://www.edrdg.org/jmdict/j_jmdict.html ; license: https://www.edrdg.org/edrdg/licence.html ; CC BY-SA: https://creativecommons.org/licenses/by-sa/4.0/ . Snapshot 26 October 2026, converted by scriptin/jmdict-simplified 3.6.2. Pinned archive and SHA-256 are in scripts/build-dictionary.py.
+
+The Store build transforms headword, reading and English definitions into an offline SQLite lookup index. That derived dictionary data remains CC BY-SA 4.0. Rebuild it using `python3 scripts/build-dictionary.py`; the download is verified before use. No restriction in the app's software license limits rights in this dictionary data. Dictionary definitions and attribution are accessible offline in the app; source and license links are in About. Refresh the pinned dictionary snapshot regularly and preserve attribution when doing so.
+
+Expo, React Native, SQLite, Ionicons and their dependencies retain their respective upstream open-source licenses in their packages. Native license notices must be collected from the actual release archive before submission. No FFmpeg, yt-dlp, Netflix bridge, YouTube extraction, ReplayKit module or external runtime is included in this project's dependency or entry graph.

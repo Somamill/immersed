@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Immersed",
+    "slug": "immersed",
+    "version": "0.21.3",
+    "owner": "somamill",
+    "userInterfaceStyle": "automatic",
+    "orientation": "default",
+    "scheme": "immersed-store",
+    "icon": "../../assets/icon.png",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.somamill.immersed",
+      "appleTeamId": "YJH8WWUVF3",
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "UIFileSharingEnabled": false
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-video",
+      "expo-asset"
+    ],
+    "updates": {
+      "enabled": false
+    },
+    "extra": {
+      "edition": "store",
+      "eas": {
+        "projectId": "f6597504-4823-4dd7-99a1-32907814ea98"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}

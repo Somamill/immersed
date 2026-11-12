@@ -2,7 +2,7 @@
   "expo": {
     "name": "Immersed",
     "slug": "immersed",
-    "version": "0.21.2",
+    "version": "0.21.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -37,7 +37,8 @@
           "imageWidth": 64,
           "resizeMode": "contain"
         }
-      ]
+      ],
+      "expo-status-bar"
     ],
     "scheme": "immersed",
     "extra": {
