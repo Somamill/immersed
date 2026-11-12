@@ -4,6 +4,16 @@ Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Rel
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-11-12
+
+Part of dot.
+
+### Changed
+
+- Apply shared dot. surfaces, typography, controls and indigo accents to desktop and mobile chrome while preserving the video stage, learning states and subtitle replay.
+- Add accessible suite discovery and companion project links in Settings, with runtime tokens refreshed by the brand-kit sync workflow.
+- Improve narrow-screen desktop layout, keyboard focus and contrast.
+
 ## [0.21.0] - 2026-11-12
 
 Subtitle replay and reliable word context

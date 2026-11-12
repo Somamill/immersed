@@ -1,5 +1,16 @@
 [
   {
+    "version": "0.21.1",
+    "date": "2026-11-12",
+    "title": "Part of dot.",
+    "notes": [
+      "Apply shared dot. surfaces, typography, controls and indigo accents to desktop and mobile chrome while preserving the video stage, learning states and subtitle replay.",
+      "Add accessible suite discovery and companion project links in Settings, with runtime tokens refreshed by the brand-kit sync workflow.",
+      "Improve narrow-screen desktop layout, keyboard focus and contrast."
+    ],
+    "changelogFormat": 1
+  },
+  {
     "version": "0.21.0",
     "date": "2026-11-12",
     "title": "Subtitle replay and reliable word context",
