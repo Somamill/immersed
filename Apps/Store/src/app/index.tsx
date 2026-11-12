@@ -1,3 +1,4 @@
+import notices from "../../assets/third-party-notices.json";
 import Constants from "expo-constants";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -43,6 +44,7 @@ function message(error: unknown) {
   return error instanceof Error ? error.message : "Please try again.";
 }
 export default function ImmersedStore() {
+  const [showLicenses, setShowLicenses] = useState(false);
   const db = useSQLiteContext(),
     dark = useColorScheme() === "dark",
     { width } = useWindowDimensions();
@@ -760,6 +762,8 @@ export default function ImmersedStore() {
               />
             }
             <Action label="Read the privacy policy" icon="open-outline" onPress={() => { openLink('https://github.com/Somamill/immersed/blob/main/Apps/Store/PRIVACY.md'); }} busy={!!busy} theme={{s, palette, onAccent: dotTokens.colors.onAccent[dark ? 'dark' : 'light']}} />
+            <Action label={showLicenses ? 'Hide software licenses' : 'Software licenses'} icon="document-text-outline" onPress={() => setShowLicenses(!showLicenses)} busy={!!busy} theme={{s, palette, onAccent: dotTokens.colors.onAccent[dark ? 'dark' : 'light']}} />
+            {showLicenses && <Text selectable style={s.body}>{notices.text}</Text>}
             <Text accessibilityRole="header" style={s.sectionTitle}>
               Dictionary credits
             </Text>
