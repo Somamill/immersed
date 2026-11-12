@@ -1,0 +1,62 @@
+/* Hallmark · shape: app screen · genre: media library · theme: existing dot. identity */
+/* Refinement: preserve task layouts and content; share semantic roles and control rhythm. */
+:root { --dot-font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; --dot-oled-background: #000; --dot-oled-surface: #101010; --dot-shell-shadow: 0 8px 24px #00000018; --dot-accent: var(--dot-accent-immersed); }
+html[data-dot-theme] { accent-color: var(--dot-accent); scrollbar-color: var(--dot-border) var(--dot-background); }
+body { font-family: var(--dot-font-ui); }
+::selection { background: var(--dot-accent); color: var(--dot-on-accent); }
+input, textarea { caret-color: var(--dot-accent); }
+input::placeholder, textarea::placeholder { color: var(--dot-secondaryText); opacity: 1; }
+:where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--dot-accent); outline-offset: 3px;
+}
+button:disabled { cursor: not-allowed; }
+.dot-suite { color: var(--dot-text); font-size: 13px; line-height: 1.5; min-width: 0; }
+.dot-suite summary { display: flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; list-style: none; width: fit-content; }
+.dot-suite summary::-webkit-details-marker { display: none; }
+.dot-suite summary::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--dot-accent); flex-shrink: 0; }
+.dot-suite summary::after { content: "+"; color: var(--dot-secondaryText); }
+.dot-suite[open] summary::after { content: "−"; }
+.dot-suite b { font-size: 19px; font-weight: 700; letter-spacing: -.4px; }
+.dot-suite nav { display: grid; gap: 4px; padding: 4px 0 12px; }
+.dot-suite nav a { display: block; min-height: 44px; padding: 8px 0; color: var(--dot-accent); text-decoration: underline; text-underline-offset: 3px; line-height: 1.5; }
+.dot-suite nav a:hover { text-decoration-thickness: 2px; }
+.dot-suite nav small { display: block; font-size: 12px; color: var(--dot-secondaryText); }
+.dot-suite p { color: var(--dot-secondaryText); font-size: 13px; line-height: 1.5; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+html[data-dot-theme], html[data-dot-theme] body, html[data-dot-theme] body.light { background: var(--dot-background); color: var(--dot-text); }
+html[data-dot-theme] header, html[data-dot-theme] body.light header, html[data-dot-theme] dialog, html[data-dot-theme] body.light dialog { background: var(--dot-surface); color: var(--dot-text); border-color: var(--dot-border); }
+html[data-dot-theme] input, html[data-dot-theme] select, html[data-dot-theme] body.light input, html[data-dot-theme] body.light select { background: var(--dot-background); color: var(--dot-text); border-color: var(--dot-border); border-radius: var(--dot-radius-control); }
+html[data-dot-theme] button, html[data-dot-theme] body.light button { color: var(--dot-text); border-color: var(--dot-border); }
+html[data-dot-theme] .primary, html[data-dot-theme] body.light .primary, html[data-dot-theme] .play, html[data-dot-theme] .discoveryTopics button[aria-pressed="true"], html[data-dot-theme] body.light .discoveryTopics button[aria-pressed="true"] { background: var(--dot-accent); color: var(--dot-on-accent); border-color: transparent; }
+html[data-dot-theme] .videoCard, html[data-dot-theme] .studyCard, html[data-dot-theme] .lookup, html[data-dot-theme] body.light .lookup { background: var(--dot-surface); color: var(--dot-text); border-color: var(--dot-border); border-radius: var(--dot-radius-card); }
+html[data-dot-theme] .studyHead, html[data-dot-theme] .videoStatus, html[data-dot-theme] .lookupActions, html[data-dot-theme] body.light .lookupActions { background: var(--dot-surface); border-color: var(--dot-border); }
+html[data-dot-theme] .hint, html[data-dot-theme] .studyHead span, html[data-dot-theme] .discoveryIntro p, html[data-dot-theme] .recentMeaning, html[data-dot-theme] body.light .recentMeaning { color: var(--dot-secondaryText); }
+html[data-dot-theme] .reading, html[data-dot-theme] .understanding, html[data-dot-theme] .word rt, html[data-dot-theme] body.light .word rt { color: var(--dot-accent); }
+html[data-dot-theme] .iconButton, html[data-dot-theme] body.light .iconButton { background: var(--dot-surface); border-color: var(--dot-border); color: var(--dot-text); }
+html[data-dot-theme] .iconButton.active, html[data-dot-theme] .iconButton[aria-pressed="true"] { background: var(--dot-accent); color: var(--dot-on-accent); }
+html[data-dot-theme] .controls, html[data-dot-theme] .speedMenu, html[data-dot-theme] body.light .speedMenu { background: var(--dot-surface); border-color: var(--dot-border); }
+html[data-dot-theme] .discoveryEyebrow { display: none; }
+html[data-dot-theme] .dot-suite { border-bottom: 1px solid var(--dot-border); margin-bottom: 16px; padding-bottom: 8px; }
+@media (max-width: 720px) {
+  html[data-dot-theme] header { flex-wrap: wrap; width: calc(100% - 24px); max-width: calc(100% - 24px); margin: 12px; padding: 12px; gap: 8px; height: auto; }
+  html[data-dot-theme] header .brand { min-width: 0; }
+  html[data-dot-theme] header form { min-width: 0; flex: 1; }
+  html[data-dot-theme] header input { min-width: 0; width: 100%; }
+  html[data-dot-theme] header nav { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+  html[data-dot-theme] main { grid-template-columns: minmax(0, 1fr); padding: 12px; height: auto; gap: 16px; }
+  html[data-dot-theme] .videoCard { min-width: 0; height: 48vh; }
+  html[data-dot-theme] .studyCard { min-width: 0; min-height: 48vh; }
+}
+/* Native fullscreen captions deliberately keep a transparent backing. */
+html[data-dot-theme].netflixFocus, html[data-dot-theme] body.netflixFocus { background: transparent !important; }
+
+html[data-dot-theme] :where(button, a, summary):active { opacity: .78; }
+html[data-dot-theme] :where(h1, h2, h3) { text-wrap: balance; }
+html[data-dot-theme] body input:not([type="checkbox"]):not([type="radio"]), html[data-dot-theme] body select, html[data-dot-theme] body textarea { border: 1px solid var(--dot-secondaryText); }
+
+html[data-dot-theme] #play { background: var(--dot-accent); color: var(--dot-on-accent); }
+html[data-dot-theme] .controls .control { width: 48px; height: 48px; min-height: 44px; padding: 8px; }
+html[data-dot-theme] body #search #query { background: var(--dot-background); border: 1px solid var(--dot-secondaryText); border-radius: var(--dot-radius-control); }

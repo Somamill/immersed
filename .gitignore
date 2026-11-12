@@ -54,3 +54,7 @@ __pycache__/
 
 # Deployment-local domain configuration
 deploy/.env
+
+# Local design-audit captures
+.hallmark/shots/
+.hallmark/before/
