@@ -1,5 +1,16 @@
 [
   {
+    "version": "0.21.2",
+    "date": "2026-11-12",
+    "title": "Part of dot.",
+    "notes": [
+      "Apply shared dot. surfaces, typography, controls and indigo accents while preserving the video stage, subtitle replay, spoken-verb lookup and learning states.",
+      "Add accessible suite discovery and companion links in Settings; refresh runtime tokens through the shared brand-kit workflow.",
+      "Improve narrow-screen desktop layout, keyboard focus and contrast."
+    ],
+    "changelogFormat": 1
+  },
+  {
     "version": "0.21.1",
     "date": "2026-11-12",
     "title": "Resolve spoken Japanese verb lookups",

@@ -1,3 +1,4 @@
+import { dotPalette } from '../dot-theme';
 import PitchAccent from './PitchAccent';
 import React, { useMemo, useState, useRef, useEffect } from 'react';
 import { ActivityIndicator, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Switch, Text, View, useWindowDimensions } from 'react-native';
@@ -21,21 +22,21 @@ export default function LookupSheet({ inline = false, pitchAccent = false, capti
   const [expandedLookup, setExpandedLookup] = useState<Props['lookup']>(null);
   const moreEntries = expandedLookup !== null && expandedLookup === lookup;
   const { height } = useWindowDimensions();
-  const ink = dark ? '#F3F3F3' : '#242D28', muted = dark ? '#A0AAA4' : '#66746A', accent = dark ? '#B4DEC4' : '#344C3F';
+  const ink = dotPalette(dark).text, muted = dotPalette(dark).secondaryText, accent = dotPalette(dark).accent;
   const dismiss = useMemo(() => PanResponder.create({
     onMoveShouldSetPanResponder: (_event, state) => state.dy > 35 && state.dy > Math.abs(state.dx) * 1.5,
     onPanResponderRelease: onClose,
   }), [onClose]);
-  const spellingContent = !!alternatives.length && <View testID="same-sound-alternatives" style={{ paddingTop: 10, marginTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: dark ? '#29322C' : '#D8DED5' }}>
+  const spellingContent = !!alternatives.length && <View testID="same-sound-alternatives" style={{ paddingTop: 10, marginTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: dotPalette(dark).border }}>
             <Text style={{ color: muted, fontSize: 12, marginBottom: 3 }}>{alternatives.some(alternative => alternative.likely) ? 'Context suggestion' : 'Same reading'}</Text>
             {alternatives.map(alternative => <Pressable key={alternative.form} accessibilityRole="button" accessibilityLabel={`Use spelling ${alternative.form}`} onPress={event => { event.stopPropagation(); onChooseSpelling?.(alternative); }} style={{ minHeight: 48, paddingVertical: 7 }}>
               <Text style={{ color: accent, fontSize: 17 }}>{alternative.form}</Text>
               <Text numberOfLines={2} style={{ color: muted, fontSize: 13, lineHeight: 19 }}>{alternative.entry.senses[0]?.english_definitions.join('; ')}</Text>
             </Pressable>)}
           </View>;
-  const content = <Pressable accessible={false} testID="dictionary-sheet" onPress={onClose} style={[styles.sheet, inline ? { flex: 1, minHeight: 0, borderRadius: 0, paddingTop: 4, paddingHorizontal: 16, paddingBottom: 0, backgroundColor: dark ? '#000' : '#F7F5EF' } : { backgroundColor: dark ? '#090C0A' : '#F7F5EF', height: Math.min(height * .72, Math.max(350, Math.min(510, height * .56))), paddingBottom: Math.max(20, insets.bottom + 10) }]}>
+  const content = <Pressable accessible={false} testID="dictionary-sheet" onPress={onClose} style={[styles.sheet, inline ? { flex: 1, minHeight: 0, borderRadius: 0, paddingTop: 4, paddingHorizontal: 16, paddingBottom: 0, backgroundColor: dotPalette(dark).background } : { backgroundColor: dotPalette(dark).surface, height: Math.min(height * .72, Math.max(350, Math.min(510, height * .56))), paddingBottom: Math.max(20, insets.bottom + 10) }]}>
         <View {...dismiss.panHandlers} style={{ paddingBottom: inline ? 2 : 14 }}>
-          {!inline && <View style={{ width: 32, height: 4, borderRadius: 2, backgroundColor: dark ? '#354039' : '#C5CDC4', alignSelf: 'center', marginBottom: 18 }} />}
+          {!inline && <View style={{ width: 32, height: 4, borderRadius: 2, backgroundColor: dotPalette(dark).border, alignSelf: 'center', marginBottom: 18 }} />}
           <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
             <View style={{ flex: 1 }}>
               <Text selectable={false} style={{ color: ink, fontSize: inline ? 22 : 27, fontWeight: '600', lineHeight: inline ? 28 : 36 }}>{lookup?.token.text}</Text>
@@ -53,7 +54,7 @@ export default function LookupSheet({ inline = false, pitchAccent = false, capti
           {!!error && <Text selectable={false} style={{ color: muted, lineHeight: 23 }}>{error}</Text>}
           {!loading && !error && !entries.length && <Text selectable={false} style={{ color: muted }}>No matching word found.</Text>}
           {alternatives.some(alternative => alternative.likely) && spellingContent}
-          {(moreEntries ? entries : entries.slice(0, 1)).map((entry, index) => <View key={entry.slug} style={{ paddingVertical: inline ? 3 : 10, borderTopWidth: index ? StyleSheet.hairlineWidth : 0, borderTopColor: dark ? '#29322C' : '#D8DED5' }}>
+          {(moreEntries ? entries : entries.slice(0, 1)).map((entry, index) => <View key={entry.slug} style={{ paddingVertical: inline ? 3 : 10, borderTopWidth: index ? StyleSheet.hairlineWidth : 0, borderTopColor: dotPalette(dark).border }}>
             {(index > 0 || entry.source === 'JMnedict' || (entry.source === 'JMdict' && entry.japanese.some(j => j.word && j.word !== lookup?.token.lemma) && /^[ぁ-ゖァ-ヺー]+$/.test(lookup?.token.text || ''))) && <Text selectable={false} style={{ color: muted, fontSize: 13, lineHeight: 21 }}>{[...new Set(entry.japanese.map(j => [j.word, j.reading].filter(Boolean).join(' ')))].join(' · ')}{entry.source === 'JMnedict' ? ` · ${[...new Set(entry.senses.flatMap(sense => sense.parts_of_speech))].join(' · ')}` : ''}</Text>}
             {pitchAccent && <PitchAccent accents={entry.pitch} dark={dark} />}
             <Text selectable={false} style={{ color: ink, fontSize: inline ? 15 : 17, lineHeight: inline ? 21 : 25 }}>{entry.senses.slice(0, 2).map(sense => sense.english_definitions.join('; ')).join('\n')}</Text>
@@ -69,7 +70,7 @@ export default function LookupSheet({ inline = false, pitchAccent = false, capti
           </Pressable>
           <Pressable accessible={false} testID="word-knowledge-control" onPress={event => event.stopPropagation()} style={{ minHeight: inline ? 44 : 48, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Text selectable={false} style={{ color: muted, fontSize: 14 }}>{known ? 'Known' : 'Unknown'}</Text>
-            <Switch accessibilityLabel="Known word" value={known} onValueChange={onKnown} trackColor={{ false: dark ? '#354039' : '#CAD2C9', true: dark ? '#41694D' : '#A5BCA7' }} />
+            <Switch accessibilityLabel="Known word" value={known} onValueChange={onKnown} trackColor={{ false: dotPalette(dark).border, true: dark ? '#41694D' : '#A5BCA7' }} />
           </Pressable>
         </View>
       </Pressable>;

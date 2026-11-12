@@ -1,3 +1,4 @@
+import { dotPalette } from '../dot-theme';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { shouldHighlightToken, type JlptLevel } from '../learning';
@@ -13,7 +14,7 @@ export default function StudySubtitles({ tokens, tail, dark, level, knowledge, r
     else if (!token.word && /^[、。，．！？!?…」』）)\]】］｝〕〉》〙〗〟’”]+$/u.test(token.text) && groups.length && !prefix) groups[groups.length - 1].punctuation += token.text;
     else { groups.push({ token, punctuation: '', prefix }); prefix = ''; }
   }
-  const ink = dark ? '#F3F3F3' : '#242D28';
+  const ink = dotPalette(dark).text;
   return <View testID="subtitle-words" onLayout={event => onHeight?.(event.nativeEvent.layout.height)} style={styles.words}>
     {groups.map(({ token, punctuation, prefix }, index) => {
       const unknown = shouldHighlightToken(token, level, knowledge);
@@ -22,8 +23,8 @@ export default function StudySubtitles({ tokens, tail, dark, level, knowledge, r
       return <View key={`${token.start}:${index}`} style={styles.group}>
         {!!prefix && <Text selectable={false} style={[styles.japanese, { color: ink, paddingBottom: 2 }]}>{prefix}</Text>}
         <Pressable accessibilityRole={token.word ? 'button' : undefined} accessibilityLabel={token.word ? `Look up ${token.text}` : token.text} disabled={!token.word} onPress={() => onWord(token)} style={[styles.word, { paddingTop: hasReadings ? 16 * fontScale : 0 }]}>
-          {furigana && <View pointerEvents="none" style={styles.ruby}><Text selectable={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} testID={`furigana-${token.lemma}`} style={[styles.reading, { color: dark ? '#B4DEC4' : '#476B54' }]}>{token.reading}</Text></View>}
-          <View testID={unknown ? `unknown-${token.lemma}` : undefined} style={unknown ? { backgroundColor: dark ? '#B4DEC41A' : '#344C3F12', borderRadius: 5 } : undefined}><Text selectable={false} style={[styles.japanese, { color }]}>{token.text}</Text></View>
+          {furigana && <View pointerEvents="none" style={styles.ruby}><Text selectable={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} testID={`furigana-${token.lemma}`} style={[styles.reading, { color: dotPalette(dark).accent }]}>{token.reading}</Text></View>}
+          <View testID={unknown ? `unknown-${token.lemma}` : undefined} style={unknown ? { backgroundColor: dotPalette(dark).softAccent, borderRadius: 5 } : undefined}><Text selectable={false} style={[styles.japanese, { color }]}>{token.text}</Text></View>
         </Pressable>
         {!!punctuation && <Text selectable={false} style={[styles.japanese, { color: ink, paddingBottom: 2 }]}>{punctuation}</Text>}
       </View>;

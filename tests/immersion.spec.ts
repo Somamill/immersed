@@ -1,3 +1,4 @@
+import { dotTokens } from '../branding/dot/tokens';
 import { configuredServiceOrigin } from '../src/service-origin';
 import { preserveCaptionTokens } from '../src/subtitle-tokens';
 import { test, expect } from '@playwright/test';
@@ -584,7 +585,7 @@ test('N2 furigana shows N1 readings only and can be turned off without disabling
   await expect(page.getByTestId('furigana-抽象')).toHaveCount(0);
   await expect(page.getByTestId('furigana-食べる')).toHaveCount(0);
   await expect(page.getByTestId('subtitle-words')).toHaveCSS('justify-content', 'center');
-  await expect(page.getByText('愛想', { exact: true })).toHaveCSS('color', 'rgb(243, 243, 243)');
+  await expect(page.getByText('愛想', { exact: true })).toHaveCSS('color', `rgb(${dotTokens.colors.dark.text.slice(1).match(/../g)!.map(channel => parseInt(channel, 16)).join(', ')})`);
   await expect(page.getByTestId('unknown-愛想')).toBeVisible();
   await expect(page.getByTestId('unknown-抽象')).toHaveCount(0);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -596,7 +597,7 @@ test('N2 furigana shows N1 readings only and can be turned off without disabling
   await page.getByRole('switch', { name: 'Known word', exact: true }).check();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await expect(page.getByTestId('unknown-愛想')).toHaveCount(0);
-  await expect(page.getByText('愛想', { exact: true })).toHaveCSS('color', 'rgb(243, 243, 243)');
+  await expect(page.getByText('愛想', { exact: true })).toHaveCSS('color', `rgb(${dotTokens.colors.dark.text.slice(1).match(/../g)!.map(channel => parseInt(channel, 16)).join(', ')})`);
 });
 
 test('JavaScript-only YouTube watch navigation is reported even before a video exists', async ({ page }) => {

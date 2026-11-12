@@ -4,6 +4,16 @@ Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Rel
 
 ## [Unreleased]
 
+## [0.21.2] - 2026-11-12
+
+Part of dot.
+
+### Changed
+
+- Apply shared dot. surfaces, typography, controls and indigo accents while preserving the video stage, subtitle replay, spoken-verb lookup and learning states.
+- Add accessible suite discovery and companion links in Settings; refresh runtime tokens through the shared brand-kit workflow.
+- Improve narrow-screen desktop layout, keyboard focus and contrast.
+
 ## [0.21.1] - 2026-11-12
 
 Resolve spoken Japanese verb lookups
