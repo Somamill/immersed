@@ -40,7 +40,7 @@ html[data-dot-theme] .iconButton.active, html[data-dot-theme] .iconButton[aria-p
 html[data-dot-theme] .controls, html[data-dot-theme] .speedMenu, html[data-dot-theme] body.light .speedMenu { background: var(--dot-surface); border-color: var(--dot-border); }
 html[data-dot-theme] .discoveryEyebrow { display: none; }
 html[data-dot-theme] .dot-suite { border-bottom: 1px solid var(--dot-border); margin-bottom: 16px; padding-bottom: 8px; }
-@media (max-width: 720px) {
+@media (max-width: 1000px) {
   html[data-dot-theme] header { flex-wrap: wrap; width: calc(100% - 24px); max-width: calc(100% - 24px); margin: 12px; padding: 12px; gap: 8px; height: auto; }
   html[data-dot-theme] header .brand { min-width: 0; }
   html[data-dot-theme] header form { min-width: 0; flex: 1; }
@@ -60,3 +60,7 @@ html[data-dot-theme] body input:not([type="checkbox"]):not([type="radio"]), html
 html[data-dot-theme] #play { background: var(--dot-accent); color: var(--dot-on-accent); }
 html[data-dot-theme] .controls .control { width: 48px; height: 48px; min-height: 44px; padding: 8px; }
 html[data-dot-theme] body #search #query { background: var(--dot-background); border: 1px solid var(--dot-secondaryText); border-radius: var(--dot-radius-control); }
+
+@media (max-width: 1000px) {
+  html[data-dot-theme] .controls { flex-wrap: wrap; max-width: calc(100% - 24px); gap: 8px; }
+}
