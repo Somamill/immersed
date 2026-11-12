@@ -4,6 +4,14 @@ Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Rel
 
 ## [Unreleased]
 
+## [0.21.1] - 2026-11-12
+
+Resolve spoken Japanese verb lookups
+
+### Changed
+
+- Recover dictionary-attested katakana verbs and spoken conjugations across tokenizer boundaries, including シメてる and 粋がってんじゃねえ. Preserve original captions, spaces, punctuation and offsets; keep nouns and names distinct. Improve dictionary part-of-speech ranking. Unsupported fictional names still have no invented definition.
+
 ## [0.21.0] - 2026-11-12
 
 Subtitle replay and reliable word context

@@ -234,3 +234,43 @@ test('expressive interjection endings do not become unrelated verbs or noun homo
   const direct=await lookup('ふんっ！');assert.ok(direct[0].senses[0].english_definitions.some(x=>/humph|hmm/.test(x)));
   assert.ok((await lookup('分',{pos:'noun',reading:'ふん'}))[0].senses[0].english_definitions.includes('minute (unit of time)'));
 });
+
+test('Netflix slang recovers whole dictionary verbs without changing caption glyphs or offsets',async()=>{
+  const samples=[
+    ['この辺 シメてる“泥紋デーモン”のヘッドやってんだぞ こら','シメてる','締める',/keep under strict control/],
+    ['虎の威 借って粋がってんじゃねえよ 芋ゴリラ','粋がってんじゃねえ','粋がる',/put on airs|act brave/],
+  ];
+  for(const [text,surface,lemma,meaning] of samples){
+    const tokens=await analyze(text),token=tokens.find(t=>t.text===surface);
+    assert.ok(token,surface);assert.equal(token.lemma,lemma);assert.equal(token.pos,'verb');assert.equal(token.proper,false);
+    assert.equal(tokens.map(t=>t.text).join(''),text);
+    for(const t of tokens)assert.equal(text.slice(t.start,t.end),t.text);
+    const entries=await lookup(token.lemma,token);
+    assert.ok(entries.some(e=>e.senses.some(s=>s.english_definitions.some(d=>meaning.test(d)))));
+    assert.ok((await lookup(surface)).some(e=>e.senses.some(s=>s.english_definitions.some(d=>meaning.test(d)))));
+  }
+});
+
+test('dictionary-validated spoken forms generalize across scripts, verb classes, tense and negation',async()=>{
+  const cases=[
+    ['イキがってる',/put on airs/],['いきがってんだ',/put on airs/],['ナメてる',/look down on|make light of/],
+    ['ビビってんじゃねえ',/feel afraid|nervous/],['粋がらない',/put on airs/],['シメた',/tighten|fasten/],
+    ['食べてる',/eat/],['読んでる',/read/],['泳いでる',/swim/],['書いてんだ',/write/],
+    ['待ってんだ',/wait/],['話してる',/speak|talk/],['遊んでんだ',/play/],['死んでる',/die/],
+    ['行ってる',/go/],['きてる',/come/],['してる',/do/],['勉強してる',/study/],
+  ];
+  for(const [text,meaning] of cases){
+    const tokens=await analyze(text);assert.equal(tokens[0].text,text,text);assert.equal(tokens[0].pos,'verb',text);
+    assert.ok((await lookup(tokens[0].lemma,tokens[0])).some(e=>e.senses.some(s=>s.english_definitions.some(d=>meaning.test(d)))),text);
+  }
+});
+
+test('spoken recovery does not reinterpret nouns, names, quotation boundaries, or arbitrary text',async()=>{
+  for(const text of ['合点','がってん','勉強','粋','みんな'])assert.equal((await analyze(text))[0].pos,'noun',text);
+  assert.equal((await analyze('鈴木'))[0].proper,true);
+  for(const text of ['シメ てる','粋。がってる','粋「がってる」'])assert.ok(!(await analyze(text)).some(t=>t.lemma==='締める'||t.lemma==='粋がる'));
+  assert.deepEqual(await lookup('アババババてる'),[]);
+  assert.ok(!(await analyze('そうじゃねえ')).some(t=>t.pos==='verb'));
+  assert.equal((await analyze('彼の主張は筋が通っている。')).find(t=>t.text.includes('筋')).text,'筋');
+  const determiner=(await analyze('この辺'))[0];assert.equal((await lookup(determiner.lemma,determiner))[0].senses[0].english_definitions[0],'this');
+});

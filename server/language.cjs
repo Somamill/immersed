@@ -4,6 +4,7 @@ const kuromoji = require('kuromoji');
 const names = require('./names.cjs');
 const { grammarEntry } = require('./grammar.cjs');
 const pitch = require('./pitch.cjs');
+const { verbForms } = require('./verb-forms.cjs');
 let ready;
 let englishIndex;
 const normalizeEnglish = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/^(?:to|an?|the)\s+/, '').replace(/\s+/g, ' ').trim();
@@ -99,6 +100,7 @@ async function lookupUncached(word, options = {}) {
     const interjections = (index.get(emphatic)||[]).filter(e=>e.sense.some(s=>s.partOfSpeech.includes('int')));
     if(emphatic!==word&&interjections.length) matches=interjections.map(entry=>({entry,lemma:emphatic,by:'spoken ending'}));
     if(!matches.length&&spoken.get(word)?.length===1) matches=spoken.get(word).map(x=>({...x,by:'omitted particle'}));
+    if(!matches.length) matches=verbForms(word,index).map(x=>({...x,by:'inflection'}));
   }
   if(!matches.length&&!options.proper){const base=honorificBase(word,index);if(base)matches=base.entries.map(entry=>({entry,lemma:base.base,by:'honorific'}));}
   if(!matches.length)matches=(stems.get(word)||stems.get(hira(word))||[]).map(x=>({...x,by:'inflection'}));
@@ -116,7 +118,7 @@ async function lookupUncached(word, options = {}) {
   const matchingReading=(entry)=>entry.kana.some(k=>k.text===requestedReading)?requestedReading:(stems.get(requestedReading)||[]).find(x=>x.entry.id===entry.id)?.lemma||'';
   const pronounced = requestedReading ? matches.filter(x => matchingReading(x.entry)) : [];
   if (pronounced.length) matches = pronounced;
-  const fitsPOS = entry => entry.sense.some(s=>s.partOfSpeech.some(p=>options.pos==='interjection'?p==='int':options.pos==='verb'?/^v/.test(p):options.pos==='adjective'?/^adj/.test(p):options.pos==='noun'?/^n/.test(p):false));
+  const fitsPOS = entry => entry.sense.some(s=>s.partOfSpeech.some(p=>options.pos==='interjection'?p==='int':options.pos==='verb'?/^v/.test(p):options.pos==='adjective'?/^adj/.test(p):options.pos==='noun'?/^n/.test(p):options.pos==='determiner'?p==='adj-pn':options.pos==='adverb'?/^adv/.test(p):options.pos==='conjunction'?p==='conj':options.pos==='prefix'?p==='pref':false));
   if(options.pos==='interjection'&&matches.some(x=>fitsPOS(x.entry)))matches=matches.filter(x=>fitsPOS(x.entry));
   matches.sort((a,b)=>Number(fitsPOS(b.entry))-Number(fitsPOS(a.entry))||Number(!!matchingReading(b.entry))-Number(!!matchingReading(a.entry)));
   const seen=new Set();
@@ -219,6 +221,24 @@ async function analyzeUncached(text, grouped = true) {
       const hit=stems.get(surface)?.[0];
       if(hit)expression={lemma:hit.lemma,end:j+1,pos:'verb'};
     }
+    // Recover complete dictionary verbs before a noun/name misclassification can
+    // split 粋 + がってん, or turn katakana シメ + てる into unrelated entries.
+    for (let j=i;j<Math.min(tokens.length,i+8);j++) {
+      const part=tokens.slice(i,j+1);
+      if(part.some(t=>!t.word||/\s/u.test(t.text))||part.some((t,n)=>n&&t.start!==part[n-1].end))break;
+      if(part.some(t=>t.pos==='particle'&&!['て','で','じゃ'].includes(t.text)))break;
+      if(expression && j+1<expression.end)continue;
+      const surface=text.slice(head.start,tokens[j].end);
+      if(j===i && head.pos!=='verb' && index.has(head.lemma))continue;
+      const matches=verbForms(surface,index);
+      if(!matches.length)continue;
+      const preferred=matches.find(m=>m.form===head.lemma||m.lemma===head.lemma)||matches[0];
+      const sameLemma=matches.every(m=>m.lemma===preferred.lemma);
+      const lemma=sameLemma?preferred.lemma:preferred.form;
+      // Leave an ordinary, already-correct single-token verb to Kuromoji.
+      if(j===i && head.pos==='verb' && head.lemma===lemma)continue;
+      expression={lemma,end:j+1,pos:'verb',recovered:true,grammar:preferred.grammar};
+    }
     const conjectural = head.pos === 'auxiliary' && ['だ', 'です'].includes(head.lemma) &&
       /^(だろう|でしょう)(?:(?:な|ね)?(?:って|と)|な|ね)?/.exec(remaining);
     if (conjectural) {
@@ -231,7 +251,7 @@ async function analyzeUncached(text, grouped = true) {
       }
     }
     const pattern = !expression && patterns.find(([surface]) => remaining.startsWith(surface) && tokens.some(t => t.end === head.start + surface.length));
-    if (expression) { end = expression.end; grammar.push('expression'); if(expression.omitted)grammar.push('spoken particle omission'); } else if (pattern) {
+    if (expression) { end = expression.end; grammar.push(...(expression.grammar||[])); if(!expression.recovered)grammar.push('expression'); if(expression.omitted)grammar.push('spoken particle omission'); } else if (pattern) {
       while (end < tokens.length && tokens[end - 1].end < head.start + pattern[0].length) end++;
       grammar.push(pattern[1]);
     } else if (head.pos === 'noun' || head.pos === 'prefix') {
@@ -253,6 +273,7 @@ async function analyzeUncached(text, grouped = true) {
         const t = tokens[end];
         if(t.pos==='verb'&&t.detail==='接尾'&&['せる','させる','れる','られる'].includes(t.lemma)){grammar.push(auxiliaries[t.lemma]);end++;}
         else if (t.pos === 'auxiliary' || (t.pos==='adjective'&&t.lemma==='ない'&&t.detail==='非自立')) { if (auxiliaries[t.lemma]) grammar.push(auxiliaries[t.lemma]); end++; }
+        else if (t.pos==='verb' && t.text==='てる' && /^(し|き|来)$/u.test(tokens[end-1].text)) { grammar.push('て-form construction', 'contracted progressive: ～ている'); end++; }
         else if (['て', 'で'].includes(t.text) && tokens[end + 1]?.pos === 'verb' && tokens[end + 1].detail === '非自立') { grammar.push('て-form construction'); end += 2; }
         else if (['て', 'で'].includes(t.text)) { grammar.push('て-form'); end++; }
         else break;
@@ -271,7 +292,7 @@ async function analyzeUncached(text, grouped = true) {
       end++; grammar.push('contracted prohibition: ～るな');
     }
     const part = tokens.slice(i, end);
-    result.push({ ...head, pos: expression ? expression.pos : suruVerb ? 'verb' : compoundNoun ? 'noun' : head.pos, text: text.slice(head.start, part.at(-1).end), end: part.at(-1).end, lemma: pattern ? pattern[0] : interjectionLemma || nounLemma, reading: part.map(t => t.reading || t.text).join(''), grammar: [...new Set(grammar)] });
+    result.push({ ...head, ...(expression?.recovered?{proper:false}:{}), pos: expression ? expression.pos : suruVerb ? 'verb' : compoundNoun ? 'noun' : head.pos, text: text.slice(head.start, part.at(-1).end), end: part.at(-1).end, lemma: pattern ? pattern[0] : interjectionLemma || nounLemma, reading: hira(part.map(t => t.reading || t.text).join('')), grammar: [...new Set(grammar)] });
     i = end;
   }
   return result;
