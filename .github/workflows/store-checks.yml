@@ -28,4 +28,5 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run dictionary:build
+      - run: npm run test:dictionary
       - run: npx expo export --platform ios
