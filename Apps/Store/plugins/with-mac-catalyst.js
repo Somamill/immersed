@@ -3,6 +3,7 @@ const { withPodfile, withPodfileProperties, withXcodeProject, withDangerousMod }
 const fs = require('node:fs');
 const path = require('node:path');
 module.exports = function withMacCatalyst(config) {
+  config = require('./with-store-metadata')(config, { category: 'public.app-category.education' });
   config = withPodfileProperties(config, c => {
     // Expo and React Native prebuilt iOS frameworks may omit Catalyst slices.
     c.modResults['ios.buildReactNativeFromSource'] = 'true';
