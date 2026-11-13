@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.21.5",
+    "date": "2026-11-13",
+    "title": "Make subtitle word lookup accessible",
+    "notes": [
+      "In the Store edition, expose individual subtitle word lookups through native accessibility actions while preserving tap-to-lookup and the dot. design. Keep the trailing dot in native app naming. Store review and physical-device acceptance remain pending."
+    ],
+    "changelogFormat": 1
+  },
+  {
     "version": "0.21.4",
     "date": "2026-11-13",
     "title": "Complete the Immersed. Store name",
@@ -33,7 +42,7 @@
     "date": "2026-11-12",
     "title": "Resolve spoken Japanese verb lookups",
     "notes": [
-      "Recover dictionary-attested katakana verbs and spoken conjugations across tokenizer boundaries, including シメてる and 粋がってんじゃねえ. Preserve original captions, spaces, punctuation and offsets; keep nouns and names distinct. Improve dictionary part-of-speech ranking. Unsupported fictional names still have no invented definition."
+      "Recover dictionary-attested katakana verbs and spoken conjugations across tokenizer boundaries, including \u30b7\u30e1\u3066\u308b and \u7c8b\u304c\u3063\u3066\u3093\u3058\u3083\u306d\u3048. Preserve original captions, spaces, punctuation and offsets; keep nouns and names distinct. Improve dictionary part-of-speech ranking. Unsupported fictional names still have no invented definition."
     ],
     "changelogFormat": 1
   },
@@ -49,9 +58,9 @@
   {
     "version": "0.20.1",
     "date": "2026-11-12",
-    "title": "Match Netflix to immersed’s shared design",
+    "title": "Match Netflix to immersed\u2019s shared design",
     "notes": [
-      "Use immersed’s shared glass toolbar, colors, cards, popups and icons in Netflix, while retaining the minimal reader and transparent fullscreen captions. The layout stays within narrow panes and expands lookup without moving the subtitle. All 32 Netflix browser checks, lint and typecheck passed; the underlying v0.20.0 playback, keyboard and dictionary fixes are retained."
+      "Use immersed\u2019s shared glass toolbar, colors, cards, popups and icons in Netflix, while retaining the minimal reader and transparent fullscreen captions. The layout stays within narrow panes and expands lookup without moving the subtitle. All 32 Netflix browser checks, lint and typecheck passed; the underlying v0.20.0 playback, keyboard and dictionary fixes are retained."
     ]
   },
   {
@@ -59,10 +68,10 @@
     "date": "2026-11-12",
     "title": "Minimal Netflix reader, transparent captions and reliable hover resume",
     "notes": [
-      "Remove the unsigned Mac build’s WebCrypto Keychain dependency using in-memory session keys and renew Netflix playback caches. Native encrypted-key reload and transparent backing checks passed without a Keychain prompt; picture and fullscreen playback were confirmed in the current Mac session. Netflix remains dependent on its embedded-player support, and encrypted web sessions may require sign-in again after restart.",
-      "Replace Netflix’s information panel with a compact toolbar and centered captions. Fullscreen captions have a transparent background, and expanding lookup keeps the hovered text stationary. Subtitle tracks are selected in Netflix itself.",
-      "Add persistent 1 Unknown, 2 Learning, 3 Known and 4 Ignored word actions. Move hover pause/resume ownership into Netflix’s player, retain manual pauses, and navigate original subtitle blocks through its controller.",
-      "Improve dictionary-backed spoken contractions, omitted particles and expressive endings, including しら切んな, 気回さなくて and ふんっ. Context sense selection receives validated grammar and preserves prohibitions. All 106 Mac browser tests, native session checks, language tests, lint, typecheck and Apple Silicon build passed."
+      "Remove the unsigned Mac build\u2019s WebCrypto Keychain dependency using in-memory session keys and renew Netflix playback caches. Native encrypted-key reload and transparent backing checks passed without a Keychain prompt; picture and fullscreen playback were confirmed in the current Mac session. Netflix remains dependent on its embedded-player support, and encrypted web sessions may require sign-in again after restart.",
+      "Replace Netflix\u2019s information panel with a compact toolbar and centered captions. Fullscreen captions have a transparent background, and expanding lookup keeps the hovered text stationary. Subtitle tracks are selected in Netflix itself.",
+      "Add persistent 1 Unknown, 2 Learning, 3 Known and 4 Ignored word actions. Move hover pause/resume ownership into Netflix\u2019s player, retain manual pauses, and navigate original subtitle blocks through its controller.",
+      "Improve dictionary-backed spoken contractions, omitted particles and expressive endings, including \u3057\u3089\u5207\u3093\u306a, \u6c17\u56de\u3055\u306a\u304f\u3066 and \u3075\u3093\u3063. Context sense selection receives validated grammar and preserves prohibitions. All 106 Mac browser tests, native session checks, language tests, lint, typecheck and Apple Silicon build passed."
     ]
   },
   {
@@ -70,7 +79,7 @@
     "date": "2026-11-12",
     "title": "Keep Netflix fullscreen lookup inside every window size",
     "notes": [
-      "Let the floating Netflix subtitle and dictionary panel shrink within smaller windows while preserving full video bounds. Native layout checks passed at 800×600, 1320×860 and 1850×1000, including expanded lookup. Original subtitle timing and playback-rate synchronization are retained. Netflix returned S7353-5101 during a live seek check; protected playback remains dependent on Netflix’s embedded-player support."
+      "Let the floating Netflix subtitle and dictionary panel shrink within smaller windows while preserving full video bounds. Native layout checks passed at 800\u00d7600, 1320\u00d7860 and 1850\u00d71000, including expanded lookup. Original subtitle timing and playback-rate synchronization are retained. Netflix returned S7353-5101 during a live seek check; protected playback remains dependent on Netflix\u2019s embedded-player support."
     ]
   },
   {
@@ -78,7 +87,7 @@
     "date": "2026-11-12",
     "title": "Fix Netflix fullscreen native layout",
     "notes": [
-      "Use native constraints for video-filling Netflix fullscreen and an expanding interactive subtitle lookup panel. Match caption changes and clears to Netflix’s displayed original subtitles and reflect playback-rate changes. Lint, typecheck, 90 Mac browser tests and native build passed; native fullscreen geometry was checked at multiple window sizes. Netflix returned S7353-5101 during a live seek test, so protected playback remains dependent on Netflix’s embedded-player support."
+      "Use native constraints for video-filling Netflix fullscreen and an expanding interactive subtitle lookup panel. Match caption changes and clears to Netflix\u2019s displayed original subtitles and reflect playback-rate changes. Lint, typecheck, 90 Mac browser tests and native build passed; native fullscreen geometry was checked at multiple window sizes. Netflix returned S7353-5101 during a live seek test, so protected playback remains dependent on Netflix\u2019s embedded-player support."
     ]
   },
   {
@@ -86,7 +95,7 @@
     "date": "2026-11-12",
     "title": "Enable Netflix video fullscreen and synchronize original captions",
     "notes": [
-      "Netflix fullscreen fills the video area with a floating interactive subtitle and word-lookup panel; its fullscreen control, F and Escape use the same layout. Subtitle changes and clears follow Netflix’s displayed caption events instead of timer-only track estimates, and the speed icon follows Netflix playback rate. Original timed tracks remain available for subtitle navigation. Verified fixtures and native build; live playback check follows installation."
+      "Netflix fullscreen fills the video area with a floating interactive subtitle and word-lookup panel; its fullscreen control, F and Escape use the same layout. Subtitle changes and clears follow Netflix\u2019s displayed caption events instead of timer-only track estimates, and the speed icon follows Netflix playback rate. Original timed tracks remain available for subtitle navigation. Verified fixtures and native build; live playback check follows installation."
     ]
   },
   {
@@ -146,7 +155,7 @@
     "notes": [
       "Subtitle clicks no longer pin hover lookup. Leaving the word and card closes it and resumes only playback paused by lookup; preserve the hovered target during subtitle refreshes and respect manual pauses.",
       "Handle pointer exit into embedded video, explicit playback, and accidental reopening after Close. Clear stale text during subtitle gaps.",
-      "Join dictionary-confirmed split words such as 読 / 者 in the Mac reading view, preserving transcript characters and audio bounds. Recognition errors can still remain; no guessed wording is substituted."
+      "Join dictionary-confirmed split words such as \u8aad / \u8005 in the Mac reading view, preserving transcript characters and audio bounds. Recognition errors can still remain; no guessed wording is substituted."
     ]
   },
   {
@@ -315,7 +324,7 @@
     "date": "2026-11-10",
     "title": "Cleaner subtitles and Japanese dictionary lookup",
     "notes": [
-      "Remove Listening filler and regeneration controls from the study view. Temporary subtitle failures recover automatically with bounded retries, and large-v3 becomes the default once while later model choices remain available. Dictionary lookup resolves inflected and continuative forms such as 吸い取り, keeps attested compound verbs together, respects readings and labels reading-only matches. Lookup now shows headwords, parts of speech, dictionary sources and expandable meanings. Speech recognition can still make mistakes; dictionary readings never silently replace subtitle wording."
+      "Remove Listening filler and regeneration controls from the study view. Temporary subtitle failures recover automatically with bounded retries, and large-v3 becomes the default once while later model choices remain available. Dictionary lookup resolves inflected and continuative forms such as \u5438\u3044\u53d6\u308a, keeps attested compound verbs together, respects readings and labels reading-only matches. Lookup now shows headwords, parts of speech, dictionary sources and expandable meanings. Speech recognition can still make mistakes; dictionary readings never silently replace subtitle wording."
     ]
   },
   {
@@ -383,7 +392,7 @@
   {
     "version": "0.8.1",
     "date": "2026-11-09",
-    "title": "Show Mac subtitle chunks and iPhone–Mac artwork",
+    "title": "Show Mac subtitle chunks and iPhone\u2013Mac artwork",
     "notes": [
       "Add original concept artwork to the repository and describe Immersed as an iPhone and Mac project. The Mac companion now publishes each 60-second Japanese recognition chunk and waits for the first subtitle before playback.",
       "The Mac worker still needs a real macOS installation and accuracy test; its initial audio download/model startup can be slow and some YouTube videos may block playback or audio access. iPhone captionless generation remains unavailable in Expo Go."
@@ -484,7 +493,7 @@
     "notes": [
       "Hide watch-page metadata and comments without repositioning YouTube's player, and defer caption hooks until the page loads.",
       "Let YouTube enter native fullscreen when inline playback is unavailable.",
-      "Show YouTube playability and media diagnostics under Settings → About when a video fails.",
+      "Show YouTube playability and media diagnostics under Settings \u2192 About when a video fails.",
       "The public Kiyo video still needs an on-device playback check; this cloud cannot access YouTube media, and videos without source captions still need accessible audio for transcription."
     ]
   },
@@ -560,8 +569,8 @@
     "date": "2026-10-30",
     "title": "Improve grammar lookups and caption homophone suggestions",
     "notes": [
-      "Group conjectural grammar such as だろうなって; distinguish auxiliary う from dictionary animal nouns with POS-specific caches.",
-      "Add context-ranked same-reading spelling suggestions for supplied captions, including 自称/事象 and 累計/類型. Explicit selection preserves the original caption spelling.",
+      "Group conjectural grammar such as \u3060\u308d\u3046\u306a\u3063\u3066; distinguish auxiliary \u3046 from dictionary animal nouns with POS-specific caches.",
+      "Add context-ranked same-reading spelling suggestions for supplied captions, including \u81ea\u79f0/\u4e8b\u8c61 and \u7d2f\u8a08/\u985e\u578b. Explicit selection preserves the original caption spelling.",
       "Stabilize the video split and word popup height, collapse extra dictionary entries and request minimal YouTube controls. Source captions can still be wrong; no OCR or verified audio correction is added."
     ]
   },
@@ -611,7 +620,7 @@
     "title": "Separate word lookup, better expressions and optional pitch accents",
     "notes": [
       "Restored subtitle word popup with pause/resume; Dictionary search and Settings keep playing in a larger lower panel.",
-      "Dictionary-backed expressions including 気を抜く retain whole meanings across supported inflections. Vocabulary indicator now shows one conservative familiar-word percentage.",
+      "Dictionary-backed expressions including \u6c17\u3092\u629c\u304f retain whole meanings across supported inflections. Vocabulary indicator now shows one conservative familiar-word percentage.",
       "Optional recorded Tokyo pitch accents from pinned Kanjium data in word lookups and dictionary search; absent patterns are hidden.",
       "Fresh captionless YouTube transcription, embedded Google sign-in and locked-screen playback remain unsupported in this preview; native playback and keyboard behavior still need iPhone testing."
     ]
@@ -635,7 +644,7 @@
     "notes": [
       "Bring wrapped subtitle rows closer while retaining the base text size. Add central play/pause between previous and next controls in study and lookup.",
       "Simplify the dictionary sheet: scrollable meanings, one Save action and a reachable known/unknown switch at bottom right. Keep tap-to-dismiss and playback intent.",
-      "Fix compound-prefix lookup forms such as お名前 and 再利用, including suru inflections.",
+      "Fix compound-prefix lookup forms such as \u304a\u540d\u524d and \u518d\u5229\u7528, including suru inflections.",
       "Automatically join short adjacent cues when Japanese morphology and a dictionary confirm a word or inflection across the boundary; preserve source glyphs and outer timestamps, process progressively and validate every result.",
       "Boundary joining is conservative and cannot repair all ASR mistakes or DOM-only caption splits. Real iPhone layout and audio accuracy remain unverified; fresh captionless YouTube transcription and in-app account sign-in remain unsupported here."
     ]
@@ -682,7 +691,7 @@
     "notes": [
       "Fit the navigation pill closely around three icons instead of spanning the screen; preserve comfortable touch targets.",
       "Center subtitle lines, improve word/line spacing, keep closing punctuation attached, and use amber difficulty and mint grammar colors.",
-      "Restore a furigana on/off switch with level-aware readings: N2 shows N1 readings, while N2–N5 remain plain. Personal knowledge overrides apply; unlisted words remain unclassified.",
+      "Restore a furigana on/off switch with level-aware readings: N2 shows N1 readings, while N2\u2013N5 remain plain. Personal knowledge overrides apply; unlisted words remain unclassified.",
       "Handle JavaScript-only YouTube watch navigation, open each selected video in a fresh embed, and hide the previous page until the embed loads so watch-page comments/channel sections do not remain in the viewing area.",
       "Word and grammar lookup remain always on. Physical-iPhone routing/glass behavior remains unverified; fresh captionless-video speech transcription retains the existing audio-access limitation."
     ]
@@ -693,7 +702,7 @@
     "title": "Always-on learning, two-way dictionary and tighter subtitle timing",
     "notes": [
       "Keep word/grammar lookup, grouping and readings always enabled; ignore older off settings and remove learning off switches.",
-      "Add automatic English–Japanese dictionary search to Words, alongside saved vocabulary. Hide provider details and history in Settings → About.",
+      "Add automatic English\u2013Japanese dictionary search to Words, alongside saved vocabulary. Hide provider details and history in Settings \u2192 About.",
       "Use presented video-frame timestamps and immediate seek/playback events; expire timed cues correctly instead of displaying stale lines.",
       "Clip one rounded glass dock with matching radii and plain icon controls; simplify appearance to a single Dark mode switch.",
       "Remove the separate Google sign-in button. YouTube sign-in links open the system browser under Google policy; browser login is not shared with the embedded player.",
@@ -720,7 +729,7 @@
       "Place subtitles in a fixed full-width section beneath the portrait video; only bottom navigation floats.",
       "Remove subtitle retry/details, restore-player, video-fit and duplicate playback controls. Recover temporary subtitle failures automatically with bounded backoff and timeouts.",
       "Remove YouTube browse bottom navigation and its reserved padding so discovery continues behind the glass dock; refresh the page adapter with each release.",
-      "New subtitles for captionless YouTube videos remain blocked by this cloud network’s proxy 403. Live iPhone playback and YouTube caption compatibility remain unverified."
+      "New subtitles for captionless YouTube videos remain blocked by this cloud network\u2019s proxy 403. Live iPhone playback and YouTube caption compatibility remain unverified."
     ]
   },
   {
@@ -744,7 +753,7 @@
       "Content extends under an absolute floating navigation dock, with native Apple Liquid Glass where supported and blur elsewhere.",
       "Add route-backed edge swipes between Content, Words and Settings, panel-wide horizontal gestures, and dictionary-header swipe dismissal.",
       "Fix an incompatible audio decoder by pinning PyAV 16.1.0; credential-free Whisper successfully transcribed a public test recording.",
-      "YouTube source audio is still blocked by this environment’s proxy (403); automatic captionless YouTube generation remains unresolved, despite a working local recognizer."
+      "YouTube source audio is still blocked by this environment\u2019s proxy (403); automatic captionless YouTube generation remains unresolved, despite a working local recognizer."
     ]
   },
   {
@@ -765,7 +774,7 @@
     "title": "Portrait viewing, AMOLED theme and learner controls",
     "notes": [
       "Add a tall-player layout and a rounded blurred navigation dock at the bottom.",
-      "Add persisted N5–N1 level estimates with advanced-word highlighting and personal Known/Unknown overrides; familiar and unlisted words display normally.",
+      "Add persisted N5\u2013N1 level estimates with advanced-word highlighting and personal Known/Unknown overrides; familiar and unlisted words display normally.",
       "Add pure-black AMOLED mode, a Shorts toggle, and ordinary native-content topic searches.",
       "Remove subtitle-loading messages from the player and keep diagnostic status in Settings.",
       "Improve video selection/focus styles, expose original-layout recovery, and reload terminated WebViews; live iPhone black-frame recovery remains unverified.",
