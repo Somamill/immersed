@@ -17,7 +17,8 @@
       },
       "infoPlist": {
         "UIFileSharingEnabled": false
-      }
+      },
+      "buildNumber": "2"
     },
     "plugins": [
       "expo-router",
