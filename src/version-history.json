@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.21.4",
+    "date": "2026-11-13",
+    "title": "Complete the Immersed. Store name",
+    "notes": [
+      "Use Immersed. consistently in the installed app name and Store listing. App Store review and interactive release checks remain pending."
+    ],
+    "changelogFormat": 1
+  },
+  {
     "version": "0.21.3",
     "date": "2026-11-13",
     "title": "Add a separate imported-media Store edition",
