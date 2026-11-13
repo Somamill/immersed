@@ -79,6 +79,17 @@ export default function ImmersedStore() {
   const cues = useMemo(() => decodeCues(current), [current]);
   const cueIndex = activeCue(cues, time),
     cue = cues[cueIndex];
+  const captionWords = cue
+    ? tokenResult?.caption === cue.text ? tokenResult.tokens : [cue.text]
+    : [];
+  const captionActionWords = tokenResult?.caption === cue?.text
+    ? [...new Set(captionWords)].filter((word) => /[A-Za-z0-9\u3040-\u30ff\u3400-\u9fff\uff66-\uff9d]/.test(word))
+    : [];
+  const captionActionContext = JSON.stringify([current?.id, cue?.start, cue?.end, cue?.text]);
+  const captionActions = captionActionWords.map((word, index) => ({
+    name: `lookup:${captionActionContext}:${index}`,
+    label: `Look up ${word}`,
+  }));
   const tokenCache = useRef(new Map<string, string[]>()),
     lookupSequence = useRef(0),
     lastSavedSecond = useRef(-1);
@@ -547,15 +558,21 @@ export default function ImmersedStore() {
                 </View>
                 <View style={s.captions}>
                   {cue ? (
-                    <Text style={s.caption}>
-                      {(tokenResult?.caption === cue.text
-                        ? tokenResult.tokens
-                        : [cue.text]
-                      ).map((token, index) => (
+                    <Text
+                      style={s.caption}
+                      accessible
+                      accessibilityLabel={cue.text}
+                      accessibilityHint="Choose a word from accessibility actions to look it up."
+                      accessibilityActions={captionActions}
+                      onAccessibilityAction={({ nativeEvent }) => {
+                        const index = captionActions.findIndex((action) => action.name === nativeEvent.actionName);
+                        if (index >= 0) void search(captionActionWords[index]);
+                      }}
+                    >
+                      {captionWords.map((token, index) => (
                         <Text
                           key={`${index}-${token}`}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Look up ${token}`}
+                          accessible={false}
                           onPress={() => {
                             search(token);
                           }}

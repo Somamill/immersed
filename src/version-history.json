@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.21.5",
+    "date": "2026-11-13",
+    "title": "Make subtitle word lookup accessible",
+    "notes": [
+      "In the Store edition, expose individual subtitle word lookups through native accessibility actions while preserving tap-to-lookup and the dot. design. Keep the trailing dot in native app naming. Store review and physical-device acceptance remain pending."
+    ],
+    "changelogFormat": 1
+  },
+  {
     "version": "0.21.4",
     "date": "2026-11-13",
     "title": "Complete the Immersed. Store name",

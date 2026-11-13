@@ -2,7 +2,7 @@
   "expo": {
     "name": "Immersed.",
     "slug": "immersed",
-    "version": "0.21.4",
+    "version": "0.21.5",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -10,7 +10,8 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.somamill.immersed",
       "infoPlist": {
-        "NSSpeechRecognitionUsageDescription": "Immersed creates Japanese captions from the video audio on this iPhone while you watch. Audio is not saved or uploaded."
+        "NSSpeechRecognitionUsageDescription": "Immersed creates Japanese captions from the video audio on this iPhone while you watch. Audio is not saved or uploaded.",
+        "CFBundleName": "Immersed."
       },
       "config": {
         "usesNonExemptEncryption": false

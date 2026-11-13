@@ -4,6 +4,14 @@ Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Rel
 
 ## [Unreleased]
 
+## [0.21.5] - 2026-11-13
+
+Make subtitle word lookup accessible
+
+### Changed
+
+- In the Store edition, expose individual subtitle word lookups through native accessibility actions while preserving tap-to-lookup and the dot. design. Keep the trailing dot in native app naming. Store review and physical-device acceptance remain pending.
+
 ## [0.21.4] - 2026-11-13
 
 Complete the Immersed. Store name
