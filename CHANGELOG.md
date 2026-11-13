@@ -4,6 +4,14 @@ Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Rel
 
 ## [Unreleased]
 
+## [0.21.4] - 2026-11-13
+
+Complete the Immersed. Store name
+
+### Changed
+
+- Use Immersed. consistently in the installed app name and Store listing. App Store review and interactive release checks remain pending.
+
 ## [0.21.3] - 2026-11-13
 
 Add a separate imported-media Store edition

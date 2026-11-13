@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Immersed",
+    "name": "Immersed.",
     "slug": "immersed",
-    "version": "0.21.3",
+    "version": "0.21.4",
     "owner": "somamill",
     "userInterfaceStyle": "automatic",
     "orientation": "default",
@@ -17,7 +17,8 @@
       },
       "infoPlist": {
         "UIFileSharingEnabled": false
-      }
+      },
+      "buildNumber": "2"
     },
     "plugins": [
       "expo-router",
