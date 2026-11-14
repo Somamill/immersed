@@ -30,6 +30,9 @@ function searchItems(data) {
         duration:parts.every(Number.isFinite) ? parts.reduce((sum,n)=>sum*60+n,0) : 0,
         thumbnail:v.thumbnail?.thumbnails?.at(-1)?.url,
         isShort:(v.thumbnailOverlays || []).some(o=>o.thumbnailOverlayTimeStatusRenderer?.style==='SHORTS')});
+      // Discovery displays at most 18 items. Avoid walking the remaining page
+      // (recommendations and continuations can be much larger than the list).
+      if (result.length === 18) break;
     }
     // Reverse DFS preserves YouTube's ranked result order.
     const values = Array.isArray(item) ? item : Object.values(item);

@@ -126,8 +126,12 @@ async function lookupUncached(word, options = {}) {
   const named = options.proper || !general.length ? names.lookup(word, options.reading) : [];
   return options.proper ? [...named, ...general] : [...general, ...named];
 }
-async function search(query) {
-  const { index, forms, words, tokenizer, tags } = await initialize();
+const searchCache = new Map();
+function search(query) {
+  return remember(searchCache, query.normalize('NFKC').trim(), () => searchUncached(query), 120);
+}
+async function searchUncached(query) {
+  const { index, forms, words, tags } = await initialize();
   const text = query.normalize('NFKC').trim();
   if (!text || text.length > 120) return [];
   const japanese = /[ぁ-ヿ㐀-鿿々]/.test(text);
@@ -135,10 +139,16 @@ async function search(query) {
   let phraseLemma = '';
   if (japanese) {
     for (const entry of index.get(text) || index.get(hira(text)) || []) candidates.add(entry);
-    phraseLemma = (await analyze(text))[0]?.lemma || '';
-    for (const entry of index.get(phraseLemma) || []) candidates.add(entry);
-    const lemma = tokenizer.tokenize(text)[0]?.basic_form;
-    if (lemma && lemma !== '*') for (const entry of index.get(lemma) || []) candidates.add(entry);
+    // Exact headwords need no morphology. For inflections, use the lemma only
+    // when analysis covers the whole query; otherwise a sentence search would
+    // misleadingly return definitions for just its first word.
+    if (!candidates.size) {
+      const tokens = await analyze(text);
+      if (tokens.length === 1 && tokens[0].text === text) {
+        phraseLemma = tokens[0].lemma || '';
+        for (const entry of index.get(phraseLemma) || []) candidates.add(entry);
+      }
+    }
     let low = 0, high = forms.length;
     while (low < high) { const mid = (low + high) >>> 1; if (forms[mid] < text) low = mid + 1; else high = mid; }
     for (let i = low; i < forms.length && forms[i].startsWith(text) && candidates.size < 150; i++) for (const entry of index.get(forms[i])) candidates.add(entry);

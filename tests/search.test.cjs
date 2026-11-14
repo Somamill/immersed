@@ -1,6 +1,17 @@
 const { test } = require("node:test"),
   assert = require("node:assert/strict");
 const { createSearch } = require("../desktop/search.cjs");
+const { searchItems } = require("../desktop/youtube-metadata.cjs");
+test('public YouTube search keeps ranked results and stops after the visible page', () => {
+  const videos = Array.from({ length: 30 }, (_, i) => ({ videoRenderer: {
+    videoId: String(i).padStart(11, 'a'), title: { simpleText: `Video ${i}` },
+    lengthText: { simpleText: '20:00' },
+  } }));
+  const items = searchItems({ contents: { twoColumnSearchResultsRenderer: { primaryContents: videos } } });
+  assert.equal(items.length, 18);
+  assert.equal(items[0].title, 'Video 0');
+  assert.equal(items[17].title, 'Video 17');
+});
 test('fast discovery avoids a subprocess and still validates original-language metadata',async()=>{
  let runs=0,finish;const manager=createSearch({run:async()=>{runs++;throw Error('unneeded');},fastSearch:async()=>[{id:'aaaaaaaaaaa',title:'対談',duration:1800}],videoInfo:()=>new Promise(resolve=>{finish=resolve;}),concurrency:4});
  const first=await manager.search('文化');assert.equal(first.items.length,1);assert.equal(first.items[0].language,null);assert.equal(first.hasMore,true);
@@ -9,6 +20,23 @@ test('fast discovery avoids a subprocess and still validates original-language m
 test('page metadata failures retain the yt-dlp fallback',async()=>{
  let runs=0;const manager=createSearch({fastSearch:async()=>{throw Error('changed page');},run:async()=>{runs++;return{stdout:JSON.stringify({entries:[{id:'aaaaaaaaaaa',title:'対談',duration:1800}]})};},videoInfo:async()=>({language:'ja'})});
  assert.equal((await manager.search('文化')).items.length,1);assert.equal(runs,1);
+});
+test('a transient language check failure retries sooner than a verified search', async () => {
+  let clock = 1000, checks = 0, searches = 0;
+  const manager = createSearch({
+    now: () => clock,
+    fastSearch: async () => { searches++; return [{ id: 'aaaaaaaaaaa', title: '対談', duration: 1800 }]; },
+    run: async () => { throw Error('unused'); },
+    videoInfo: async () => { if (++checks === 1) throw Error('temporary outage'); return { language: 'ja' }; },
+  });
+  await manager.search('文化');
+  await tick();
+  assert.equal((await manager.search('文化')).items[0].language, null);
+  clock += 30001;
+  await manager.search('文化');
+  await tick();
+  assert.equal((await manager.search('文化')).items[0].language, 'ja');
+  assert.equal(searches, 2);
 });
 const tick = () => new Promise((r) => setTimeout(r, 5));
 test("flat search returns before language checks and publishes results progressively", async () => {

@@ -38,6 +38,8 @@ test('dictionary searches English meanings, Japanese readings and inflected word
   assert.ok(japanese.some(entry => entry.senses.some(s => s.english_definitions.includes('to eat'))));
   assert.ok((await search('たべる')).some(entry => entry.japanese.some(form => form.word === '食べる')));
   assert.ok((await search('食べました')).some(entry => entry.japanese.some(form => form.word === '食べる')));
+  assert.equal((await search('気を抜く'))[0].japanese[0].word, '気を抜く');
+  assert.deepEqual(await search('日本語を'), [], 'a partial sentence must not become a result for its first word');
   assert.ok((await search('ice cream')).some(entry => entry.senses.some(s => s.english_definitions.some(d => /ice cream/i.test(d)))));
   assert.deepEqual(await search('zzzzzzzznotaword'), []);
 });

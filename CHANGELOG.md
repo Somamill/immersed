@@ -4,6 +4,15 @@ Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Rel
 
 ## [Unreleased]
 
+## [0.22.2] - 2026-11-14
+
+Faster, steadier search
+
+### Changed
+
+- Japanese dictionary search now skips morphology for exact headwords, caches recent queries, and avoids misleading first-word results for partial sentences while retaining inflected-word lookup.
+- Mac video discovery stops parsing after its visible 18 results and retries failed language checks after 30 seconds instead of keeping an unverified result for five minutes. YouTube access remains subject to its network and embed restrictions.
+
 ## [0.22.1] - 2026-11-14
 
 Keep Mac release aligned with current repository

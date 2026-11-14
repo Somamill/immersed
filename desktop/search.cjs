@@ -1,6 +1,6 @@
 const VALID = /^[A-Za-z0-9_-]{11}$/;
 const discovery = require("./discovery.js");
-function createSearch({ run, videoInfo, peek = () => null, fastSearch, concurrency = 2 }) {
+function createSearch({ run, videoInfo, peek = () => null, fastSearch, concurrency = 2, now = Date.now }) {
   const cache = new Map(),
     pending = new Map(),
     queue = [];
@@ -31,6 +31,7 @@ function createSearch({ run, videoInfo, peek = () => null, fastSearch, concurren
           };
         })
         .catch(() => {
+          job.failed = true;
           job.items[index] = { ...item, checked: true };
         })
         .finally(() => {
@@ -45,7 +46,9 @@ function createSearch({ run, videoInfo, peek = () => null, fastSearch, concurren
     const page = Math.max(1, Math.min(4, Math.floor(Number(value.page) || 1)));
     const key = JSON.stringify([query, filters, page]);
     const old = cache.get(key);
-    if (old && Date.now() - old.time < 300000) return snapshot(old);
+    // Successful metadata is stable; a network error should not hide a video
+    // behind "language unverified" for the entire normal cache lifetime.
+    if (old && now() - old.time < (old.failed ? 30000 : 300000)) return snapshot(old);
     if (pending.has(key)) return pending.get(key);
     const task = (async () => {
       let raw;
@@ -75,26 +78,29 @@ function createSearch({ run, videoInfo, peek = () => null, fastSearch, concurren
         .filter(
           (e) => e && VALID.test(e.id) && !seen.has(e.id) && seen.add(e.id),
         )
-        .map((e) => ({
-          id: e.id,
-          title: e.title || "YouTube video",
-          duration: e.duration || 0,
-          channel: e.channel || e.uploader || "",
-          thumbnail:
-            e.thumbnail ||
-            e.thumbnails?.at(-1)?.url ||
-            "https://i.ytimg.com/vi/" + e.id + "/hqdefault.jpg",
-          isShort: e.isShort === true || /\/shorts\//.test(e.url || ""),
-          language: null,
-          ...(peek(e.id) || {}),
-          checked: !!peek(e.id),
-        }))
+        .map((e) => {
+          const cached = peek(e.id);
+          return {
+            id: e.id,
+            title: e.title || "YouTube video",
+            duration: e.duration || 0,
+            channel: e.channel || e.uploader || "",
+            thumbnail:
+              e.thumbnail ||
+              e.thumbnails?.at(-1)?.url ||
+              "https://i.ytimg.com/vi/" + e.id + "/hqdefault.jpg",
+            isShort: e.isShort === true || /\/shorts\//.test(e.url || ""),
+            language: null,
+            ...(cached || {}),
+            checked: !!cached,
+          };
+        })
         .filter(item => discovery.eligible(item, filters))
         .sort((a, b) => filters.conversation ? discovery.score(b) - discovery.score(a) : 0);
       const job = {
         items,
         hasMore: page < 4 && (raw.hasMore===true || (raw.entries || []).length >= 18),
-        time: Date.now(),
+        time: now(),
         remaining: items.filter((x) => !x.checked).length,
       };
       cache.set(key, job);
