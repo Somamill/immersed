@@ -57,9 +57,10 @@ final class NetflixFocusView: NSView {
         didSet { studyHeight?.constant = expanded ? 520 : 190; needsLayout = true }
     }
     var exitButton: NSButton?
+    var transport: NSView?
     var hideChrome: DispatchWorkItem?
-    func mount(movie: WKWebView, study: WKWebView, exit button: NSButton) {
-        for view in [movie as NSView, study as NSView, button as NSView] {
+    func mount(movie: WKWebView, study: WKWebView, exit button: NSButton, controls: NSView) {
+        for view in [movie as NSView, study as NSView, button as NSView, controls] {
             view.translatesAutoresizingMaskIntoConstraints = false
             addSubview(view)
         }
@@ -75,12 +76,21 @@ final class NetflixFocusView: NSView {
             study.heightAnchor.constraint(lessThanOrEqualTo: heightAnchor, multiplier: 0.75),
             button.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -24), button.topAnchor.constraint(equalTo: topAnchor, constant: 20),
             button.widthAnchor.constraint(equalToConstant: 40), button.heightAnchor.constraint(equalToConstant: 40)
+            ,controls.centerXAnchor.constraint(equalTo: centerXAnchor), controls.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -18)
         ])
-        exitButton = button
+        exitButton = button; transport = controls
     }
     func revealControls() {
-        hideChrome?.cancel(); exitButton?.alphaValue = 1
-        let work = DispatchWorkItem { [weak self] in self?.exitButton?.alphaValue = 0 }
+        hideChrome?.cancel(); exitButton?.alphaValue = 1; transport?.alphaValue = 1
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            if let controls = self.transport, let window = self.window,
+               controls.frame.contains(self.convert(window.mouseLocationOutsideOfEventStream, from: nil)) { return }
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18
+                self.exitButton?.animator().alphaValue = 0; self.transport?.animator().alphaValue = 0
+            }
+        }
         hideChrome = work; DispatchQueue.main.asyncAfter(deadline: .now() + 1.8, execute: work)
     }
 }
@@ -91,6 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     var web: WKWebView!
     var service: Process?
     var loading: NSView!
+    var startupBegan = ProcessInfo.processInfo.systemUptime
     var attempts = 0
     var startupErrorShown = false
     var browserWindows: [NSWindow] = []
@@ -141,12 +152,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         window.styleMask.insert(.fullSizeContentView)
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
-        window.backgroundColor = NSColor(calibratedRed: 0.025, green: 0.05, blue: 0.035, alpha: 1)
+        window.titlebarSeparatorStyle = .none
+        window.backgroundColor = NSColor(calibratedRed: 9/255, green: 18/255, blue: 14/255, alpha: 1)
         window.isMovableByWindowBackground = true
         window.collectionBehavior.insert(.fullScreenPrimary)
         window.isReleasedWhenClosed = false
         window.minSize = NSSize(width: 800, height: 600)
-        window.contentView = web
+        let surface = NSView(frame: window.contentView!.bounds)
+        web.frame = surface.bounds; web.autoresizingMask = [.width, .height]; surface.addSubview(web)
+        window.contentView = surface
         window.center()
         window.setFrameAutosaveName("immersed.main")
         window.makeKeyAndOrderFront(nil)
@@ -161,10 +175,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         }
     }
     func showStartupAnimation() {
-        loading = NSView(frame: web.bounds)
+        startupBegan = ProcessInfo.processInfo.systemUptime
+        let surface = window.contentView!
+        loading = NSView(frame: surface.bounds)
         loading.autoresizingMask = [.width, .height]; loading.wantsLayer = true
         loading.layer?.backgroundColor = NSColor(calibratedRed: 0.025, green: 0.05, blue: 0.035, alpha: 1).cgColor
-        web.addSubview(loading)
+        surface.addSubview(loading, positioned: .above, relativeTo: web)
         let ringHost = NSView(); ringHost.translatesAutoresizingMaskIntoConstraints = false; ringHost.wantsLayer = true
         let logo = NSImageView(); logo.translatesAutoresizingMaskIntoConstraints = false
         logo.image = NSImage(named: NSImage.applicationIconName); logo.imageScaling = .scaleProportionallyUpOrDown
@@ -500,7 +516,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         movie.removeFromSuperview(); web.removeFromSuperview()
         let button = NSButton(image: NSImage(systemSymbolName: "arrow.down.right.and.arrow.up.left", accessibilityDescription: "Exit Netflix fullscreen")!, target: self, action: #selector(exitNetflixFullscreen))
         button.bezelStyle = .texturedRounded; button.setAccessibilityLabel("Exit Netflix fullscreen")
-        focus.mount(movie: movie, study: web, exit: button)
+        let controls = NSStackView(); controls.orientation = .horizontal; controls.spacing = 8
+        for (symbol, label, selector) in [("backward.end.fill", "Previous subtitle", #selector(previousSubtitle)), ("playpause.fill", "Play or pause", #selector(togglePlayback)), ("forward.end.fill", "Next subtitle", #selector(nextSubtitle))] {
+            let control = NSButton(image: NSImage(systemSymbolName: symbol, accessibilityDescription: label)!, target: self, action: selector)
+            control.bezelStyle = .texturedRounded; control.setAccessibilityLabel(label); control.toolTip = label
+            control.widthAnchor.constraint(equalToConstant: 48).isActive = true
+            control.heightAnchor.constraint(equalToConstant: 42).isActive = true; controls.addArrangedSubview(control)
+        }
+        focus.mount(movie: movie, study: web, exit: button, controls: controls)
         netflixFocus = focus; window.contentView = focus; focus.needsLayout = true; focus.layoutSubtreeIfNeeded(); focus.revealControls()
         web.evaluateJavaScript("window.immersedNetflixFullscreen?.(true)", completionHandler: nil)
         movie.evaluateJavaScript("window.immersedNetflixCommand?.({command:'fullscreenState',value:true})", completionHandler: nil)
@@ -511,6 +534,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         enterNetflixFullscreen()
         if !netflixWasFullscreen { window.toggleFullScreen(nil) }
     }
+    @objc func previousSubtitle() { netflixFocus?.revealControls(); web.evaluateJavaScript("window.immersedPlayback?.('skip',-1)", completionHandler: nil) }
+    @objc func nextSubtitle() { netflixFocus?.revealControls(); web.evaluateJavaScript("window.immersedPlayback?.('skip',1)", completionHandler: nil) }
+    @objc func togglePlayback() { netflixFocus?.revealControls(); web.evaluateJavaScript("window.immersedPlayback?.('toggle')", completionHandler: nil) }
     func restoreNetflixLayout() {
         guard let focus = netflixFocus, let split = netflixSplit, let movie = netflixView else { return }
         focus.hideChrome?.cancel(); movie.removeFromSuperview(); web.removeFromSuperview()
@@ -570,10 +596,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         if webView === web, webView.url?.host == "127.0.0.1" {
             ready = true
-            NSAnimationContext.runAnimationGroup({ context in
-                context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.22
-                self.loading.animator().alphaValue = 0
-            }, completionHandler: { [weak self] in self?.loading.removeFromSuperview() })
+            let remaining = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : max(0, 0.4 - (ProcessInfo.processInfo.systemUptime - startupBegan))
+            DispatchQueue.main.asyncAfter(deadline: .now() + remaining) { [weak self] in
+                guard let self else { return }
+                NSAnimationContext.runAnimationGroup({ context in
+                    context.duration = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion ? 0 : 0.18
+                    self.loading.animator().alphaValue = 0
+                }, completionHandler: { [weak self] in self?.loading.removeFromSuperview() })
+            }
             let files = pendingFiles; pendingFiles.removeAll()
             for file in files { importMedia(file) }
         }
@@ -600,10 +630,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         }.resume()
     }
     func startService() {
-        guard let launcher = ["/opt/homebrew/bin/immersed-mac", "/usr/local/bin/immersed-mac"].first(where: { FileManager.default.isExecutableFile(atPath: $0) }) else {
+        let bundled = Bundle.main.resourceURL?.appendingPathComponent("runtime/desktop/launch.sh")
+        let launcher = ["/opt/homebrew/bin/immersed-mac", "/usr/local/bin/immersed-mac"].first(where: { FileManager.default.isExecutableFile(atPath: $0) })
+        guard launcher != nil || (bundled.map { FileManager.default.fileExists(atPath: $0.path) } ?? false) else {
             startupFailed("Install with Homebrew: brew install --HEAD Somamill/immersed/immersed-mac"); attempts = 900; return
         }
-        let process = Process(); process.executableURL = URL(fileURLWithPath: launcher); process.arguments = ["--service"]
+        let process = Process()
+        if let bundled, FileManager.default.fileExists(atPath: bundled.path) {
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = [bundled.path, bundled.deletingLastPathComponent().deletingLastPathComponent().path, "--service"]
+        } else {
+            process.executableURL = URL(fileURLWithPath: launcher!); process.arguments = ["--service"]
+        }
         do {
             try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
             let log = home.appendingPathComponent("startup.log")

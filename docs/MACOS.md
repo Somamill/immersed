@@ -14,11 +14,23 @@ Discover shares **Original Japanese only**, **Hide Shorts** and **Minimum video 
 
 ```sh
 brew tap Somamill/immersed https://github.com/Somamill/immersed.git
-brew install --HEAD Somamill/immersed/immersed-mac
+brew install Somamill/immersed/immersed-mac
 immersed-mac
 ```
 
 The first command launch creates `~/Applications/immersed.app`. Open **immersed.** from Finder, Spotlight or Launchpad afterward. Initial setup installs the local dictionaries, context database and speech runtime. Speech models download on first use; prepare them before going offline. Subsequent starts reuse dependencies, dictionaries, models and transcripts. Quit immersed. before updating with `brew upgrade --fetch-HEAD Somamill/immersed/immersed-mac`.
+
+Stable releases now use a checksummed GitHub source artifact. For an ordinary stable installation, update with `brew update && brew upgrade Somamill/immersed/immersed-mac`. Existing `--HEAD` installations can continue using `brew upgrade --fetch-HEAD Somamill/immersed/immersed-mac`. Both install the full AppKit/WebKit edition, preserving Netflix, Whisper, dictionary, local media, audiobook and saved-word features. Reopening a current Homebrew build reuses its native binary instead of recompiling Swift every time.
+
+### DMG and signing
+
+GitHub releases include `immersed-<version>-arm64.dmg` and matching SHA-256 files. The app in the DMG bundles the same full backend source; it still requires Homebrew's Node, Python 3.13, FFmpeg and yt-dlp. It is not a standalone offline runtime. Keep a single copy of the app in Applications or `~/Applications` to avoid duplicate Spotlight entries. Existing dictionaries, speech models and listening positions stay under the same application support directory.
+
+Build with `/bin/sh desktop/build-dmg.sh`. Setting `IMMERSED_SIGN_IDENTITY` to a **Developer ID Application** identity signs the app with hardened runtime and signs the disk image. The release script rejects App Store signing identities for this route. Notarize with `xcrun notarytool submit`, wait for Apple's Accepted result, and staple the app/disk image before describing a download as notarized. Signing keys and API credentials are never packaged or committed.
+
+The current account is Admin; Apple's certificate API rejected Developer ID issuance as Account Holder-only, and Xcode disabled that certificate type. Consequently v0.22.0's DMG is an **unsigned preview**, not a notarized release. Homebrew source installation is the supported install/update path until the Account Holder supplies a Developer ID Application certificate. The existing App Store and Mac App Store certificates cannot substitute for it.
+
+The native startup logo/ring now sits above WebKit in its own view and briefly fades out once content is ready, with reduced-motion support and no startup text. The app's titlebar separator is removed and its fill matches the content; the macOS system menu bar remains controlled by macOS.
 
 ## Netflix original subtitles
 
@@ -27,6 +39,8 @@ Choose **Netflix** in the Mac toolbar or paste an `https://www.netflix.com/watch
 The reader uses original Netflix subtitles, without Whisper, OCR, audio extraction or downloads. Hover lookup, furigana, level highlighting, saved words, speed and subtitle navigation remain available. Complete original tracks supply previous/next boundaries; visible-only tracks can navigate only encountered blocks. Displayed captions and clears follow Netflix’s renderer directly, rather than relying on a track-clock estimate. Playback commands prefer Netflix’s own player controller, whose seek positions use milliseconds.
 
 F, Netflix’s fullscreen control and immersed’s fullscreen icon enter a video-filling layout with transparent interactive captions. The native study WebKit backing and both document backgrounds are transparent; text shadows preserve legibility without an opaque bar. Only the dictionary card gets a background when opened. Escape closes lookup first, then exits fullscreen. The duplicate original caption overlay is hidden in fullscreen and restored afterward.
+
+Move the pointer to reveal native **Previous subtitle**, **Play or pause** and **Next subtitle** buttons in fullscreen. Previous/next use the app's original subtitle boundaries, rather than Netflix's ten-second skip. They fade away when idle and stay visible while the pointer is over them. Fullscreen text uses stronger weight, a thin dark outline and shadows for contrast over bright video, while the caption surface stays fully transparent.
 
 While hovering or looking up a word, **1** marks Unknown, **2** Learning, **3** Known and **4** Ignored. The popup shows the same actions and current state. States persist; ignored words do not inflate vocabulary comprehension. Number keys are not word actions while typing or using modifier keys. Netflix-focused key events are forwarded to the active study lookup.
 
@@ -72,6 +86,8 @@ Hover briefly to look up a word and pause playback; leaving the lookup resumes o
 Settings and saved words persist locally. Export/import provides a JSON backup through a native Mac save dialog; a backup can be saved to iCloud Drive. Automatic iPhone/Mac iCloud synchronization remains deferred until Apple signing configuration is available. Exporting a file is not automatic cross-device synchronization.
 
 ## YouTube search and filtering
+
+Discovery first attempts bounded public YouTube page metadata, with a timed yt-dlp fallback when the page cannot be parsed. Four bounded metadata checks run in parallel; language results appear progressively and cached verified results are reused. Japanese titles or manually translated Japanese subtitles never count as proof of original Japanese audio. Speech recognition and media downloads are not started during discovery. Real latency varies with YouTube and the network; a local smoke check on 2026-11-14 returned 18 results in about 0.6 seconds and one original-language check in about 0.8 seconds.
 
 Search runs inside the app. **Original Japanese only** is enabled by default and checks original-language metadata, not just titles or the selected dub. Unknown-language results are excluded. The toggle also guards directly opened video links. Shorts and duration filters apply to search results and playback selection. The native YouTube browsing window is explicitly labelled unfiltered; choosing a video sends it to the filtered study player.
 
@@ -162,3 +178,20 @@ Subtitle typography removes artificial button padding between Japanese tokens, u
 Visible-caption verification now uses up to three HD source frames from a bounded 0.6-second sample. Strong OCR needs two matching readings; lower-confidence OCR requires three matches. Unmatched samples can retry at later positions, busy sampling does not consume attempts, and late responses are ignored. Comparison normalizes common spoken fillers without rewriting source text. A weaker quoted-title match additionally requires a dictionary-attested four-or-more-kanji compound, shared written characters and a matching phonetic ending. Unattested OCR such as 国成発揚 is rejected rather than used to correct 国威発揚.
 
 The screenshot's lower-resolution frames produced 国成 at confidence 0.5. HD frames at the same source time produced the visible 国威発揚 consistently; the new matching path accepts that source text while retaining the original ASR in the local correction cache. These checks improve source-caption recovery, not model weights, and cannot guarantee correct transcription where no usable source captions exist. Creator captions can also be abbreviated or paraphrased.
+
+
+### Release verification (0.22.0)
+
+Verified the release snapshot with 44 Node backend tests, 12 Python/native tests,
+126 Chromium/WebKit browser tests, TypeScript checking, Expo's `src` lint scope,
+and lint on the changed desktop JavaScript. Native tests exercise the startup
+layer and fullscreen buttons at three window sizes. Dependencies were installed
+fresh in a temporary directory because reads in the working directory stalled
+or returned incomplete files.
+
+Impeccable scanned the changed CSS and live app. Hallmark rendered the live app
+at desktop and narrow widths. Existing discovery placeholder contrast, nested
+cards, text glyph controls and narrow discovery overflow remain audit findings;
+the native Mac window has a larger minimum size. Static HTML-only warnings about
+missing focus styles do not account for the external study stylesheet. These
+browser checks do not validate Netflix's protected video frames or code signing.

@@ -227,6 +227,16 @@ test('Netflix toolbar stays inside narrow panes and fullscreen has no opaque cap
   await expect(page.locator('header')).toBeHidden();
 });
 
+test('fullscreen subtitles have an outline and stronger text without a panel background',async({page})=>{
+ await page.addInitScript(()=>{(window as any).webkit={messageHandlers:{immersed:{postMessage:()=>{}}}};});
+ await page.goto('/');await page.getByRole('button',{name:'Netflix',exact:true}).click();
+ await page.evaluate(()=>{(window as any).immersedNetflixEvent({event:'state',id:'123',time:1,paused:true,duration:300});(window as any).immersedNetflixEvent({event:'line',time:1,text:'確かに日本の公共性について考えています。'});(window as any).immersedNetflixFullscreen(true);});
+ const line=page.locator('#subtitles .line');await expect(line).toBeVisible();
+ const style=await line.evaluate(e=>{const s=getComputedStyle(e);return{stroke:s.getPropertyValue('-webkit-text-stroke-width'),weight:s.fontWeight,background:s.backgroundColor};});
+ expect(parseFloat(style.stroke)).toBeGreaterThan(0);expect(Number(style.weight)).toBeGreaterThanOrEqual(600);expect(style.background).toBe('rgba(0, 0, 0, 0)');
+ for(const width of [480,960]){await page.setViewportSize({width,height:520});const bounds=await line.boundingBox();expect(bounds!.x).toBeGreaterThanOrEqual(0);expect(bounds!.x+bounds!.width).toBeLessThanOrEqual(width);}
+});
+
 test('word shortcuts 1–4 persist distinct states, preserve hover and never seek Netflix',async({page})=>{
   await page.addInitScript(()=>{(window as any).__commands=[];(window as any).webkit={messageHandlers:{immersed:{postMessage:(x:any)=>(window as any).__commands.push(x)}}}});
   const load=async()=>{await page.goto('/');await page.getByRole('button',{name:'Netflix',exact:true}).click();await page.evaluate(()=>{const event=(window as any).immersedNetflixEvent;event({event:'state',id:'123',time:1.5,paused:true,duration:300});event({event:'cues',language:'ja',cues:[{start:1,end:3,text:'政治について話します。'}]});event({event:'line',id:'123',time:1.5,text:'政治について話します。'});});};

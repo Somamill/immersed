@@ -1,0 +1,7 @@
+{
+  "name": "immersed-mac-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": { "kuromoji": "0.1.2" },
+  "engines": { "node": ">=24" }
+}

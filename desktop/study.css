@@ -1134,7 +1134,9 @@ html.netflixFocus, body.netflixFocus { background: transparent !important; }
 .netflixFocus #watchPage { margin: 0; padding: 0; height: 100dvh; }
 .netflixFocus .studyCard { min-height: 0; height: 100dvh; background: transparent !important; border: 0; box-shadow: none; }
 .netflixFocus .subtitles { padding: 8px 16px; background: transparent; }
-.netflixFocus .line { width: 100%; text-align: center; font-size: clamp(24px,3vw,34px); line-height: 1.7; color: #fff; text-shadow: 0 2px 3px #000, 0 0 5px #000, 0 0 12px #000; }
+.netflixFocus .line { width: 100%; text-align: center; font-size: clamp(26px,3.2vw,38px); font-weight: 650; line-height: 1.5; color: #fff; -webkit-text-stroke: 0.65px #050706; paint-order: stroke fill; text-shadow: 0 2px 2px #000, 1px 0 2px #000, -1px 0 2px #000, 0 0 6px #000; }
+.netflixFocus .word { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.netflixFocus rt { -webkit-text-stroke: 0.3px #050706; color: #f5f8f6; font-weight: 650; }
 .netflixFocus .word { background: transparent; color: inherit; }
 .netflixFocus .word:hover { background: #0005; }
 .netflixFocus .lookup { text-shadow: none; }

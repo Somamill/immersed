@@ -1,6 +1,15 @@
 const { test } = require("node:test"),
   assert = require("node:assert/strict");
 const { createSearch } = require("../desktop/search.cjs");
+test('fast discovery avoids a subprocess and still validates original-language metadata',async()=>{
+ let runs=0,finish;const manager=createSearch({run:async()=>{runs++;throw Error('unneeded');},fastSearch:async()=>[{id:'aaaaaaaaaaa',title:'対談',duration:1800}],videoInfo:()=>new Promise(resolve=>{finish=resolve;}),concurrency:4});
+ const first=await manager.search('文化');assert.equal(first.items.length,1);assert.equal(first.items[0].language,null);assert.equal(first.hasMore,true);
+ finish({language:'ja'});await new Promise(r=>setImmediate(r));assert.equal((await manager.search('文化')).items[0].language,'ja');assert.equal(runs,0);
+});
+test('page metadata failures retain the yt-dlp fallback',async()=>{
+ let runs=0;const manager=createSearch({fastSearch:async()=>{throw Error('changed page');},run:async()=>{runs++;return{stdout:JSON.stringify({entries:[{id:'aaaaaaaaaaa',title:'対談',duration:1800}]})};},videoInfo:async()=>({language:'ja'})});
+ assert.equal((await manager.search('文化')).items.length,1);assert.equal(runs,1);
+});
 const tick = () => new Promise((r) => setTimeout(r, 5));
 test("flat search returns before language checks and publishes results progressively", async () => {
   let finishA,

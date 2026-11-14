@@ -1,6 +1,6 @@
 const VALID = /^[A-Za-z0-9_-]{11}$/;
 const discovery = require("./discovery.js");
-function createSearch({ run, videoInfo, peek = () => null }) {
+function createSearch({ run, videoInfo, peek = () => null, fastSearch, concurrency = 2 }) {
   const cache = new Map(),
     pending = new Map(),
     queue = [];
@@ -15,7 +15,7 @@ function createSearch({ run, videoInfo, peek = () => null }) {
     };
   }
   function pump() {
-    while (active < 2 && queue.length) {
+    while (active < Math.max(1, Math.min(4, concurrency)) && queue.length) {
       const { job, index } = queue.shift();
       active++;
       const item = job.items[index];
@@ -48,7 +48,9 @@ function createSearch({ run, videoInfo, peek = () => null }) {
     if (old && Date.now() - old.time < 300000) return snapshot(old);
     if (pending.has(key)) return pending.get(key);
     const task = (async () => {
-      const { stdout } = await run(
+      let raw;
+      if (page===1 && fastSearch) { try { raw={entries:await fastSearch(discovery.queryFor(query,filters)),hasMore:true}; } catch { /* Keep yt-dlp as the compatibility fallback. */ } }
+      if(!raw) { const { stdout } = await run(
         "yt-dlp",
         [
           "--flat-playlist",
@@ -67,8 +69,8 @@ function createSearch({ run, videoInfo, peek = () => null }) {
         ],
         { timeout: 25000, maxBuffer: 4 * 1024 * 1024 },
       );
-      const raw = JSON.parse(stdout),
-        seen = new Set();
+      raw=JSON.parse(stdout); }
+      const seen = new Set();
       const items = (raw.entries || [])
         .filter(
           (e) => e && VALID.test(e.id) && !seen.has(e.id) && seen.add(e.id),
@@ -82,7 +84,7 @@ function createSearch({ run, videoInfo, peek = () => null }) {
             e.thumbnail ||
             e.thumbnails?.at(-1)?.url ||
             "https://i.ytimg.com/vi/" + e.id + "/hqdefault.jpg",
-          isShort: /\/shorts\//.test(e.url || ""),
+          isShort: e.isShort === true || /\/shorts\//.test(e.url || ""),
           language: null,
           ...(peek(e.id) || {}),
           checked: !!peek(e.id),
@@ -91,7 +93,7 @@ function createSearch({ run, videoInfo, peek = () => null }) {
         .sort((a, b) => filters.conversation ? discovery.score(b) - discovery.score(a) : 0);
       const job = {
         items,
-        hasMore: page < 4 && (raw.entries || []).length >= 18,
+        hasMore: page < 4 && (raw.hasMore===true || (raw.entries || []).length >= 18),
         time: Date.now(),
         remaining: items.filter((x) => !x.checked).length,
       };

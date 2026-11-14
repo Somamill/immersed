@@ -1,6 +1,6 @@
 {
   "name": "immersed",
-  "version": "0.21.1",
+  "version": "0.22.0",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/metro-runtime": "~58.0.15",
@@ -54,7 +54,7 @@
     "start:hosted": "node server/hosted.cjs",
     "mac:serve": "node desktop/server.cjs",
     "alignment:setup": "node scripts/setup-alignment.cjs",
-    "test:mac": "node --test tests/focused-speech.test.cjs tests/video-priority.test.cjs tests/search.test.cjs tests/word-history.test.cjs tests/subtitle-playback.test.cjs tests/reading-cues.test.cjs tests/transcript-windows.test.cjs tests/transcript-compare.test.cjs tests/mac-media.test.cjs tests/mac-server.test.cjs tests/highlighting.test.cjs tests/caption-frames.test.cjs && python3 -m unittest tests/test_mac_quality.py tests/test_mac_transcribe.py tests/test_mac_web_session.py && playwright test --config playwright.mac.config.ts"
+    "test:mac": "node --test tests/focused-speech.test.cjs tests/video-priority.test.cjs tests/search.test.cjs tests/youtube-metadata.test.cjs tests/word-history.test.cjs tests/subtitle-playback.test.cjs tests/reading-cues.test.cjs tests/transcript-windows.test.cjs tests/transcript-compare.test.cjs tests/mac-media.test.cjs tests/mac-server.test.cjs tests/highlighting.test.cjs tests/caption-frames.test.cjs && python3 -m unittest tests/test_mac_quality.py tests/test_mac_transcribe.py tests/test_mac_web_session.py tests/test_mac_focus.py && playwright test --config playwright.mac.config.ts"
   },
   "private": true,
   "engines": {

@@ -7,6 +7,7 @@ const { promisify } = require("node:util");
 const focusedSpeech = require("./focused-speech.cjs");
 const { createMedia } = require("./media.cjs");
 const { createSearch } = require("./search.cjs");
+const youtubeMetadata = require("./youtube-metadata.cjs").createYouTubeMetadata();
 const { createCaptionFrames } = require("./caption-frames.cjs");
 const { parseYouTubeCaptions } = require("./captions.cjs");
 const api = require("../server/middleware.cjs");
@@ -421,25 +422,26 @@ function publicInfo(e) {
       (e.aspect_ratio > 0 && e.aspect_ratio < 1 && e.duration <= 180),
   };
 }
-async function videoInfo(id) {
+async function videoInfo(id, { quick = false } = {}) {
   if (videoInfoCache.has(id)) return videoInfoCache.get(id);
   if (videoInfoPending.has(id)) return videoInfoPending.get(id);
   const task = (async () => {
+    if(quick) { try { const info=await youtubeMetadata.info(id);if(info?.language) {videoInfoCache.set(id,info);if(videoInfoCache.size>100)videoInfoCache.delete(videoInfoCache.keys().next().value);return info;} } catch { /* Compatibility fallback below. */ } }
     const { stdout } = await run(
       "yt-dlp",
       [
         "--skip-download",
         "--no-warnings",
         "--socket-timeout",
-        "8",
+        quick ? "4" : "8",
         "--retries",
-        "1",
+        quick ? "0" : "1",
         "--extractor-retries",
-        "1",
+        quick ? "0" : "1",
         "--dump-single-json",
         "https://www.youtube.com/watch?v=" + id,
       ],
-      { timeout: 25000, maxBuffer: 16 * 1024 * 1024 },
+      { timeout: quick ? 8000 : 25000, maxBuffer: 16 * 1024 * 1024 },
     );
     const result = publicInfo(JSON.parse(stdout));
     videoInfoCache.set(id, result);
@@ -452,7 +454,9 @@ async function videoInfo(id) {
 }
 const searches = createSearch({
   run,
-  videoInfo,
+  videoInfo: id => videoInfo(id,{quick:true}),
+  fastSearch: query => youtubeMetadata.search(query),
+  concurrency: 4,
   peek: (id) => videoInfoCache.get(id),
 });
 
