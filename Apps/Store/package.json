@@ -1,6 +1,6 @@
 {
   "name": "immersed-store",
-  "version": "0.21.5",
+  "version": "0.21.6",
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
@@ -10,8 +10,9 @@
     "lint": "expo lint",
     "test": "node --test tests/*.test.cjs",
     "dictionary:build": "python3 scripts/build-dictionary.py",
-    "eas-build-post-install": "python3 scripts/build-dictionary.py",
-    "test:dictionary": "node --test tests/dictionary.integration.cjs"
+    "test:dictionary": "node --test tests/dictionary.integration.cjs",
+    "store:build": "bash scripts/build-store.sh",
+    "testflight": "bash scripts/build-store.sh ios --upload"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",

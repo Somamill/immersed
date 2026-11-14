@@ -1,5 +1,7 @@
 # Persistent hosting
 
+> Legacy community-preview notes: Expo Go delivery and hosted update/tunnel instructions below are retired. Use the [native Xcode/TestFlight guide](../TESTFLIGHT.md) for Apple releases. The Store edition is self-contained and excludes the experimental streaming/capture backend.
+
 Status: the standalone server and native export are implemented. **No permanent host is deployed by this change.** This workspace and its Expo tunnel are temporary. Restarting a process cannot keep a stopped workspace online.
 
 ## Requirements

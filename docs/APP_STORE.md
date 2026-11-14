@@ -1,27 +1,13 @@
-# App Store preparation
+# Immersed. Store release
 
-Owner confirmed Apple Developer Program membership on 2026-11-05. The Expo project is linked to [@somamill/immersed](https://expo.dev/accounts/somamill/projects/immersed); its ID is in `app.json`. The iOS bundle ID is `com.somamill.immersed`. The Expo config declares only standard exempt encryption; confirm this against the final binary when answering Apple export-compliance questions. Membership alone does not create Apple signing certificates, an App Store Connect record, or a working speech server.
+The App Store Connect record is **6834110293**, Apple team **YJH8WWUVF3**, and bundle identifier **com.somamill.immersed**. The Store edition lives in `Apps/Store`, supports iPhone, iPad and Mac Catalyst, and is free. Public availability remains subject to App Review.
 
-## Draft listing (English)
+## Store scope
 
-- Name: Immersed — Learn Japanese
-- Subtitle: Watch Japanese. Tap any word.
-- Category: Education
-- Keywords: Japanese,language learning,immersion,subtitles,dictionary,JLPT,video,vocabulary
-- Description: “Learn from the Japanese videos you already enjoy. Watch in a focused view, follow available Japanese subtitles, tap words for dictionary meanings and grammar, and save useful vocabulary with its video context. Choose a JLPT level and optional furigana to focus on unfamiliar words. Search the Japanese–English dictionary whenever you need it. Immersed is independent and open source. Video and subtitle availability depend on YouTube and the connected language service.”
-- Privacy policy URL: https://github.com/Somamill/immersed/blob/main/PRIVACY.md
-- Support URL: https://github.com/Somamill/immersed/blob/main/SUPPORT.md
-- Public support email: k4jenx@gmail.com (approved by the owner on 2026-11-05).
-- Marketing URL: https://github.com/Somamill/immersed
-- Price: Free (draft; confirm in App Store Connect).
+Import unprotected videos you own or have permission to use and matching Japanese SRT/WebVTT subtitles. Playback, the bundled JMdict dictionary and saved vocabulary work locally without an account or hosted language service. Streaming extraction, DRM bypass, capture of other apps and automatic caption generation are excluded. The separate community edition retains its experimental features and limitations.
 
-Do not advertise universal automatic subtitles, Google sign-in, background audio, podcasts, or guaranteed recognition accuracy until those capabilities pass real device tests. Do not submit illustrative browser screenshots as evidence of live iPhone playback. Capture final screenshots from a signed iPhone build with genuinely available content, and complete App Store Connect age rating, privacy answers and rights declarations based on that build. The current app uses a YouTube web view; confirm player and caption behavior against YouTube terms and Apple's review rules.
+## Native delivery
 
-## Build and review gates
+Follow [the Xcode/TestFlight guide](../TESTFLIGHT.md). Native projects are generated locally, then built, signed and uploaded with Apple tools. Expo/EAS account connections, hosted updates and Expo Go distribution are retired. Required native SDK modules remain dependencies; no Expo account or token is needed.
 
-1. Link the correct Apple team and create the App Store Connect app record with `com.somamill.immersed`. Record its numeric Apple app ID as `ASC_APP_ID` in GitHub Actions variables and an Expo access token as `EXPO_TOKEN` secret only if using the manual TestFlight workflow. No credential belongs in this repository.
-2. Finish a permanent HTTPS language service and verify its YouTube audio access. Set the public `EXPO_PUBLIC_IMMERSED_API_ORIGIN` variable to that HTTPS origin in the Expo **production** environment before building. `eas.json` selects that environment. The value is embedded in the app bundle and must not be a secret. Validate a signed build can search the dictionary and obtain captions. An Expo tunnel or a server running only in this workspace will not be reachable reliably by App Review or users.
-3. Build a signed iOS binary with `npx eas-cli@latest build --platform ios --profile production`. Upload it to TestFlight, then verify playback, Japanese captions, word lookup, network loss/recovery, accessibility and local storage on a physical iPhone. Test the captionless-video case described in [RELIABILITY.md](../RELIABILITY.md).
-4. Finalize the App Store privacy questionnaire, listing screenshots, review notes and any required demo information in App Store Connect. Uploading a binary does not publish it; select the processed build and submit the version for Apple review only after the acceptance test passes.
-
-Current state: Expo project linked; release build configuration exists. A non-interactive EAS build reached Apple credential setup and stopped because signing credentials are absent; remote build number 1 was initialized. No signed build, App Store Connect app record, stable API host or physical-device acceptance result has been verified here. The owner requires automatic subtitles for every YouTube video; the current embedded player cannot provide the audio for local recognition. [The local processing analysis](LOCAL_FIRST.md) records the unresolved media-access boundary. Do not submit the public listing as if universal subtitles worked. Public App Store submission is blocked by those gaps.
+Before submission, verify video/subtitle import, playback/replay, word lookup, saved context and persistence, accessibility, appropriate screenshots for each platform, accurate privacy/age/export declarations, licensed data attribution and real reviewer contact details. An uploaded or processed build is not an approved public release. Preserve the full community edition outside the Store.

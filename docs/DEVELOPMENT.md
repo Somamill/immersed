@@ -1,5 +1,7 @@
 # Immersed — development guide
 
+> Legacy community-preview notes: Expo Go delivery and hosted update/tunnel instructions below are retired. Use the [native Xcode/TestFlight guide](../TESTFLIGHT.md) for Apple releases. The Store edition is self-contained and excludes the experimental streaming/capture backend.
+
 ## iPhone parity update — 0.19.0
 
 The watch header now keeps the app icon and an estimated vocabulary percentage visible together. It uses the current subtitle sample, completed JLPT level and explicit known/unknown choices; it does not measure listening fluency. Katakana is automatically familiar at N2/N1 through the shared learning policy, with explicit unknown overrides preserved. Dictionary lookup uses the shared honorific-base fallback, including お便り → 便り.

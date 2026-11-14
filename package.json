@@ -1,6 +1,6 @@
 {
   "name": "immersed",
-  "version": "0.21.5",
+  "version": "0.21.6",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/metro-runtime": "~58.0.15",
@@ -41,7 +41,7 @@
     "test:e2e": "playwright test",
     "export:web": "expo export --platform web",
     "lint": "expo lint",
-    "testflight": "cd Apps/Store && npx eas-cli@latest build --platform ios --profile production --auto-submit",
+    "testflight": "bash Apps/Store/scripts/build-store.sh ios --upload",
     "language:setup": "node scripts/setup-dictionary.cjs",
     "test:language": "node --test tests/language.test.cjs",
     "version:update": "node scripts/version-update.cjs",

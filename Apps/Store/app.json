@@ -2,8 +2,7 @@
   "expo": {
     "name": "Immersed.",
     "slug": "immersed",
-    "version": "0.21.5",
-    "owner": "somamill",
+    "version": "0.21.6",
     "userInterfaceStyle": "automatic",
     "orientation": "default",
     "scheme": "immersed-store",
@@ -19,7 +18,7 @@
         "UIFileSharingEnabled": false,
         "CFBundleName": "Immersed."
       },
-      "buildNumber": "3"
+      "buildNumber": "16"
     },
     "plugins": [
       "expo-router",
@@ -31,10 +30,7 @@
       "enabled": false
     },
     "extra": {
-      "edition": "store",
-      "eas": {
-        "projectId": "f6597504-4823-4dd7-99a1-32907814ea98"
-      }
+      "edition": "store"
     },
     "web": {
       "bundler": "metro"

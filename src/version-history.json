@@ -1,5 +1,16 @@
 [
   {
+    "version": "0.21.6",
+    "date": "2026-11-14",
+    "title": "Build Store releases with Xcode",
+    "notes": [
+      "Remove Expo and EAS cloud project connections and OTA release links; retain native modules required by the apps.",
+      "Use Xcode archives and Apple TestFlight for signed Store delivery.",
+      "Background delivery requires approved GitHub signing secrets; Apple review remains required."
+    ],
+    "changelogFormat": 1
+  },
+  {
     "version": "0.21.5",
     "date": "2026-11-13",
     "title": "Make subtitle word lookup accessible",

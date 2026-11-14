@@ -6,9 +6,9 @@ The primary flow is watching a local video and tapping Japanese SRT/WebVTT capti
 
 ## Build
 
-Use Node 24+, Python 3, `npm ci`, then `npm run dictionary:build`. The script downloads a pinned, checksum-verified data archive and generates the ignored offline SQLite asset. It also runs automatically after EAS installs dependencies. Do not add the 56 MiB generated database or signing files to Git.
+Use Node 24+, Python 3, `npm ci`, then `npm run dictionary:build`. The script downloads a pinned, checksum-verified data archive and generates the ignored offline SQLite asset. The native build script also generates it before creating Xcode projects. Do not add the 56 MiB generated database or signing files to Git.
 
-Run `npm run typecheck`, `npm run lint`, `npm test` and `npx expo-doctor`. Use `npx eas-cli@latest build --platform ios --profile production`; local signing files stay outside the repo with only an ignored credentials.json reference. Expo project: somamill/immersed. Apple team: YJH8WWUVF3. Universal bundle: com.somamill.immersed. App Store Connect: 6834110293. Free.
+Run `npm run typecheck`, `npm run lint`, `npm test` and `npx expo-doctor`. Use `bash scripts/build-store.sh ios` or `macos` to build native archives with Xcode. See [native delivery](../../TESTFLIGHT.md) for signing and TestFlight; no Expo account or token is used.
 
 `DOT_PLATFORM=macos npx expo prebuild --platform ios --clean` enables the CNG Catalyst plugin. Build the generated Immersed workspace/scheme for `generic/platform=macOS,variant=Mac Catalyst`, passing `IPHONEOS_DEPLOYMENT_TARGET=16.4 MACOSX_DEPLOYMENT_TARGET=13.4 SUPPORTS_MACCATALYST=YES`. The plugin enables sandboxing and user-selected file access only for Mac builds; generated native files remain untracked. Mac compilation, signing and native acceptance must pass before submission.
 

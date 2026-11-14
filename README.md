@@ -6,7 +6,7 @@
   <a href="https://github.com/Somamill/immersed/actions/workflows/check.yml"><img alt="Build and tests" src="https://github.com/Somamill/immersed/actions/workflows/check.yml/badge.svg" /></a>
   <a href="https://github.com/Somamill/immersed/releases"><img alt="Latest release" src="https://img.shields.io/github/v/release/Somamill/immersed?color=b4dec4&amp;label=release" /></a>
   <a href="LICENSE"><img alt="Code license MIT" src="https://img.shields.io/badge/code-MIT-b4dec4" /></a>
-  <img alt="iPhone preview with Expo Go" src="https://img.shields.io/badge/iPhone-Expo%20Go-171717" />
+  <img alt="Native iPhone build with Xcode" src="https://img.shields.io/badge/iPhone-Xcode-171717" />
   <img alt="Mac local test via Homebrew" src="https://img.shields.io/badge/Mac-Homebrew%20test-171717" />
 </p>
 <p align="center">
@@ -66,7 +66,7 @@ Built for learners looking for a **free, open-source immersion tool for iPhone a
 - **Natural content:** browse ordinary Japanese daily life, food, travel, science, gaming and conversation. Discovery is language-biased search, not a verified Japanese-only feed.
 - **Check confusing phrases:** a compact Japanese context model can choose a close-sounding alternative already proposed by a recognizer. Morphology guards protect proper/unknown words, numbers and negation; this is language plausibility, not verified speech.
 - **Compare generated captions:** ReazonSpeech, Whisper Small and Kotoba Whisper evaluate the same audio chunks progressively. The worker keeps candidate phrases, disagreement and timings; the current CPU preview cannot deliver guaranteed real-time three-model recognition. Settings → About contains the latest comparison report. Source-audio access is still blocked in this preview.
-- **Try local captions on iPhone:** a native-build prototype uses ReplayKit's app-audio samples and Apple's on-device Japanese Speech framework when YouTube has no Japanese track. iOS asks for recording and speech permission. This does not run in Expo Go, and a signed iPhone build plus real-device and YouTube policy review are required before calling it supported. Protected media and unavailable Japanese recognition remain limitations.
+- **Try local captions on iPhone:** a native-build prototype uses ReplayKit's app-audio samples and Apple's on-device Japanese Speech framework when YouTube has no Japanese track. iOS asks for recording and speech permission. A community native iPhone build, real-device testing and third-party authorization are required before calling this supported; this capture feature is excluded from the Store edition. Protected media and unavailable Japanese recognition remain limitations.
 - **Resolve caption mix-ups:** word lookups explain grammatical endings and can suggest a same-reading spelling from sentence context. For example, 事象 may fit a caption misheard as 自称. Suggestions do not rewrite source captions automatically.
 - **Tap to understand:** automatic word/grammar grouping, dictionary forms and readings. Tapping a subtitle opens the word popup, pauses playing video, and resumes on dismissal. Save and a bottom-right known/unknown switch stay within reach. Dictionary search is a separate panel that leaves playback running.
 - **Your level, less clutter:** choose a completed JLPT level. Text stays white in dark mode; unfamiliar words have a soft highlight. Light mode uses dark text for readability. Optional furigana appears on harder kanji words. Known/unknown choices override estimates.
@@ -83,11 +83,11 @@ Built for learners looking for a **free, open-source immersion tool for iPhone a
 
 ## App Store preparation
 
-The project is linked to the owner's Expo account, and the current App Store listing draft, privacy policy, support route and release gates are in [App Store preparation](docs/APP_STORE.md). Apple Developer Program membership is confirmed. A public release still needs a signed iPhone acceptance test and permanent language service.
+The standalone Store edition has an App Store Connect record. Its scope, privacy policy and release gates are in [App Store preparation](docs/APP_STORE.md). Native builds use Xcode and TestFlight; this edition does not require a hosted language service. Public release remains subject to acceptance tests and Apple review.
 
 ## Persistent hosting
 
-A standalone HTTPS server can serve the Expo Go bundle and language API from one stable origin, without a development tunnel. The Docker/Compose setup includes persistent caches and HTTPS. **It has not been deployed to a permanent host.** See [deployment instructions and acceptance checks](docs/DEPLOYMENT.md).
+The optional community HTTPS backend can serve the language API from one stable origin. The Store edition uses a bundled dictionary and does not require that backend. The Docker/Compose setup includes persistent caches and HTTPS. **It has not been deployed to a permanent host.** See [deployment instructions and acceptance checks](docs/DEPLOYMENT.md).
 
 The optional acoustic alignment pass uses real audio to place selected words; it cannot fix incorrect text. Larger recognizers tested in this update did not beat the baseline. See [measured results and remaining limits](docs/RECOGNITION_UPGRADE.md).
 
@@ -97,18 +97,9 @@ The Apple Silicon Mac app **immersed.** opens its own window with embedded YouTu
 
 ## Try it on your iPhone
 
-Install **Expo Go** on your iPhone. Using Node.js 24, from a clone of this repository:
+The Store edition in `Apps/Store` is a standalone native app for importing videos you own and Japanese subtitles, offline word lookup and saved vocabulary. Build and sign it with Xcode, then distribute through TestFlight and the App Store; see [native delivery instructions](TESTFLIGHT.md). Public App Store availability remains subject to Apple review.
 
-```sh
-npm ci
-npm run language:setup
-npm run context:setup
-npm run preview
-```
-
-Open the printed link/QR code in Expo Go. The development server supplies dictionary/analysis and must stay running. No Apple Developer subscription is needed for this preview; Expo Go keeps its own installed Home Screen icon. The preview supervisor restarts a failed Expo process with bounded backoff. Expo can issue a new address after a restart; the latest is recorded in `.expo/immersed-preview.json`. Links are temporary, and the server/workspace must stay running.
-
-For the optional self-hosted recognition worker, setup details and platform limits, see the [development guide](docs/DEVELOPMENT.md). A static web export or signed app does not include a running backend. Private, region-limited or account-required videos may still be unavailable in YouTube's own watch page. YouTube account sign-in is unavailable in this preview; unsupported sign-in links show an explanation instead of redirecting to Safari. Native OAuth would require a registered client and would not itself establish an authenticated YouTube session. Locked-screen audio is not supported in this preview.
+Expo/EAS cloud builds, hosted JavaScript updates and Expo Go previews are retired. Native SDK modules and local project generation remain development dependencies. The separately distributed community edition retains its experimental integrations and their documented limitations; those features are not shipped in the Store edition.
 
 ## Coming from Migaku, Language Reactor or Yomitan?
 
@@ -116,7 +107,7 @@ These projects share an immersion-learning idea; their platforms and scope diffe
 
 | Project | Explore it for |
 | --- | --- |
-| **Immersed** | An open-source iPhone and Mac experiment combining video, Japanese dictionary lookup and saved vocabulary. Expo Go preview and local Mac test today. |
+| **Immersed** | An open-source iPhone and Mac experiment combining video, Japanese dictionary lookup and saved vocabulary. Native Store edition and a separate community Mac edition. |
 | [Migaku](https://migaku.com/) | An established commercial immersion ecosystem and browser workflow. |
 | [Language Reactor](https://www.languagereactor.com/) | A browser-based language-learning companion. |
 | [asbplayer](https://docs.asbplayer.dev/) | Free, open-source browser video study and subtitle sentence mining. |

@@ -10,6 +10,9 @@ permissions:
 jobs:
   store:
     runs-on: ubuntu-latest
+    env:
+      EXPO_OFFLINE: '1'
+      EXPO_NO_TELEMETRY: '1'
     defaults:
       run:
         working-directory: Apps/Store

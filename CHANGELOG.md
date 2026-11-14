@@ -4,6 +4,16 @@ Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Rel
 
 ## [Unreleased]
 
+## [0.21.6] - 2026-11-14
+
+Build Store releases with Xcode
+
+### Changed
+
+- Remove Expo and EAS cloud project connections and OTA release links; retain native modules required by the apps.
+- Use Xcode archives and Apple TestFlight for signed Store delivery.
+- Background delivery requires approved GitHub signing secrets; Apple review remains required.
+
 ## [0.21.5] - 2026-11-13
 
 Make subtitle word lookup accessible

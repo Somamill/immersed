@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "scheme": "Immersed",
+  "workspace": "ios/Immersed.xcworkspace",
+  "bundleIdentifier": "com.somamill.immersed",
+  "teamId": "YJH8WWUVF3",
+  "iosProfile": "dot immersed IOS_APP_STORE",
+  "appStoreId": "6834110293"
+}

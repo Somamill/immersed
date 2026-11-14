@@ -2,7 +2,7 @@
   "expo": {
     "name": "Immersed.",
     "slug": "immersed",
-    "version": "0.21.5",
+    "version": "0.21.6",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -43,11 +43,10 @@
     ],
     "scheme": "immersed",
     "extra": {
-      "storageScopeKey": "@anonymous/immersed-6848fb61-7eac-408c-9365-26aaec27faeb",
-      "eas": {
-        "projectId": "f6597504-4823-4dd7-99a1-32907814ea98"
-      }
+      "storageScopeKey": "@anonymous/immersed-6848fb61-7eac-408c-9365-26aaec27faeb"
     },
-    "owner": "somamill"
+    "updates": {
+      "enabled": false
+    }
   }
 }
