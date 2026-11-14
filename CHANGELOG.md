@@ -4,6 +4,14 @@ Dates use Asia/Tokyo. Each released update has a matching Git tag and GitHub Rel
 
 ## [Unreleased]
 
+## [0.22.1] - 2026-11-14
+
+Keep Mac release aligned with current repository
+
+### Changed
+
+- Preserve the latest Store edition and shared dot. brand changes alongside the full-feature Homebrew Mac app, faster discovery, native startup animation and transparent Netflix fullscreen subtitle controls. Direct-download DMG signing remains blocked by the Apple account Admin role.
+
 ## [0.22.0] - 2026-11-14
 
 Full-feature Mac distribution and faster discovery

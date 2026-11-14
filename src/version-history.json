@@ -1,5 +1,14 @@
 [
   {
+    "version": "0.22.1",
+    "date": "2026-11-14",
+    "title": "Keep Mac release aligned with current repository",
+    "notes": [
+      "Preserve the latest Store edition and shared dot. brand changes alongside the full-feature Homebrew Mac app, faster discovery, native startup animation and transparent Netflix fullscreen subtitle controls. Direct-download DMG signing remains blocked by the Apple account Admin role."
+    ],
+    "changelogFormat": 1
+  },
+  {
     "version": "0.22.0",
     "date": "2026-11-14",
     "title": "Full-feature Mac distribution and faster discovery",

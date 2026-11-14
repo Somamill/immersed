@@ -153,7 +153,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
-        window.backgroundColor = NSColor(calibratedRed: 9/255, green: 18/255, blue: 14/255, alpha: 1)
+        window.backgroundColor = NSColor(calibratedRed: 21/255, green: 24/255, blue: 21/255, alpha: 1)
         window.isMovableByWindowBackground = true
         window.collectionBehavior.insert(.fullScreenPrimary)
         window.isReleasedWhenClosed = false
@@ -179,7 +179,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKUIDelegate, WKNaviga
         let surface = window.contentView!
         loading = NSView(frame: surface.bounds)
         loading.autoresizingMask = [.width, .height]; loading.wantsLayer = true
-        loading.layer?.backgroundColor = NSColor(calibratedRed: 0.025, green: 0.05, blue: 0.035, alpha: 1).cgColor
+        loading.layer?.backgroundColor = NSColor(calibratedRed: 21/255, green: 24/255, blue: 21/255, alpha: 1).cgColor
         surface.addSubview(loading, positioned: .above, relativeTo: web)
         let ringHost = NSView(); ringHost.translatesAutoresizingMaskIntoConstraints = false; ringHost.wantsLayer = true
         let logo = NSImageView(); logo.translatesAutoresizingMaskIntoConstraints = false

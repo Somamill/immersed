@@ -180,7 +180,7 @@ Visible-caption verification now uses up to three HD source frames from a bounde
 The screenshot's lower-resolution frames produced 国成 at confidence 0.5. HD frames at the same source time produced the visible 国威発揚 consistently; the new matching path accepts that source text while retaining the original ASR in the local correction cache. These checks improve source-caption recovery, not model weights, and cannot guarantee correct transcription where no usable source captions exist. Creator captions can also be abbreviated or paraphrased.
 
 
-### Release verification (0.22.0)
+### Release verification (0.22.1)
 
 Verified the release snapshot with 44 Node backend tests, 12 Python/native tests,
 126 Chromium/WebKit browser tests, TypeScript checking, Expo's `src` lint scope,
@@ -190,8 +190,8 @@ fresh in a temporary directory because reads in the working directory stalled
 or returned incomplete files.
 
 Impeccable scanned the changed CSS and live app. Hallmark rendered the live app
-at desktop and narrow widths. Existing discovery placeholder contrast, nested
-cards, text glyph controls and narrow discovery overflow remain audit findings;
-the native Mac window has a larger minimum size. Static HTML-only warnings about
-missing focus styles do not account for the external study stylesheet. These
-browser checks do not validate Netflix's protected video frames or code signing.
+at desktop and narrow widths. The merged shared theme fixes placeholder contrast
+and narrow discovery overflow. Existing nested-card and text-glyph control findings
+remain. The eyebrow flagged by Impeccable is hidden by the shared stylesheet;
+static HTML-only focus and missing-asset warnings do not describe the served app.
+These browser checks do not validate Netflix's protected frames or code signing.
