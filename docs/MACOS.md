@@ -1,6 +1,6 @@
 # immersed. for Apple Silicon Mac
 
-immersed. is a compiled arm64 AppKit application with an embedded WebKit study interface and YouTube player. It opens its own Mac window. Homebrew manages its local Node, Python, FFmpeg and yt-dlp dependencies; MLX runs speech recognition on Apple Silicon. Distribution currently uses GitHub/Homebrew without Developer ID signing or notarization.
+immersed. is a compiled arm64 AppKit application with an embedded WebKit study interface and YouTube player. It opens its own Mac window. Homebrew manages its local Node, Python, FFmpeg and yt-dlp dependencies; MLX runs speech recognition on Apple Silicon. GitHub provides a Developer ID signed and Apple-notarized DMG; Homebrew also provides a local source installation.
 
 ## Discover Japanese conversations
 
@@ -28,7 +28,7 @@ GitHub releases include `immersed-<version>-arm64.dmg` and matching SHA-256 file
 
 Build with `/bin/sh desktop/build-dmg.sh`. Setting `IMMERSED_SIGN_IDENTITY` to a **Developer ID Application** identity signs the app with hardened runtime and signs the disk image. The release script rejects App Store signing identities for this route. Notarize with `xcrun notarytool submit`, wait for Apple's Accepted result, and staple the app/disk image before describing a download as notarized. Signing keys and API credentials are never packaged or committed.
 
-The current account is Admin; Apple's certificate API rejected Developer ID issuance as Account Holder-only, and Xcode disabled that certificate type. Consequently v0.22.0's DMG is an **unsigned preview**, not a notarized release. Homebrew source installation is the supported install/update path until the Account Holder supplies a Developer ID Application certificate. The existing App Store and Mac App Store certificates cannot substitute for it.
+On 2026-11-14, the signed-in Apple Developer website issued **Developer ID Application: Max Miller (YJH8WWUVF3)**. The API/Xcode Admin restriction did not prevent issuance through that browser session. The website accepted the prepared public CSR with the standard `.certSigningRequest` filename; its matching private key remains local. The v0.22.1 DMG is now signed with hardened runtime, accepted by Apple's notary service, and stapled. Both the installed app and DMG passed Gatekeeper as **Notarized Developer ID**. The previous unsigned DMG asset and checksum were replaced with the verified signed download; the Homebrew source archive is unchanged.
 
 The native startup logo/ring now sits above WebKit in its own view and briefly fades out once content is ready, with reduced-motion support and no startup text. The app's titlebar separator is removed and its fill matches the content; the macOS system menu bar remains controlled by macOS.
 
