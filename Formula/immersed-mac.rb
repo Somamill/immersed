@@ -2,7 +2,7 @@ class ImmersedMac < Formula
   desc "Japanese video immersion, Netflix subtitles and local audiobooks for macOS"
   homepage "https://github.com/Somamill/immersed"
   url "https://github.com/Somamill/immersed/releases/download/v0.22.0/immersed-mac-0.22.0.tar.gz"
-  sha256 "a2bf9cce7cb21143829a6a9f7a5427315c3e15621f4d71225735e3dc98a2504d"
+  sha256 "cac8418dfdeea741eec83671aa46df1ff62abe03364cf26d7fe026e2be0081bc"
   head "https://github.com/Somamill/immersed.git", branch: "main"
   depends_on :macos
   depends_on "node"
