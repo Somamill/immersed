@@ -1,3 +1,4 @@
+import { dotPalette } from '../dot-theme';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Text, View } from 'react-native';
 import type { TimedCue } from '../captions';
@@ -25,9 +26,9 @@ export default function VideoCoverage({ cues, level, knowledge, dark, compact = 
   const stats = useMemo(() => estimateVocabulary(tokens, level, knowledge), [tokens, level, knowledge]);
   if (!stats) return null;
   const percent = stats.lower;
-  const color = dark ? '#B4DEC4' : '#344C3F';
-  return <View testID="video-coverage" accessibilityLabel={`${percent}% familiar words. Sample: ${stats.total} vocabulary occurrences, ${stats.unrated} unrated. Unrated words are not counted as familiar. Estimated from captions and your learning profile; listening comprehension can differ.`} style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: compact ? 3 : 12, paddingVertical: 5, borderRadius: 14, backgroundColor: compact ? 'transparent' : dark ? '#142019' : '#E5ECE4' }}>
+  const color = dotPalette(dark).accent;
+  return <View testID="video-coverage" accessibilityLabel={`${percent}% familiar words. Sample: ${stats.total} vocabulary occurrences, ${stats.unrated} unrated. Unrated words are not counted as familiar. Estimated from captions and your learning profile; listening comprehension can differ.`} style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 9, paddingHorizontal: compact ? 3 : 12, paddingVertical: 5, borderRadius: 14, backgroundColor: compact ? 'transparent' : dotPalette(dark).softAccent }}>
     <Text selectable={false} style={{ color, fontSize: 15, fontWeight: '700', fontVariant: ['tabular-nums'] }}>{percent}%</Text>
-    {!compact && <View><Text selectable={false} style={{ color, fontSize: 10, lineHeight: 13 }}>familiar words</Text><View style={{ height: 3, width: 68, borderRadius: 2, overflow: 'hidden', backgroundColor: dark ? '#354039' : '#CAD2C9', marginTop: 3 }}><View style={{ height: 3, width: `${percent}%`, backgroundColor: color }} /></View></View>}
+    {!compact && <View><Text selectable={false} style={{ color, fontSize: 10, lineHeight: 13 }}>familiar words</Text><View style={{ height: 3, width: 68, borderRadius: 2, overflow: 'hidden', backgroundColor: dotPalette(dark).border, marginTop: 3 }}><View style={{ height: 3, width: `${percent}%`, backgroundColor: color }} /></View></View>}
   </View>;
 }

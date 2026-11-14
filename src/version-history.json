@@ -9,6 +9,44 @@
     "changelogFormat": 1
   },
   {
+    "version": "0.21.5",
+    "date": "2026-11-13",
+    "title": "Make subtitle word lookup accessible",
+    "notes": [
+      "In the Store edition, expose individual subtitle word lookups through native accessibility actions while preserving tap-to-lookup and the dot. design. Keep the trailing dot in native app naming. Store review and physical-device acceptance remain pending."
+    ],
+    "changelogFormat": 1
+  },
+  {
+    "version": "0.21.4",
+    "date": "2026-11-13",
+    "title": "Complete the Immersed. Store name",
+    "notes": [
+      "Use Immersed. consistently in the installed app name and Store listing. App Store review and interactive release checks remain pending."
+    ],
+    "changelogFormat": 1
+  },
+  {
+    "version": "0.21.3",
+    "date": "2026-11-13",
+    "title": "Add a separate imported-media Store edition",
+    "notes": [
+      "Prepare an isolated App Store edition for local videos and SRT/VTT subtitles, offline JMdict lookup, and saved words; retain the full community app. Store builds and Apple review remain pending."
+    ],
+    "changelogFormat": 1
+  },
+  {
+    "version": "0.21.2",
+    "date": "2026-11-12",
+    "title": "Part of dot.",
+    "notes": [
+      "Apply shared dot. surfaces, typography, controls and indigo accents while preserving the video stage, subtitle replay, spoken-verb lookup and learning states.",
+      "Add accessible suite discovery and companion links in Settings; refresh runtime tokens through the shared brand-kit workflow.",
+      "Improve narrow-screen desktop layout, keyboard focus and contrast."
+    ],
+    "changelogFormat": 1
+  },
+  {
     "version": "0.21.1",
     "date": "2026-11-12",
     "title": "Resolve spoken Japanese verb lookups",

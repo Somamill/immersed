@@ -12,6 +12,40 @@ Full-feature Mac distribution and faster discovery
 
 - Keep the full AppKit/WebKit study app available through Homebrew and GitHub DMG/source artifacts. Add fading previous-subtitle, play/pause and next-subtitle buttons in Netflix fullscreen, stronger outlined captions with no background, and a visible native startup animation. Remove the titlebar separator, reuse installed native builds and install only Mac runtime dependencies. Use bounded public YouTube metadata with parallel language checks and yt-dlp fallback for faster discovery. Developer ID creation is blocked by the current Admin role; the DMG is not notarized until the Account Holder supplies a Developer ID Application certificate.
 
+## [0.21.5] - 2026-11-13
+
+Make subtitle word lookup accessible
+
+### Changed
+
+- In the Store edition, expose individual subtitle word lookups through native accessibility actions while preserving tap-to-lookup and the dot. design. Keep the trailing dot in native app naming. Store review and physical-device acceptance remain pending.
+
+## [0.21.4] - 2026-11-13
+
+Complete the Immersed. Store name
+
+### Changed
+
+- Use Immersed. consistently in the installed app name and Store listing. App Store review and interactive release checks remain pending.
+
+## [0.21.3] - 2026-11-13
+
+Add a separate imported-media Store edition
+
+### Changed
+
+- Prepare an isolated App Store edition for local videos and SRT/VTT subtitles, offline JMdict lookup, and saved words; retain the full community app. Store builds and Apple review remain pending.
+
+## [0.21.2] - 2026-11-12
+
+Part of dot.
+
+### Changed
+
+- Apply shared dot. surfaces, typography, controls and indigo accents while preserving the video stage, subtitle replay, spoken-verb lookup and learning states.
+- Add accessible suite discovery and companion links in Settings; refresh runtime tokens through the shared brand-kit workflow.
+- Improve narrow-screen desktop layout, keyboard focus and contrast.
+
 ## [0.21.1] - 2026-11-12
 
 Resolve spoken Japanese verb lookups

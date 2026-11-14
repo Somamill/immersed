@@ -186,6 +186,7 @@ function persist() {
 function applyPreferences() {
   if (netflix) netflixCommand("original", extras.netflixOriginal !== false);
   document.body.classList.toggle("light", !prefs.dark);
+  document.documentElement.dataset.dotTheme = prefs.dark ? "dark" : "light";
   window.webkit?.messageHandlers?.immersed?.postMessage({
     action: "blockAds",
     enabled: extras.blockAds,
@@ -1593,6 +1594,9 @@ function setting(body, label, description, key, options, isExtra = false) {
 }
 function showSettings() {
   const body = showPanel("Settings");
+  const suite = document.createElement("section");
+  suite.innerHTML = '<h3>Immersed</h3><details class="dot-suite"><summary>Part of <b>dot.</b></summary><nav aria-label="More from dot."><a href="https://github.com/Somamill/read">read.<small>Books, articles, and highlights.</small></a><a href="https://github.com/Somamill/listen">listen.<small>Find your next audiobook.</small></a></nav></details>';
+  body.append(suite);
   body.append(button("Version history", showHistory));
   if (source && source.type !== "netflix" && cues.length)
     body.append(button("Compare speech models", compareTranscript));

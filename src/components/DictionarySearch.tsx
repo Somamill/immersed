@@ -1,3 +1,4 @@
+import { dotPalette } from '../dot-theme';
 import PitchAccent from './PitchAccent';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Text, TextInput, View } from 'react-native';
@@ -8,7 +9,7 @@ export default function DictionarySearch({ dark, compact = false, pitchAccent = 
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<{ query: string; entries: DictionaryEntry[]; error?: string } | null>(null);
   const text = query.trim();
-  const ink = dark ? '#eee' : '#242D28', muted = dark ? '#aaa' : '#70776E';
+  const ink = dotPalette(dark).text, muted = dotPalette(dark).secondaryText;
   useEffect(() => {
     if (!text) return;
     let active = true;
@@ -23,13 +24,13 @@ export default function DictionarySearch({ dark, compact = false, pitchAccent = 
   }, [text]);
   const current = result?.query === text ? result : null;
   return <View style={{ marginBottom: compact ? 12 : 24 }}>
-    <TextInput accessibilityLabel="Search English or Japanese words" placeholder="English or Japanese" placeholderTextColor={muted} value={query} onChangeText={setQuery} maxLength={120} autoCapitalize="none" autoCorrect={false} clearButtonMode="while-editing" style={{ minHeight: compact ? 40 : 52, borderRadius: compact ? 12 : 16, paddingHorizontal: compact ? 12 : 16, backgroundColor: dark ? '#171717' : '#E8EBE1', color: ink, fontSize: compact ? 16 : 18 }} />
+    <TextInput accessibilityLabel="Search English or Japanese words" placeholder="English or Japanese" placeholderTextColor={muted} value={query} onChangeText={setQuery} maxLength={120} autoCapitalize="none" autoCorrect={false} clearButtonMode="while-editing" style={{ minHeight: compact ? 40 : 52, borderRadius: compact ? 12 : 16, paddingHorizontal: compact ? 12 : 16, backgroundColor: dotPalette(dark).surface, color: ink, fontSize: compact ? 16 : 18 }} />
     {!!text && <View style={{ marginTop: compact ? 10 : 16 }}>
       <Text selectable={false} style={{ color: muted, marginBottom: compact ? 8 : 14 }}>{/[ぁ-ヿ㐀-鿿々]/.test(text) ? 'Japanese → English' : 'English → Japanese'}</Text>
       {!current && <ActivityIndicator accessibilityLabel="Searching dictionary" color={muted} />}
       {current?.error && <Text selectable={false} style={{ color: muted }}>{current.error}</Text>}
       {current && !current.error && !current.entries.length && <Text selectable={false} style={{ color: muted }}>No matches.</Text>}
-      {current?.entries.map(entry => <View key={entry.slug} style={{ paddingVertical: compact ? 8 : 16, borderBottomWidth: 1, borderBottomColor: dark ? '#252525' : '#ddd', gap: 7 }}>
+      {current?.entries.map(entry => <View key={entry.slug} style={{ paddingVertical: compact ? 8 : 16, borderBottomWidth: 1, borderBottomColor: dotPalette(dark).border, gap: 7 }}>
         <Text selectable={false} style={{ color: ink, fontSize: compact ? 21 : 25 }}>{entry.japanese[0]?.word || entry.japanese[0]?.reading}</Text>
         {!!entry.japanese[0]?.word && <Text selectable={false} style={{ color: muted, fontSize: 16 }}>{entry.japanese[0]?.reading}</Text>}
         {pitchAccent && <PitchAccent accents={entry.pitch} dark={dark} />}
